@@ -31,7 +31,7 @@ model Plan {
   name         String
   description  String?
   difficulty   String?
-  progress     Int      @default(0)
+  progress     Float    @default(0)
   tags         PlanTagAssociation[]
   progressRecords ProgressRecord[]
 }

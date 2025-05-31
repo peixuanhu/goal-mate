@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface Goal {
   id: number
@@ -15,10 +17,6 @@ interface Goal {
   name: string
   description: string
 }
-
-const TAGS = [
-  'reading', 'programming', 'math', 'algorithm', 'music', 'exercise'
-]
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
@@ -29,6 +27,8 @@ export default function GoalsPage() {
   const [form, setForm] = useState<Partial<Goal>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [tagOptions, setTagOptions] = useState<string[]>([])
+  const router = useRouter();
 
   const fetchGoals = async () => {
     setLoading(true)
@@ -39,6 +39,10 @@ export default function GoalsPage() {
     setTotal(data.total)
     setLoading(false)
   }
+
+  useEffect(() => {
+    fetch('/api/tag').then(res => res.json()).then(setTagOptions)
+  }, [])
 
   useEffect(() => { fetchGoals() }, [tag, pageNum])
 
@@ -78,6 +82,11 @@ export default function GoalsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-8">
+      <div className="mb-4">
+        <Button asChild variant="outline">
+          <Link href="/">返回首页</Link>
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>目标管理</CardTitle>
@@ -87,12 +96,7 @@ export default function GoalsPage() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="tag">标签</Label>
-                <Select value={form.tag || undefined} onValueChange={v => setForm(f => ({ ...f, tag: v }))}>
-                  <SelectTrigger id="tag" className="w-full" />
-                  <SelectContent>
-                    {TAGS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input id="tag" className="w-full" placeholder="标签（可自定义）" value={form.tag || ''} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} required />
               </div>
               <div className="flex-1 space-y-2">
                 <Label htmlFor="name">名称</Label>
@@ -111,10 +115,12 @@ export default function GoalsPage() {
           <div className="mb-4 mt-8">
             <Label className="mr-2">筛选标签</Label>
             <Select value={tag || 'all'} onValueChange={v => { setTag(v === 'all' ? '' : v); setPageNum(1) }}>
-              <SelectTrigger className="w-40 inline-block" />
+              <SelectTrigger className="w-40 inline-block">
+                <SelectValue placeholder="全部标签" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部标签</SelectItem>
-                {TAGS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                {tagOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -125,6 +131,7 @@ export default function GoalsPage() {
                 <TableHead>标签</TableHead>
                 <TableHead>描述</TableHead>
                 <TableHead>操作</TableHead>
+                <TableHead>跳转</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -136,6 +143,9 @@ export default function GoalsPage() {
                   <TableCell className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => handleEdit(goal)} className="w-16">编辑</Button>
                     <Button size="sm" variant="destructive" onClick={() => handleDelete(goal.goal_id)} className="w-16">删除</Button>
+                  </TableCell>
+                  <TableCell>
+                    <Button size="sm" variant="secondary" onClick={() => router.push(`/plans?tag=${goal.tag}`)}>查看计划</Button>
                   </TableCell>
                 </TableRow>
               ))}
