@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label"
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Combobox } from "@/components/ui/combobox"
 
 interface Goal {
   id: number
@@ -41,7 +42,7 @@ export default function GoalsPage() {
   }
 
   useEffect(() => {
-    fetch('/api/tag').then(res => res.json()).then(setTagOptions)
+    fetch('/api/tag?pageSize=1000').then(res => res.json()).then(setTagOptions)
   }, [])
 
   useEffect(() => { fetchGoals() }, [tag, pageNum])
@@ -96,7 +97,13 @@ export default function GoalsPage() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="tag">标签</Label>
-                <Input id="tag" className="w-full" placeholder="标签（可自定义）" value={form.tag || ''} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} required />
+                <Combobox
+                  options={tagOptions}
+                  value={form.tag || ''}
+                  onChange={v => setForm(f => ({ ...f, tag: v }))}
+                  placeholder="标签（可自定义）"
+                  className="w-full"
+                />
               </div>
               <div className="flex-1 space-y-2">
                 <Label htmlFor="name">名称</Label>

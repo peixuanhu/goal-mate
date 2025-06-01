@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label"
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Combobox } from "@/components/ui/combobox"
 
 interface Plan {
   plan_id: string
@@ -31,7 +32,7 @@ export default function ProgressPage() {
   const searchParams = useSearchParams();
 
   const fetchPlans = async () => {
-    const res = await fetch('/api/plan')
+    const res = await fetch('/api/plan?pageSize=1000')
     const data = await res.json()
     setPlans(data.list || data)
     if (!planId && (data.list?.[0]?.plan_id || data[0]?.plan_id)) {
@@ -80,12 +81,16 @@ export default function ProgressPage() {
         <CardContent>
           <div className="mb-4 flex gap-4 items-center">
             <Label>选择计划</Label>
-            <Select value={planId} onValueChange={v => setPlanId(v)}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="请选择计划" /></SelectTrigger>
-              <SelectContent>
-                {plans.map(p => <SelectItem key={p.plan_id} value={p.plan_id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={plans.map(p => p.name)}
+              value={plans.find(p => p.plan_id === planId)?.name || ''}
+              onChange={v => {
+                const p = plans.find(p => p.name === v)
+                if (p) setPlanId(p.plan_id)
+              }}
+              placeholder="请选择计划"
+              className="w-64"
+            />
           </div>
           <form onSubmit={handleSubmit} className="space-y-4 mb-8">
             <div className="flex flex-col md:flex-row gap-4">

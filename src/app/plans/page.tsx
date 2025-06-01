@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Combobox } from "@/components/ui/combobox"
 
 interface Plan {
   id: number
@@ -19,10 +20,6 @@ interface Plan {
   progress: number
   tags: string[]
 }
-
-const TAGS = [
-  'reading', 'programming', 'math', 'algorithm', 'music', 'exercise', 'finance'
-]
 const DIFFICULTY = ['easy', 'medium', 'hard']
 
 type PlanForm = {
@@ -63,7 +60,7 @@ export default function PlansPage() {
     setEditingId(null)
   }
   const fetchGoals = async () => {
-    const res = await fetch('/api/goal')
+    const res = await fetch('/api/goal?pageSize=1000')
     const data = await res.json()
     setGoals(data.list || data)
   }
@@ -81,7 +78,7 @@ export default function PlansPage() {
   useEffect(() => { fetchGoals() }, [])
 
   useEffect(() => {
-    fetch('/api/tag').then(res => res.json()).then(setTagOptions)
+    fetch('/api/tag?pageSize=1000').then(res => res.json()).then(setTagOptions)
   }, [])
 
   const handleSubmit = async (e: any) => {
@@ -172,13 +169,28 @@ export default function PlansPage() {
             </div>
             <div className="flex flex-wrap gap-4 items-center">
               <Label>标签</Label>
-              {TAGS.map(t => (
+              {tagOptions.map(t => (
                 <label key={t} className="flex items-center gap-1">
                   <input type="checkbox" checked={form.tags?.includes(t)} onChange={e => {
                     setForm(f => ({ ...f, tags: e.target.checked ? [...(f.tags||[]), t] : (f.tags||[]).filter(x => x!==t) }))
                   }} /> {t}
                 </label>
               ))}
+              <Input
+                className="w-32"
+                placeholder="新标签"
+                value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
+                onChange={e => {
+                  const val = e.target.value.trim();
+                  setForm(f => ({
+                    ...f,
+                    tags: [
+                      ...(f.tags?.filter(tag => tagOptions.includes(tag)) || []),
+                      ...(val ? [val] : [])
+                    ]
+                  }))
+                }}
+              />
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={loading} className="w-28">{editingId ? '更新' : '新增'}</Button>
@@ -187,15 +199,13 @@ export default function PlansPage() {
           </form>
           <div className="mb-4 mt-8 flex gap-4 items-center">
             <Label>筛选标签</Label>
-            <Select value={tag} onValueChange={v => { setTag(v); setPageNum(1) }}>
-              <SelectTrigger className="w-40 inline-block">
-                <SelectValue placeholder="全部标签" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部标签</SelectItem>
-                {tagOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={tagOptions}
+              value={tag === 'all' ? '' : tag}
+              onChange={v => { setTag(v || 'all'); setPageNum(1) }}
+              placeholder="全部标签"
+              className="w-40 inline-block"
+            />
             <Label>筛选难度</Label>
             <Select value={difficulty || 'all'} onValueChange={v => { setDifficulty(v === 'all' ? '' : v); setPageNum(1) }}>
               <SelectTrigger className="w-40 inline-block">
@@ -207,15 +217,16 @@ export default function PlansPage() {
               </SelectContent>
             </Select>
             <Label>筛选目标</Label>
-            <Select value={goalId || 'all'} onValueChange={v => { setGoalId(v === 'all' ? '' : v); setPageNum(1) }}>
-              <SelectTrigger className="w-40 inline-block">
-                <SelectValue placeholder="全部目标" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部目标</SelectItem>
-                {goals.map(g => <SelectItem key={g.goal_id} value={g.goal_id}>{g.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={goals.map(g => g.name)}
+              value={goals.find(g => g.goal_id === goalId)?.name || ''}
+              onChange={v => {
+                const g = goals.find(g => g.name === v)
+                setGoalId(g ? g.goal_id : 'all'); setPageNum(1)
+              }}
+              placeholder="全部目标"
+              className="w-40 inline-block"
+            />
           </div>
           <Table>
             <TableHeader>
