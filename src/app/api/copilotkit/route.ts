@@ -282,6 +282,152 @@ const runtime = new CopilotRuntime({
       },
     },
 
+    // 获取系统选项（标签和难度）
+    {
+      name: "getSystemOptions",
+      description: "获取系统中已有的标签列表和标准难度选项，用于创建计划时参考",
+      parameters: [],
+      handler: async () => {
+        console.log("📋 getSystemOptions called");
+        try {
+          // 获取所有已有标签
+          const existingTags = await prisma.planTagAssociation.findMany({
+            select: { tag: true },
+            distinct: ['tag']
+          });
+          
+          const tagList = existingTags.map(t => t.tag);
+          
+          // 标准难度选项
+          const difficultyOptions = ['easy', 'medium', 'hard'];
+          
+          console.log("📋 Available tags:", tagList);
+          console.log("📋 Difficulty options:", difficultyOptions);
+          
+          return { 
+            success: true, 
+            data: {
+              existingTags: tagList,
+              difficultyOptions: difficultyOptions,
+              message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。`
+            }
+          };
+        } catch (error: any) {
+          console.error("❌ Error:", error);
+          return { success: false, error: error.message };
+        }
+      },
+    },
+
+    // 创建计划
+    {
+      name: "createPlan",
+      description: "创建新计划，用于具体的任务执行",
+      parameters: [
+        {
+          name: "name",
+          type: "string",
+          description: "计划名称",
+          required: true,
+        },
+        {
+          name: "description",
+          type: "string",
+          description: "计划描述（可包含链接等信息）",
+          required: false,
+        },
+        {
+          name: "difficulty",
+          type: "string",
+          description: "难度等级，必须使用以下标准值之一：easy、medium、hard。如果用户说中文（如简单、中等、困难），请转换为对应的英文标准值",
+          required: true,
+        },
+        {
+          name: "tags",
+          type: "string",
+          description: "标签，多个标签用逗号分隔。请优先使用已有标签，避免创建重复标签",
+          required: true,
+        }
+      ],
+      handler: async (args: any) => {
+        console.log("📋 createPlan called:", args);
+        try {
+          const { name, description, difficulty, tags } = args;
+          
+          // 查询已有标签，提供给AI参考（但实际上AI在调用时已经看到了描述）
+          const existingTags = await prisma.planTagAssociation.findMany({
+            select: { tag: true },
+            distinct: ['tag']
+          });
+          
+          const existingTagList = existingTags.map(t => t.tag);
+          console.log("📋 Existing tags in database:", existingTagList);
+          
+          // 验证难度值是否为标准值
+          const validDifficulties = ['easy', 'medium', 'hard'];
+          if (!validDifficulties.includes(difficulty)) {
+            console.warn(`⚠️ Non-standard difficulty value: ${difficulty}, using 'medium' as default`);
+            // 这里可以返回错误让AI重新选择，或者使用默认值
+            return { 
+              success: false, 
+              error: `难度值必须是以下之一：${validDifficulties.join('、')}。您提供的值是：${difficulty}`,
+              validOptions: validDifficulties
+            };
+          }
+          
+          // 处理标签
+          const tagList = tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag);
+          console.log("📋 User provided tags:", tagList);
+          console.log("📋 Available existing tags:", existingTagList);
+          
+          // 生成唯一的plan_id
+          const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
+          
+          // 创建计划
+          const plan = await prisma.plan.create({
+            data: {
+              plan_id,
+              name,
+              description: description || '',
+              difficulty: difficulty,
+              progress: 0,
+            }
+          });
+
+          // 创建标签关联
+          for (const tag of tagList) {
+            await prisma.planTagAssociation.create({
+              data: {
+                plan_id: plan.plan_id,
+                tag
+              }
+            });
+          }
+
+          // 返回创建的计划信息（包含标签）
+          const createdPlan = await prisma.plan.findUnique({
+            where: { plan_id },
+            include: { tags: true }
+          });
+
+          const result = {
+            ...createdPlan,
+            tags: createdPlan?.tags.map(t => t.tag) || []
+          };
+
+          console.log("✅ Plan created:", result);
+          return { 
+            success: true, 
+            data: result,
+            message: `计划已成功创建。\n\nID: ${plan.id}\n创建时间: ${plan.gmt_create}\n修改时间: ${plan.gmt_modified}\n计划ID: ${plan.plan_id}\n标签: ${tagList.join(', ')}\n名称: ${name}\n描述: ${description || '无'}\n难度: ${difficulty}\n\n请记得按时完成这个计划！`
+          };
+        } catch (error: any) {
+          console.error("❌ Error:", error);
+          return { success: false, error: error.message };
+        }
+      },
+    },
+
     // 查找计划 - 增强版本
     {
       name: "findPlan",
