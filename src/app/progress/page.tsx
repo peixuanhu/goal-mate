@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
+import { TextPreview } from "@/components/ui/text-preview"
 
 interface Plan {
   plan_id: string
@@ -176,7 +177,7 @@ export default function ProgressPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-6xl mx-auto p-4 space-y-8">
+      <div className="max-w-7xl mx-auto p-4 space-y-8">
         <div className="mb-4">
           <Button asChild variant="outline">
             <Link href="/">返回首页</Link>
@@ -185,8 +186,8 @@ export default function ProgressPage() {
         
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              进展记录
+            <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <span>进展记录</span>
               <div className="flex gap-2">
                 <Button 
                   size="sm" 
@@ -206,132 +207,199 @@ export default function ProgressPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 flex gap-4 items-center">
-              <Label>选择计划</Label>
-              <Combobox
-                options={[
-                  ...(viewMode === 'all' ? ['查看所有计划'] : []),
-                  ...plans.map(p => p.name)
-                ]}
-                value={
-                  planId === 'all' 
-                    ? '查看所有计划' 
-                    : plans.find(p => p.plan_id === planId)?.name || ''
-                }
-                onChange={v => {
-                  if (v === '查看所有计划') {
-                    setPlanId('all')
-                  } else {
-                    const p = plans.find(p => p.name === v)
-                    if (p) setPlanId(p.plan_id)
+            {/* 计划选择器 */}
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <Label className="text-sm font-medium">选择计划</Label>
+                <Combobox
+                  options={[
+                    ...(viewMode === 'all' ? ['查看所有计划'] : []),
+                    ...plans.map(p => p.name)
+                  ]}
+                  value={
+                    planId === 'all' 
+                      ? '查看所有计划' 
+                      : plans.find(p => p.plan_id === planId)?.name || ''
                   }
-                }}
-                placeholder="请选择计划"
-                className="w-64"
-              />
+                  onChange={v => {
+                    if (v === '查看所有计划') {
+                      setPlanId('all')
+                    } else {
+                      const p = plans.find(p => p.name === v)
+                      if (p) setPlanId(p.plan_id)
+                    }
+                  }}
+                  placeholder="请选择计划"
+                  className="w-full sm:w-80"
+                />
+              </div>
             </div>
             
             {/* 只在单个计划模式或编辑状态时显示表单 */}
             {(planId !== 'all' || editingId) && (
-              <form onSubmit={handleSubmit} className="space-y-4 mb-8">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 space-y-2">
-                    <Label htmlFor="content">进展内容</Label>
-                    <Textarea 
-                      id="content" 
-                      className="w-full min-h-[40px]" 
-                      placeholder="进展内容" 
-                      value={form.content || ''} 
-                      onChange={e => setForm(f => ({ ...f, content: e.target.value }))} 
-                      required 
-                    />
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <Label htmlFor="thinking">思考总结</Label>
-                    <Textarea 
-                      id="thinking" 
-                      className="w-full min-h-[40px]" 
-                      placeholder="思考总结" 
-                      value={form.thinking || ''} 
-                      onChange={e => setForm(f => ({ ...f, thinking: e.target.value }))} 
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={loading} className="w-32">
-                    {editingId ? '更新进展' : '添加进展'}
-                  </Button>
-                  {editingId && (
-                    <Button 
-                      type="button" 
-                      variant="secondary" 
-                      onClick={handleCancelEdit}
-                      className="w-24"
-                    >
-                      取消编辑
-                    </Button>
-                  )}
-                </div>
-              </form>
+              <Card className="mb-8">
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    {editingId ? '编辑进展记录' : '添加新进展'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* 进展内容 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="content">进展内容</Label>
+                      <Textarea 
+                        id="content" 
+                        className="w-full min-h-[120px] resize-y" 
+                        placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等..." 
+                        value={form.content || ''} 
+                        onChange={e => setForm(f => ({ ...f, content: e.target.value }))} 
+                        required 
+                      />
+                    </div>
+
+                    {/* 思考总结 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="thinking">思考总结</Label>
+                      <Textarea 
+                        id="thinking" 
+                        className="w-full min-h-[120px] resize-y" 
+                        placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等..." 
+                        value={form.thinking || ''} 
+                        onChange={e => setForm(f => ({ ...f, thinking: e.target.value }))} 
+                      />
+                    </div>
+
+                    {/* 操作按钮 */}
+                    <div className="flex gap-3 pt-4">
+                      <Button type="submit" disabled={loading} className="min-w-[120px]">
+                        {loading ? '保存中...' : (editingId ? '更新进展' : '添加进展')}
+                      </Button>
+                      {editingId && (
+                        <Button 
+                          type="button" 
+                          variant="secondary" 
+                          onClick={handleCancelEdit}
+                          className="min-w-[100px]"
+                          disabled={loading}
+                        >
+                          取消编辑
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
             )}
             
+            {/* 记录列表标题 */}
             <div className="mb-4">
               <h3 className="text-lg font-semibold">
                 {planId === 'all' ? '所有计划的最新进展' : `${plans.find(p => p.plan_id === planId)?.name || ''} 的进展记录`}
               </h3>
             </div>
             
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>时间</TableHead>
-                  {planId === 'all' && <TableHead>计划名称</TableHead>}
-                  <TableHead>内容</TableHead>
-                  <TableHead>思考</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records.length === 0 ? (
+            {/* 表格 - 添加横向滚动 */}
+            <div className="overflow-x-auto border rounded-lg">
+              <Table className="min-w-full">
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={planId === 'all' ? 5 : 4} className="text-center text-muted-foreground">
-                      {loading ? '加载中...' : '暂无进展记录'}
-                    </TableCell>
+                    <TableHead className="min-w-[140px]">时间</TableHead>
+                    {planId === 'all' && <TableHead className="min-w-[120px]">计划名称</TableHead>}
+                    <TableHead className="min-w-[250px]">内容</TableHead>
+                    <TableHead className="min-w-[250px]">思考</TableHead>
+                    <TableHead className="min-w-[130px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
                   </TableRow>
-                ) : (
-                  records.map(r => (
-                    <TableRow key={r.id} className={editingId === r.id ? 'bg-blue-50 dark:bg-blue-950' : ''}>
-                      <TableCell className="text-sm">{new Date(r.gmt_create).toLocaleString()}</TableCell>
-                      {planId === 'all' && <TableCell className="font-medium">{r.plan_name}</TableCell>}
-                      <TableCell className="max-w-xs truncate">{r.content}</TableCell>
-                      <TableCell className="max-w-xs truncate">{r.thinking}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleEdit(r)}
-                            className="h-8 px-2 text-xs"
-                            disabled={loading}
-                          >
-                            编辑
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
-                            onClick={() => handleDelete(r.id)}
-                            className="h-8 px-2 text-xs"
-                            disabled={loading}
-                          >
-                            删除
-                          </Button>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {records.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={planId === 'all' ? 5 : 4} className="text-center text-muted-foreground py-8">
+                        {loading ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            加载中...
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-gray-500 dark:text-gray-400">暂无进展记录</div>
+                            {planId !== 'all' && (
+                              <div className="text-sm text-gray-400 dark:text-gray-500">开始记录您的第一个进展吧！</div>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    records.map(r => (
+                      <TableRow key={r.id} className={editingId === r.id ? 'bg-blue-50 dark:bg-blue-950' : ''}>
+                        <TableCell className="min-w-[140px] text-sm font-mono">
+                          {new Date(r.gmt_create).toLocaleString()}
+                        </TableCell>
+                        {planId === 'all' && (
+                          <TableCell className="min-w-[120px] font-medium">
+                            <TextPreview
+                              text={r.plan_name || ''}
+                              maxLength={40}
+                              className="font-medium"
+                              truncateLines={1}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell className="min-w-[250px]">
+                          <TextPreview
+                            text={r.content}
+                            maxLength={120}
+                            className="text-sm"
+                            truncateLines={3}
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[250px]">
+                          <TextPreview
+                            text={r.thinking || ''}
+                            maxLength={120}
+                            className="text-sm text-gray-600 dark:text-gray-400"
+                            truncateLines={3}
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[130px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                          <div className="flex gap-1 items-center justify-start whitespace-nowrap">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleEdit(r)}
+                              className="h-8 px-2 text-xs"
+                              disabled={loading}
+                            >
+                              编辑
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive" 
+                              onClick={() => handleDelete(r.id)}
+                              className="h-8 px-2 text-xs"
+                              disabled={loading}
+                            >
+                              删除
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* 记录统计 */}
+            {records.length > 0 && (
+              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  共 {records.length} 条进展记录
+                  {planId !== 'all' && ` • ${plans.find(p => p.plan_id === planId)?.name || ''}`}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

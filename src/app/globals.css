@@ -270,3 +270,90 @@
   margin: 0.25rem !important;
   padding: 0.75rem !important;
 }
+
+/* 自定义工具类 */
+
+/* 文本截断类 */
+.line-clamp-2 {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  word-break: break-word !important;
+}
+
+.line-clamp-3 {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  word-break: break-word !important;
+}
+
+.line-clamp-4 {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 4 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  word-break: break-word !important;
+}
+
+/* 表格优化 */
+.table-container {
+  position: relative;
+  overflow-x: auto;
+  border-radius: calc(var(--radius));
+  border: 1px solid hsl(var(--border));
+}
+
+/* 粘性表头 */
+.sticky-header th {
+  position: sticky;
+  top: 0;
+  background: hsl(var(--background));
+  z-index: 10;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* 粘性操作列 */
+.sticky-actions {
+  position: sticky;
+  right: 0;
+  background: hsl(var(--background));
+  border-left: 1px solid hsl(var(--border));
+  z-index: 5;
+}
+
+/* 加载动画 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* 响应式隐藏 */
+@media (max-width: 768px) {
+  .md-hidden {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .sm-hidden {
+    display: none !important;
+  }
+  
+  /* 移动端表格优化 */
+  .mobile-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .mobile-table-scroll table {
+    min-width: 600px;
+  }
+}

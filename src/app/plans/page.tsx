@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
+import { TextPreview } from "@/components/ui/text-preview"
 
 interface Plan {
   id: number
@@ -131,7 +132,7 @@ export default function PlansPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto p-4 space-y-8">
+      <div className="max-w-7xl mx-auto p-4 space-y-8">
         <div className="mb-4">
           <Button asChild variant="outline">
             <Link href="/">返回首页</Link>
@@ -142,21 +143,25 @@ export default function PlansPage() {
             <CardTitle>计划管理</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 space-y-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* 表单字段 - 响应式布局 */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="space-y-2">
                   <Label htmlFor="name">名称</Label>
-                  <Input id="name" className="w-full" placeholder="名称" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+                  <Input 
+                    id="name" 
+                    className="w-full" 
+                    placeholder="输入计划名称" 
+                    value={form.name || ''} 
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                    required 
+                  />
                 </div>
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="desc">描述</Label>
-                  <Textarea id="desc" className="w-full min-h-[40px]" placeholder="描述" value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                </div>
-                <div className="flex-1 space-y-2">
+                <div className="space-y-2">
                   <Label htmlFor="difficulty">难度</Label>
                   <Select value={form.difficulty ?? 'all'} onValueChange={v => setForm(f => ({ ...f, difficulty: v }))}>
                     <SelectTrigger id="difficulty" className="w-full">
-                      <SelectValue placeholder="难度" />
+                      <SelectValue placeholder="选择难度" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">全部难度</SelectItem>
@@ -164,107 +169,235 @@ export default function PlansPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="space-y-2">
                   <Label htmlFor="progress">进度（0-1）</Label>
-                  <Input id="progress" type="number" min={0} max={1} step={0.01} className="w-full" value={form.progress} onChange={e => setForm(f => ({ ...f, progress: e.target.value }))} />
+                  <Input 
+                    id="progress" 
+                    type="number" 
+                    min={0} 
+                    max={1} 
+                    step={0.01} 
+                    className="w-full" 
+                    placeholder="0.5"
+                    value={form.progress} 
+                    onChange={e => setForm(f => ({ ...f, progress: e.target.value }))} 
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-1 xl:col-span-1">
+                  <Label>操作</Label>
+                  <div className="flex gap-2 pt-2">
+                    <Button type="submit" disabled={loading} className="flex-1 min-w-[80px]">
+                      {editingId ? '更新' : '新增'}
+                    </Button>
+                    {editingId && (
+                      <Button 
+                        type="button" 
+                        variant="secondary" 
+                        className="flex-1 min-w-[80px]" 
+                        onClick={() => { setForm({ tags: [], progress: '' }); setEditingId(null) }}
+                      >
+                        取消
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-4 items-center">
-                <Label>标签</Label>
-                {tagOptions.map(t => (
-                  <label key={t} className="flex items-center gap-1">
-                    <input type="checkbox" checked={form.tags?.includes(t)} onChange={e => {
-                      setForm(f => ({ ...f, tags: e.target.checked ? [...(f.tags||[]), t] : (f.tags||[]).filter(x => x!==t) }))
-                    }} /> {t}
-                  </label>
-                ))}
-                <Input
-                  className="w-32"
-                  placeholder="新标签"
-                  value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
-                  onChange={e => {
-                    const val = e.target.value.trim();
-                    setForm(f => ({
-                      ...f,
-                      tags: [
-                        ...(f.tags?.filter(tag => tagOptions.includes(tag)) || []),
-                        ...(val ? [val] : [])
-                      ]
-                    }))
-                  }}
+
+              {/* 描述字段 - 独立行，更大空间 */}
+              <div className="space-y-2">
+                <Label htmlFor="desc">描述</Label>
+                <Textarea 
+                  id="desc" 
+                  className="w-full min-h-[100px] resize-y" 
+                  placeholder="请输入详细描述，可以包含链接、备注等信息..." 
+                  value={form.description || ''} 
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))} 
                 />
               </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={loading} className="w-28">{editingId ? '更新' : '新增'}</Button>
-                {editingId && <Button type="button" variant="secondary" className="w-28" onClick={() => { setForm({ tags: [], progress: '' }); setEditingId(null) }}>取消编辑</Button>}
+
+              {/* 标签字段 - 独立行 */}
+              <div className="space-y-3">
+                <Label>标签</Label>
+                <div className="flex flex-wrap gap-3 items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  {tagOptions.map(t => (
+                    <label key={t} className="flex items-center gap-2 bg-white dark:bg-gray-700 px-3 py-2 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="rounded" 
+                        checked={form.tags?.includes(t)} 
+                        onChange={e => {
+                          setForm(f => ({ ...f, tags: e.target.checked ? [...(f.tags||[]), t] : (f.tags||[]).filter(x => x!==t) }))
+                        }} 
+                      /> 
+                      <span className="text-sm">{t}</span>
+                    </label>
+                  ))}
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm text-gray-600 dark:text-gray-400">新标签:</Label>
+                    <Input
+                      className="w-32"
+                      placeholder="添加新标签"
+                      value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
+                      onChange={e => {
+                        const val = e.target.value.trim();
+                        setForm(f => ({
+                          ...f,
+                          tags: [
+                            ...(f.tags?.filter(tag => tagOptions.includes(tag)) || []),
+                            ...(val ? [val] : [])
+                          ]
+                        }))
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </form>
-            <div className="mb-4 mt-8 flex gap-4 items-center">
-              <Label>筛选标签</Label>
-              <Combobox
-                options={tagOptions}
-                value={tag === 'all' ? '' : tag}
-                onChange={v => { setTag(v || 'all'); setPageNum(1) }}
-                placeholder="全部标签"
-                className="w-40 inline-block"
-              />
-              <Label>筛选难度</Label>
-              <Select value={difficulty || 'all'} onValueChange={v => { setDifficulty(v === 'all' ? '' : v); setPageNum(1) }}>
-                <SelectTrigger className="w-40 inline-block">
-                  <SelectValue placeholder="全部难度" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部难度</SelectItem>
-                  {DIFFICULTY.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Label>筛选目标</Label>
-              <Combobox
-                options={goals.map(g => g.name)}
-                value={goals.find(g => g.goal_id === goalId)?.name || ''}
-                onChange={v => {
-                  const g = goals.find(g => g.name === v)
-                  setGoalId(g ? g.goal_id : 'all'); setPageNum(1)
-                }}
-                placeholder="全部目标"
-                className="w-40 inline-block"
-              />
+
+            {/* 筛选器 */}
+            <div className="mb-6 mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="space-y-2">
+                  <Label>筛选标签</Label>
+                  <Combobox
+                    options={tagOptions}
+                    value={tag === 'all' ? '' : tag}
+                    onChange={v => { setTag(v || 'all'); setPageNum(1) }}
+                    placeholder="全部标签"
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>筛选难度</Label>
+                  <Select value={difficulty || 'all'} onValueChange={v => { setDifficulty(v === 'all' ? '' : v); setPageNum(1) }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="全部难度" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部难度</SelectItem>
+                      {DIFFICULTY.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>筛选目标</Label>
+                  <Combobox
+                    options={goals.map(g => g.name)}
+                    value={goals.find(g => g.goal_id === goalId)?.name || ''}
+                    onChange={v => {
+                      const g = goals.find(g => g.name === v)
+                      setGoalId(g ? g.goal_id : 'all'); setPageNum(1)
+                    }}
+                    placeholder="全部目标"
+                    className="w-full"
+                  />
+                </div>
+              </div>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>名称</TableHead>
-                  <TableHead>标签</TableHead>
-                  <TableHead>难度</TableHead>
-                  <TableHead>进度</TableHead>
-                  <TableHead>描述</TableHead>
-                  <TableHead>操作</TableHead>
-                  <TableHead>进展</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plans.map(plan => (
-                  <TableRow key={plan.plan_id}>
-                    <TableCell>{plan.name}</TableCell>
-                    <TableCell>{plan.tags.join(', ')}</TableCell>
-                    <TableCell>{plan.difficulty}</TableCell>
-                    <TableCell>{typeof plan.progress === 'number' ? `${Math.round(plan.progress * 100)}%` : ''}</TableCell>
-                    <TableCell>{plan.description}</TableCell>
-                    <TableCell className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="w-16">编辑</Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(plan.plan_id)} className="w-16">删除</Button>
-                    </TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="secondary" onClick={() => router.push(`/progress?plan_id=${plan.plan_id}`)}>进展</Button>
-                    </TableCell>
+
+            {/* 表格 - 添加横向滚动 */}
+            <div className="overflow-x-auto border rounded-lg">
+              <Table className="min-w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[120px]">名称</TableHead>
+                    <TableHead className="min-w-[100px]">标签</TableHead>
+                    <TableHead className="min-w-[80px]">难度</TableHead>
+                    <TableHead className="min-w-[80px]">进度</TableHead>
+                    <TableHead className="min-w-[200px]">描述</TableHead>
+                    <TableHead className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="flex gap-2 items-center mt-4">
-              <Button variant="outline" disabled={pageNum === 1} onClick={() => setPageNum(p => p - 1)} className="w-20">上一页</Button>
-              <span>第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页</span>
-              <Button variant="outline" disabled={pageNum * pageSize >= total} onClick={() => setPageNum(p => p + 1)} className="w-20">下一页</Button>
+                </TableHeader>
+                <TableBody>
+                  {plans.map(plan => (
+                    <TableRow key={plan.plan_id}>
+                      <TableCell className="min-w-[120px] font-medium">
+                        <TextPreview
+                          text={plan.name}
+                          maxLength={50}
+                          className="font-medium"
+                          truncateLines={2}
+                        />
+                      </TableCell>
+                      <TableCell className="min-w-[100px]">
+                        <TextPreview
+                          text={plan.tags.join(', ')}
+                          maxLength={30}
+                          truncateLines={1}
+                        />
+                      </TableCell>
+                      <TableCell className="min-w-[80px]">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          plan.difficulty === 'easy' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                          plan.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                          'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                        }`}>
+                          {plan.difficulty}
+                        </span>
+                      </TableCell>
+                      <TableCell className="min-w-[80px]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 transition-all duration-300" 
+                              style={{ width: `${typeof plan.progress === 'number' ? plan.progress * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {typeof plan.progress === 'number' ? `${Math.round(plan.progress * 100)}%` : '0%'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="min-w-[200px]">
+                        <TextPreview
+                          text={plan.description || ''}
+                          maxLength={100}
+                          className="text-sm text-gray-600 dark:text-gray-400"
+                          truncateLines={2}
+                        />
+                      </TableCell>
+                      <TableCell className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                        <div className="flex gap-1 items-center justify-start whitespace-nowrap">
+                          <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 px-2 text-xs">
+                            编辑
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDelete(plan.plan_id)} className="h-8 px-2 text-xs">
+                            删除
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => router.push(`/progress?plan_id=${plan.plan_id}`)} className="h-8 px-2 text-xs">
+                            进展
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* 分页 */}
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                共 {total} 条记录，第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  disabled={pageNum === 1} 
+                  onClick={() => setPageNum(p => p - 1)} 
+                  className="min-w-[80px]"
+                >
+                  上一页
+                </Button>
+                <Button 
+                  variant="outline" 
+                  disabled={pageNum * pageSize >= total} 
+                  onClick={() => setPageNum(p => p + 1)} 
+                  className="min-w-[80px]"
+                >
+                  下一页
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
