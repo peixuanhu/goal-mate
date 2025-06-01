@@ -16,7 +16,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </main>
       
       {/* 右侧AI助手聊天区域 */}
-      <div className="w-96 border-l bg-background flex flex-col h-screen sticky top-0 right-0 z-10 shrink-0">
+      <div className="w-[480px] border-l bg-background flex flex-col h-screen sticky top-0 right-0 z-10 shrink-0">
         {/* 头部 */}
         <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 shrink-0">
           <div className="flex items-center space-x-3">

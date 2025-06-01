@@ -101,7 +101,7 @@ export function ChatWrapper() {
           flex: 1 !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
-          padding: 1.5rem 1rem !important;
+          padding: 1.5rem 1.25rem !important;
           background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
           min-height: 0 !important;
           scrollbar-width: thin;
@@ -157,7 +157,7 @@ export function ChatWrapper() {
           line-height: 1.6 !important;
           word-wrap: break-word;
           position: relative;
-          max-width: 320px !important;
+          max-width: 400px !important;
           margin-bottom: 0.5rem !important;
           background: white !important;
           color: #374151 !important;
@@ -173,7 +173,7 @@ export function ChatWrapper() {
           margin-right: 1rem !important;
           border-radius: 1.25rem 1.25rem 0.5rem 1.25rem !important;
           box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
-          max-width: 280px !important;
+          max-width: 360px !important;
           border: none !important;
         }
         
@@ -199,7 +199,7 @@ export function ChatWrapper() {
           border: 1px solid #e5e7eb !important;
           border-radius: 1.25rem 1.25rem 1.25rem 0.5rem !important;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-          max-width: 320px !important;
+          max-width: 400px !important;
         }
         
         /* AI助手消息气泡尾巴 */
@@ -313,26 +313,33 @@ export function ChatWrapper() {
         .poweredBy {
           color: #9ca3af !important;
           font-size: 0.75rem !important;
-          text-align: center !important;
-          padding: 0.5rem 0 !important;
           background: #f9fafb !important;
           border-top: 1px solid #f3f4f6 !important;
+        }
+        
+        /* 分隔线居中 */
+        .copilotKitChat hr,
+        .copilotKitChat div[class*="divider"],
+        .copilotKitChat div[class*="separator"] {
+          margin: 3rem 3rem !important;
+          width: 60% !important;
+          border-color: #e5e7eb !important;
         }
         
         /* 响应式设计 */
         @media (max-width: 768px) {
           .user-message-bubble {
-            margin-right: 0.5rem !important;
-            max-width: 240px !important;
+            margin-right: 0.75rem !important;
+            max-width: 280px !important;
           }
           
           .ai-message-bubble {
-            margin-left: 0.5rem !important;
-            max-width: 260px !important;
+            margin-left: 0.75rem !important;
+            max-width: 300px !important;
           }
           
           .copilotKitMessages {
-            padding: 1rem 0.75rem !important;
+            padding: 1rem !important;
           }
         }
         
