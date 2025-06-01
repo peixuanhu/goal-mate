@@ -1,15 +1,14 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChatWrapper } from "@/components/chat-wrapper";
+import { MainLayout } from "@/components/main-layout";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex">
-      {/* 左侧主要内容 */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-muted p-8">
+    <MainLayout>
+      <div className="flex flex-col items-center justify-center gap-8 bg-muted p-8 min-h-screen">
         <h1 className="text-3xl font-bold mb-8">Goal Mate - AI智能目标管理</h1>
-        <div className="flex flex-wrap gap-8">
+        <div className="flex flex-wrap gap-8 justify-center">
           <Card className="w-64">
             <CardHeader>
               <CardTitle>目标管理</CardTitle>
@@ -71,19 +70,6 @@ export default function Home() {
           </CardContent>
         </Card>
       </div>
-      
-      {/* 右侧AI助手聊天界面 */}
-      <div className="w-96 border-l bg-background flex flex-col h-screen">
-        <div className="p-4 border-b bg-background">
-          <h2 className="font-semibold">Goal Mate AI助手</h2>
-          <p className="text-sm text-muted-foreground">
-            智能目标管理助手
-          </p>
-        </div>
-        <div className="flex-1 relative" data-copilot-chat="true">
-          <ChatWrapper />
-        </div>
-      </div>
-    </div>
+    </MainLayout>
   )
 }

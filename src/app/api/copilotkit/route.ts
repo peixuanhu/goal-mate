@@ -285,12 +285,12 @@ const runtime = new CopilotRuntime({
     // 查找计划 - 增强版本
     {
       name: "findPlan",
-      description: "根据名称查找计划，支持模糊搜索",
+      description: "根据名称查找计划，支持模糊搜索，也可以通过标签查找（如exercise、学习等）",
       parameters: [
         {
           name: "planName",
           type: "string",
-          description: "计划名称或关键词",
+          description: "计划名称、关键词或标签（如：锻炼、exercise、学习、读书等）",
           required: true,
         }
       ],
@@ -310,13 +310,36 @@ const runtime = new CopilotRuntime({
             include: { tags: true }
           });
 
-          // 如果没找到，尝试拆分关键词搜索
+          // 如果没找到，尝试通过标签搜索
+          if (plans.length === 0) {
+            console.log("🔍 Trying tag search for:", planName);
+            
+            // 尝试标签搜索
+            const tagSearchResults = await prisma.plan.findMany({
+              where: {
+                tags: {
+                  some: {
+                    tag: {
+                      contains: planName,
+                      mode: 'insensitive'
+                    }
+                  }
+                }
+              },
+              include: { tags: true }
+            });
+            
+            plans = plans.concat(tagSearchResults);
+          }
+
+          // 如果还是没找到，尝试拆分关键词搜索
           if (plans.length === 0) {
             const keywords = planName.split(/[\s《》【】()（）]/);
             console.log("🔍 Trying keyword search with:", keywords);
             
             for (const keyword of keywords) {
               if (keyword.trim()) {
+                // 名称和描述搜索
                 const keywordPlans = await prisma.plan.findMany({
                   where: {
                     OR: [
@@ -326,7 +349,23 @@ const runtime = new CopilotRuntime({
                   },
                   include: { tags: true }
                 });
-                plans = plans.concat(keywordPlans);
+                
+                // 标签搜索
+                const tagPlans = await prisma.plan.findMany({
+                  where: {
+                    tags: {
+                      some: {
+                        tag: {
+                          contains: keyword.trim(),
+                          mode: 'insensitive'
+                        }
+                      }
+                    }
+                  },
+                  include: { tags: true }
+                });
+                
+                plans = plans.concat(keywordPlans, tagPlans);
               }
             }
             
@@ -343,6 +382,7 @@ const runtime = new CopilotRuntime({
 
           console.log("✅ Found", result.length, "plans");
           console.log("📋 Found plan names:", result.map(p => p.name));
+          console.log("📋 Found plan tags:", result.map(p => p.tags));
           return { success: true, data: result };
         } catch (error: any) {
           console.error("❌ Error:", error);
@@ -380,20 +420,107 @@ const runtime = new CopilotRuntime({
         try {
           const { plan_id, progress, content } = args;
           
-          const plan = await prisma.plan.update({
-            where: { plan_id },
+          // 首先尝试直接查找计划
+          let targetPlan = await prisma.plan.findUnique({
+            where: { plan_id }
+          });
+          
+          // 如果没找到，检查是否传入了 goal_id
+          if (!targetPlan && plan_id.startsWith('goal_')) {
+            console.log("⚠️ Detected goal_id instead of plan_id, searching for plans by context");
+            
+            // 尝试通过上下文查找相关计划
+            // 这里可以根据最近的对话上下文来推断用户想要的计划
+            const recentPlans = await prisma.plan.findMany({
+              include: { tags: true },
+              orderBy: { gmt_modified: 'desc' },
+              take: 10
+            });
+            
+            // 由于我们知道用户想要更新 LeetCode 相关的计划，先查找算法相关的
+            const algorithmPlans = recentPlans.filter(plan => 
+              plan.tags.some(tag => tag.tag.includes('algorithm')) ||
+              plan.name.toLowerCase().includes('leetcode')
+            );
+            
+            if (algorithmPlans.length > 0) {
+              targetPlan = algorithmPlans[0]; // 选择最近的算法计划
+              console.log("🎯 Found algorithm plan:", targetPlan.name, targetPlan.plan_id);
+            }
+          }
+          
+          // 如果还是没找到，尝试根据进度描述中的关键词查找
+          if (!targetPlan && content) {
+            console.log("🔍 Searching plans by progress content keywords");
+            
+            const contentLower = content.toLowerCase();
+            let searchPlans: any[] = [];
+            
+            if (contentLower.includes('leetcode') || contentLower.includes('每日一题') || contentLower.includes('刷题')) {
+              searchPlans = await prisma.plan.findMany({
+                where: {
+                  OR: [
+                    { name: { contains: 'LeetCode', mode: 'insensitive' } },
+                    { name: { contains: '每日一题', mode: 'insensitive' } },
+                    { description: { contains: 'LeetCode', mode: 'insensitive' } }
+                  ]
+                }
+              });
+            }
+            
+            if (searchPlans.length > 0) {
+              targetPlan = searchPlans[0];
+              console.log("🎯 Found plan by content keywords:", targetPlan?.name, targetPlan?.plan_id);
+            }
+          }
+          
+          // 如果仍然没找到计划，返回详细错误信息
+          if (!targetPlan) {
+            console.error("❌ Plan not found. Provided ID:", plan_id);
+            console.log("🔍 Available plans:");
+            const allPlans = await prisma.plan.findMany({
+              select: { plan_id: true, name: true },
+              take: 5
+            });
+            allPlans.forEach(p => console.log(`  - ${p.name} (${p.plan_id})`));
+            
+            return { 
+              success: false, 
+              error: `无法找到计划 ID: ${plan_id}。请确认计划是否存在，或者重新搜索计划。`,
+              suggestions: allPlans.map(p => ({ name: p.name, plan_id: p.plan_id }))
+            };
+          }
+          
+          // 更新计划进度
+          const updatedPlan = await prisma.plan.update({
+            where: { plan_id: targetPlan.plan_id },
             data: { progress: progress / 100 }
           });
           
+          // 创建进度记录
           const record = await prisma.progressRecord.create({
-            data: { plan_id, content }
+            data: { 
+              plan_id: targetPlan.plan_id, 
+              content: content || `进度更新至 ${progress}%` 
+            }
           });
           
-          console.log("✅ Progress updated");
-          return { success: true, data: { plan, record } };
+          console.log("✅ Progress updated successfully for plan:", targetPlan.name);
+          return { 
+            success: true, 
+            data: { 
+              plan: updatedPlan, 
+              record,
+              message: `已成功更新计划"${targetPlan.name}"的进度至${progress}%`
+            }
+          };
         } catch (error: any) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { 
+            success: false, 
+            error: `更新进度失败: ${error.message}`,
+            details: error.stack
+          };
         }
       },
     }

@@ -22,28 +22,81 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ list: records, total })
 }
 
-// POST: InsertProgressRecord
+// POST: CreateProgressRecord
 export async function POST(req: NextRequest) {
-  const data = await req.json()
-  const record = await prisma.progressRecord.create({ data })
-  return NextResponse.json(record)
+  try {
+    const data = await req.json()
+    const record = await prisma.progressRecord.create({
+      data: {
+        plan_id: data.plan_id,
+        content: data.content || '',
+        thinking: data.thinking || ''
+      }
+    })
+    return NextResponse.json(record)
+  } catch (error) {
+    console.error('创建进展记录失败:', error)
+    return NextResponse.json(
+      { error: '创建进展记录失败' }, 
+      { status: 500 }
+    )
+  }
 }
 
 // PUT: UpdateProgressRecord
 export async function PUT(req: NextRequest) {
-  const data = await req.json()
-  const { id, ...rest } = data
-  const record = await prisma.progressRecord.update({
-    where: { id },
-    data: rest
-  })
-  return NextResponse.json(record)
+  try {
+    const data = await req.json()
+    const { id, content, thinking } = data
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: '缺少记录ID' }, 
+        { status: 400 }
+      )
+    }
+    
+    const record = await prisma.progressRecord.update({
+      where: { id: parseInt(id) },
+      data: {
+        content: content || '',
+        thinking: thinking || ''
+      }
+    })
+    
+    return NextResponse.json(record)
+  } catch (error) {
+    console.error('更新进展记录失败:', error)
+    return NextResponse.json(
+      { error: '更新进展记录失败' }, 
+      { status: 500 }
+    )
+  }
 }
 
 // DELETE: DeleteProgressRecord
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const id = parseInt(searchParams.get('id') || '0')
-  await prisma.progressRecord.delete({ where: { id } })
-  return NextResponse.json({ success: true })
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: '缺少记录ID' }, 
+        { status: 400 }
+      )
+    }
+    
+    await prisma.progressRecord.delete({
+      where: { id: parseInt(id) }
+    })
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('删除进展记录失败:', error)
+    return NextResponse.json(
+      { error: '删除进展记录失败' }, 
+      { status: 500 }
+    )
+  }
 } 
