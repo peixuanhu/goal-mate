@@ -120,3 +120,153 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* CopilotKit 聊天界面样式 - 强制应用 */
+
+/* 导入CopilotKit默认样式 */
+@import "@copilotkit/react-ui/styles.css";
+
+/* 聊天容器样式 */
+[data-copilot-chat="true"] {
+  height: 100% !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: hsl(var(--background)) !important;
+  border: none !important;
+  overflow: hidden !important;
+  font-family: inherit !important;
+}
+
+/* 覆盖所有CopilotKit内部样式 */
+[data-copilot-chat="true"] *,
+[data-copilot-chat="true"] *::before,
+[data-copilot-chat="true"] *::after {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+/* 聊天组件主体 */
+.copilot-chat {
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: hsl(var(--background)) !important;
+  border: none !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* 强制覆盖所有可能的CopilotKit类 */
+[class*="copilot"],
+[data-copilot-chat="true"] [class*="copilot"],
+[data-copilot-chat="true"] > div,
+[data-copilot-chat="true"] > div > div {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  border: none !important;
+  font-family: inherit !important;
+}
+
+/* 输入框样式 */
+[data-copilot-chat="true"] textarea,
+[data-copilot-chat="true"] input[type="text"],
+[class*="copilot"] textarea,
+[class*="copilot"] input {
+  background: hsl(var(--input)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  padding: 0.75rem !important;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  resize: none !important;
+}
+
+[data-copilot-chat="true"] textarea:focus,
+[data-copilot-chat="true"] input:focus {
+  outline: 2px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
+}
+
+/* 按钮样式 */
+[data-copilot-chat="true"] button,
+[class*="copilot"] button {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border: none !important;
+  border-radius: var(--radius) !important;
+  padding: 0.5rem 1rem !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  transition: background-color 0.2s !important;
+}
+
+[data-copilot-chat="true"] button:hover,
+[class*="copilot"] button:hover {
+  background: hsl(var(--primary) / 0.9) !important;
+}
+
+/* 消息样式 */
+[data-copilot-chat="true"] [class*="message"],
+[class*="copilot"] [class*="message"] {
+  margin-bottom: 0.75rem !important;
+  padding: 0.75rem !important;
+  border-radius: var(--radius) !important;
+  max-width: 85% !important;
+  word-wrap: break-word !important;
+  font-family: inherit !important;
+}
+
+/* 用户消息 */
+[data-copilot-chat="true"] [class*="user"],
+[class*="copilot"] [class*="user"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+/* 助手消息 */
+[data-copilot-chat="true"] [class*="assistant"],
+[class*="copilot"] [class*="assistant"] {
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-right: auto !important;
+  margin-left: 0 !important;
+}
+
+/* 滚动条样式 */
+[data-copilot-chat="true"] *::-webkit-scrollbar {
+  width: 0.25rem !important;
+}
+
+[data-copilot-chat="true"] *::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+[data-copilot-chat="true"] *::-webkit-scrollbar-thumb {
+  background: hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+}
+
+[data-copilot-chat="true"] *::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground)) !important;
+}
+
+/* 强制重置可能冲突的样式 */
+[data-copilot-chat="true"] * {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+[data-copilot-chat="true"] div {
+  padding: 0.5rem !important;
+}
+
+[data-copilot-chat="true"] textarea,
+[data-copilot-chat="true"] button {
+  margin: 0.25rem !important;
+  padding: 0.75rem !important;
+}

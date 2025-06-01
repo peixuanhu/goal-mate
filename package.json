@@ -6,9 +6,18 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma db push --force-reset",
+    "setup": "npm install && npx prisma generate && npx prisma db push"
   },
   "dependencies": {
+    "@copilotkit/react-core": "^1.8.13",
+    "@copilotkit/react-ui": "^1.8.13",
+    "@copilotkit/runtime": "^1.8.13",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@prisma/client": "^6.8.2",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.5",
@@ -17,6 +26,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.511.0",
     "next": "15.3.3",
+    "openai": "^4.104.0",
     "prisma": "^6.8.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
