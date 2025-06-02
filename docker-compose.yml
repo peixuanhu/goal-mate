@@ -22,11 +22,11 @@ services:
       
     ports:
       - "3000:3000"
-    # 等待数据库启动
+    # 初始化数据库并启动应用
     command: >
       sh -c "
-        echo 'Waiting for database to be ready...' &&
-        sleep 10 &&
+        echo 'Initializing database schema...' &&
         npx prisma db push &&
+        echo 'Starting application...' &&
         node server.js
       "

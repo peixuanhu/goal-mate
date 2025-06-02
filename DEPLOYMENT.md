@@ -31,8 +31,8 @@ nano .env
 
 设置以下必需的环境变量：
 ```env
-# 数据库密码（请设置强密码）
-DATABASE_URL="your-database-url"
+# 数据库连接URL（连接到你的独立数据库）
+DATABASE_URL="postgresql://username:password@your-db-host:5432/goalmate"
 
 # OpenAI API 配置
 OPENAI_API_KEY="your-openai-api-key"
@@ -41,6 +41,8 @@ OPENAI_BASE_URL="https://api.openai.com/v1"
 # 如果使用阿里云通义千问
 # OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 ```
+
+**重要**: 请确保你的独立数据库已经创建，并且应用服务器能够访问到数据库。
 
 4. **启动服务**
 ```bash
