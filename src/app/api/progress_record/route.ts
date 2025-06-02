@@ -26,12 +26,38 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const data = await req.json()
-    const record = await prisma.progressRecord.create({
-      data: {
-        plan_id: data.plan_id,
-        content: data.content || '',
-        thinking: data.thinking || ''
+    
+    // 处理自定义时间
+    const createData: {
+      plan_id: string;
+      content: string;
+      thinking: string;
+      gmt_create?: Date;
+    } = {
+      plan_id: data.plan_id,
+      content: data.content || '',
+      thinking: data.thinking || ''
+    }
+    
+    // 如果提供了自定义时间，使用该时间
+    if (data.custom_time) {
+      // 确保时间格式正确处理
+      const customDate = new Date(data.custom_time);
+      // 如果是YYYY-MM-DDTHH:mm格式，需要明确指定为本地时间
+      if (data.custom_time.length === 16 && data.custom_time.includes('T')) {
+        // 解析为本地时间而不是UTC
+        const [datePart, timePart] = data.custom_time.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        createData.gmt_create = new Date(year, month - 1, day, hour, minute);
+      } else {
+        createData.gmt_create = customDate;
       }
+    }
+    // 否则Prisma会自动使用当前时间（@default(now())）
+    
+    const record = await prisma.progressRecord.create({
+      data: createData
     })
     return NextResponse.json(record)
   } catch (error) {
@@ -47,7 +73,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const data = await req.json()
-    const { id, content, thinking } = data
+    const { id, content, thinking, custom_time } = data
     
     if (!id) {
       return NextResponse.json(
@@ -56,12 +82,32 @@ export async function PUT(req: NextRequest) {
       )
     }
     
+    const updateData: {
+      content: string;
+      thinking: string;
+      gmt_create?: Date;
+    } = {
+      content: content || '',
+      thinking: thinking || ''
+    }
+    
+    // 如果提供了自定义时间，更新时间
+    if (custom_time) {
+      // 确保时间格式正确处理
+      if (custom_time.length === 16 && custom_time.includes('T')) {
+        // 解析为本地时间而不是UTC
+        const [datePart, timePart] = custom_time.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        updateData.gmt_create = new Date(year, month - 1, day, hour, minute);
+      } else {
+        updateData.gmt_create = new Date(custom_time);
+      }
+    }
+    
     const record = await prisma.progressRecord.update({
       where: { id: parseInt(id) },
-      data: {
-        content: content || '',
-        thinking: thinking || ''
-      }
+      data: updateData
     })
     
     return NextResponse.json(record)

@@ -32,6 +32,9 @@ model Plan {
   description  String?
   difficulty   String?
   progress     Float    @default(0)
+  is_recurring Boolean  @default(false)
+  recurrence_type String?
+  recurrence_value String?
   tags         PlanTagAssociation[]
   progressRecords ProgressRecord[]
 }

@@ -24,6 +24,7 @@ interface ProgressRecord {
   content: string
   thinking: string
   gmt_create: string
+  custom_time?: string
 }
 
 export default function ProgressPage() {
@@ -130,7 +131,23 @@ export default function ProgressPage() {
 
   // 新增：编辑记录
   const handleEdit = (record: ProgressRecord) => {
-    setForm(record)
+    // 将记录时间转换为datetime-local格式（本地时间）
+    const recordTime = new Date(record.gmt_create)
+    
+    // 获取本地时间的各个部分
+    const year = recordTime.getFullYear()
+    const month = String(recordTime.getMonth() + 1).padStart(2, '0')
+    const day = String(recordTime.getDate()).padStart(2, '0')
+    const hours = String(recordTime.getHours()).padStart(2, '0')
+    const minutes = String(recordTime.getMinutes()).padStart(2, '0')
+    
+    // 构造本地时间格式的字符串 YYYY-MM-DDTHH:mm
+    const formattedTime = `${year}-${month}-${day}T${hours}:${minutes}`
+    
+    setForm({
+      ...record,
+      custom_time: formattedTime
+    })
     setEditingId(record.id)
     // 如果当前是查看所有模式，切换到单个计划模式
     if (planId === 'all') {
@@ -256,6 +273,27 @@ export default function ProgressPage() {
                         onChange={e => setForm(f => ({ ...f, content: e.target.value }))} 
                         required 
                       />
+                    </div>
+
+                    {/* 记录时间（可选） */}
+                    <div className="space-y-2">
+                      <Label htmlFor="recordTime" className="flex items-center gap-2">
+                        记录时间（可选）
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          留空则使用当前时间
+                        </span>
+                      </Label>
+                      <Input
+                        id="recordTime"
+                        type="datetime-local"
+                        className="w-full"
+                        value={form.custom_time || ''}
+                        onChange={e => setForm(f => ({ ...f, custom_time: e.target.value }))}
+                        placeholder="选择记录时间"
+                      />
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        💡 提示：此功能用于补登记之前漏掉的记录，如"昨天忘记记录的进展"
+                      </div>
                     </div>
 
                     {/* 思考总结 */}

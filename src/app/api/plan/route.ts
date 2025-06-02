@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const pageNum = parseInt(searchParams.get('pageNum') || '1')
   const pageSize = parseInt(searchParams.get('pageSize') || '10')
 
-  let where: any = {}
+  const where: Record<string, unknown> = {}
   if (difficulty) where.difficulty = difficulty
 
   // goal_id筛选时，取goal的tag，过滤出带该tag的plan
@@ -33,7 +33,15 @@ export async function GET(req: NextRequest) {
       skip: (pageNum - 1) * pageSize,
       take: pageSize,
       orderBy: { gmt_create: 'desc' },
-      include: { tags: true }
+      include: { 
+        tags: true,
+        progressRecords: {
+          select: {
+            gmt_create: true
+          },
+          orderBy: { gmt_create: 'desc' }
+        }
+      }
     }),
     prisma.plan.count({ where })
   ])
@@ -66,10 +74,14 @@ export async function POST(req: NextRequest) {
 // PUT: UpdatePlan
 export async function PUT(req: NextRequest) {
   const data = await req.json()
-  const { plan_id, tags, ...rest } = data
+  const { plan_id, tags, progressRecords, id, gmt_create, gmt_modified, ...rest } = data
+  
+  // 过滤掉不应该更新的字段
+  const updateData = { ...rest }
+  
   const plan = await prisma.plan.update({
     where: { plan_id },
-    data: rest
+    data: updateData
   })
   // 更新tags
   if (tags && Array.isArray(tags)) {

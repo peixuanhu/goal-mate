@@ -551,24 +551,33 @@ const runtime = new CopilotRuntime({
         {
           name: "progress",
           type: "number",
-          description: "进度(0-100)",
-          required: true,
+          description: "进度(0-100，仅用于普通任务)",
+          required: false,
         },
         {
           name: "content",
           type: "string",
           description: "进度描述",
           required: false,
+        },
+        {
+          name: "custom_time",
+          type: "string",
+          description: "自定义时间（ISO格式，如'2025-01-06T22:00'），可选",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("📈 updateProgress called:", args);
         try {
-          const { plan_id, progress, content } = args;
+          const { plan_id, progress, content, custom_time } = args;
           
           // 首先尝试直接查找计划
           let targetPlan = await prisma.plan.findUnique({
-            where: { plan_id }
+            where: { plan_id },
+            include: {
+              progressRecords: true
+            }
           });
           
           // 如果没找到，检查是否传入了 goal_id
@@ -576,9 +585,8 @@ const runtime = new CopilotRuntime({
             console.log("⚠️ Detected goal_id instead of plan_id, searching for plans by context");
             
             // 尝试通过上下文查找相关计划
-            // 这里可以根据最近的对话上下文来推断用户想要的计划
             const recentPlans = await prisma.plan.findMany({
-              include: { tags: true },
+              include: { tags: true, progressRecords: true },
               orderBy: { gmt_modified: 'desc' },
               take: 10
             });
@@ -610,8 +618,27 @@ const runtime = new CopilotRuntime({
                     { name: { contains: '每日一题', mode: 'insensitive' } },
                     { description: { contains: 'LeetCode', mode: 'insensitive' } }
                   ]
-                }
+                },
+                include: { progressRecords: true }
               });
+            }
+            
+            // 添加拳击相关的搜索
+            if (contentLower.includes('拳击') || contentLower.includes('健身') || contentLower.includes('锻炼') || contentLower.includes('运动')) {
+              const exercisePlans = await prisma.plan.findMany({
+                where: {
+                  OR: [
+                    { name: { contains: '拳击', mode: 'insensitive' } },
+                    { name: { contains: '健身', mode: 'insensitive' } },
+                    { name: { contains: '锻炼', mode: 'insensitive' } },
+                    { name: { contains: '运动', mode: 'insensitive' } },
+                    { description: { contains: '拳击', mode: 'insensitive' } },
+                    { description: { contains: '健身', mode: 'insensitive' } }
+                  ]
+                },
+                include: { progressRecords: true }
+              });
+              searchPlans = [...searchPlans, ...exercisePlans];
             }
             
             if (searchPlans.length > 0) {
@@ -636,36 +663,302 @@ const runtime = new CopilotRuntime({
               suggestions: allPlans.map(p => ({ name: p.name, plan_id: p.plan_id }))
             };
           }
-          
-          // 更新计划进度
-          const updatedPlan = await prisma.plan.update({
-            where: { plan_id: targetPlan.plan_id },
-            data: { progress: progress / 100 }
-          });
-          
+
           // 创建进度记录
-          const record = await prisma.progressRecord.create({
-            data: { 
-              plan_id: targetPlan.plan_id, 
-              content: content || `进度更新至 ${progress}%` 
-            }
-          });
-          
-          console.log("✅ Progress updated successfully for plan:", targetPlan.name);
-          return { 
-            success: true, 
-            data: { 
-              plan: updatedPlan, 
-              record,
-              message: `已成功更新计划"${targetPlan.name}"的进度至${progress}%`
-            }
+          const createData: {
+            plan_id: string;
+            content: string;
+            thinking?: string;
+            gmt_create?: Date;
+          } = {
+            plan_id: targetPlan.plan_id,
+            content: content || '进展记录',
+            thinking: ''
           };
+          
+          // 如果提供了自定义时间，使用该时间
+          if (custom_time) {
+            createData.gmt_create = new Date(custom_time);
+          }
+          
+          const record = await prisma.progressRecord.create({
+            data: createData
+          });
+
+          // 根据任务类型决定如何处理
+          if (targetPlan.is_recurring) {
+            // 周期性任务：不更新progress字段，基于进展记录判断完成状态
+            console.log("📅 Processing recurring task:", targetPlan.name);
+            
+            // 重新获取最新的进展记录以计算状态
+            const updatedPlan = await prisma.plan.findUnique({
+              where: { plan_id: targetPlan.plan_id },
+              include: { progressRecords: true }
+            });
+
+            // 计算当前周期内的完成次数
+            const { isRecurringTaskCompleted } = require('@/lib/recurring-utils');
+            const isCompleted = isRecurringTaskCompleted(updatedPlan);
+            
+            // 计算当前周期内的记录次数
+            const { getCurrentPeriodStart, getCurrentPeriodEnd, RecurrenceType } = require('@/lib/recurring-utils');
+            const recurrenceType = targetPlan.recurrence_type as any;
+            const periodStart = getCurrentPeriodStart(recurrenceType);
+            const periodEnd = getCurrentPeriodEnd(recurrenceType);
+            
+            const currentPeriodRecords = updatedPlan?.progressRecords.filter(r => {
+              const recordDate = new Date(r.gmt_create);
+              return recordDate >= periodStart && recordDate <= periodEnd;
+            }).length || 0;
+
+            const targetCount = parseInt(targetPlan.recurrence_value || '1');
+            
+            console.log("✅ Recurring task record added:", {
+              plan: targetPlan.name,
+              currentRecords: currentPeriodRecords,
+              targetCount: targetCount,
+              isCompleted: isCompleted
+            });
+
+            return {
+              success: true,
+              data: {
+                plan: updatedPlan,
+                record,
+                message: `已成功记录"${targetPlan.name}"的进展。当前周期进度：${currentPeriodRecords}/${targetCount} ${isCompleted ? '✅ 已完成' : ''}`
+              }
+            };
+          } else {
+            // 普通任务：更新progress字段
+            if (progress !== undefined) {
+              const updatedPlan = await prisma.plan.update({
+                where: { plan_id: targetPlan.plan_id },
+                data: { progress: progress / 100 }
+              });
+              
+              console.log("✅ Progress updated successfully for regular plan:", targetPlan.name);
+              return {
+                success: true,
+                data: {
+                  plan: updatedPlan,
+                  record,
+                  message: `已成功更新计划"${targetPlan.name}"的进度至${progress}%`
+                }
+              };
+            } else {
+              console.log("✅ Progress record added for regular plan:", targetPlan.name);
+              return {
+                success: true,
+                data: {
+                  plan: targetPlan,
+                  record,
+                  message: `已成功添加计划"${targetPlan.name}"的进展记录`
+                }
+              };
+            }
+          }
         } catch (error: any) {
           console.error("❌ Error:", error);
           return { 
             success: false, 
             error: `更新进度失败: ${error.message}`,
             details: error.stack
+          };
+        }
+      },
+    },
+
+    // 添加进展记录（支持自定义时间）
+    {
+      name: "addProgressRecord",
+      description: "添加进展记录，支持自定义时间，主要用于记录过去时间的进展",
+      parameters: [
+        {
+          name: "plan_name",
+          type: "string",
+          description: "计划名称或关键词",
+          required: true,
+        },
+        {
+          name: "content",
+          type: "string",
+          description: "进展内容",
+          required: true,
+        },
+        {
+          name: "record_time",
+          type: "string",
+          description: "记录时间（如'昨天晚上10点'、'昨晚10点'、'今天下午2点'等自然语言时间）",
+          required: true,
+        }
+      ],
+      handler: async (args: any) => {
+        console.log("📝 addProgressRecord called:", args);
+        try {
+          const { plan_name, content, record_time } = args;
+          
+          // 搜索计划
+          let targetPlan = null;
+          const planNameLower = plan_name.toLowerCase();
+          
+          // 根据关键词搜索计划
+          if (planNameLower.includes('拳击') || planNameLower.includes('健身') || planNameLower.includes('锻炼') || planNameLower.includes('运动')) {
+            const exercisePlans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  { name: { contains: '拳击', mode: 'insensitive' } },
+                  { name: { contains: '健身', mode: 'insensitive' } },
+                  { name: { contains: '锻炼', mode: 'insensitive' } },
+                  { name: { contains: '运动', mode: 'insensitive' } },
+                  { description: { contains: '拳击', mode: 'insensitive' } },
+                  { description: { contains: '健身', mode: 'insensitive' } }
+                ]
+              },
+              include: { progressRecords: true }
+            });
+            if (exercisePlans.length > 0) {
+              targetPlan = exercisePlans[0];
+            }
+          }
+          
+          if (planNameLower.includes('leetcode') || planNameLower.includes('算法') || planNameLower.includes('刷题')) {
+            const algorithmPlans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  { name: { contains: 'LeetCode', mode: 'insensitive' } },
+                  { name: { contains: '算法', mode: 'insensitive' } },
+                  { name: { contains: '刷题', mode: 'insensitive' } },
+                  { description: { contains: 'LeetCode', mode: 'insensitive' } }
+                ]
+              },
+              include: { progressRecords: true }
+            });
+            if (algorithmPlans.length > 0) {
+              targetPlan = algorithmPlans[0];
+            }
+          }
+          
+          // 如果还没找到，尝试直接按名称模糊搜索
+          if (!targetPlan) {
+            const searchPlans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  { name: { contains: plan_name, mode: 'insensitive' } },
+                  { description: { contains: plan_name, mode: 'insensitive' } }
+                ]
+              },
+              include: { progressRecords: true }
+            });
+            if (searchPlans.length > 0) {
+              targetPlan = searchPlans[0];
+            }
+          }
+          
+          if (!targetPlan) {
+            return {
+              success: false,
+              error: `无法找到名称包含"${plan_name}"的计划`
+            };
+          }
+          
+          // 解析时间
+          const parseRecordTime = (timeStr: string): Date => {
+            const now = new Date();
+            const timeLower = timeStr.toLowerCase();
+            
+            // 昨天相关
+            if (timeLower.includes('昨天') || timeLower.includes('昨晚')) {
+              const yesterday = new Date(now);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              if (timeLower.includes('10点') || timeLower.includes('10:00')) {
+                yesterday.setHours(22, 0, 0, 0); // 晚上10点
+              } else if (timeLower.includes('9点') || timeLower.includes('9:00')) {
+                yesterday.setHours(21, 0, 0, 0);
+              } else if (timeLower.includes('8点') || timeLower.includes('8:00')) {
+                yesterday.setHours(20, 0, 0, 0);
+              } else {
+                yesterday.setHours(20, 0, 0, 0); // 默认晚上8点
+              }
+              return yesterday;
+            }
+            
+            // 今天相关
+            if (timeLower.includes('今天') || timeLower.includes('今晚')) {
+              const today = new Date(now);
+              
+              if (timeLower.includes('10点') || timeLower.includes('10:00')) {
+                if (timeLower.includes('下午') || timeLower.includes('晚上')) {
+                  today.setHours(22, 0, 0, 0);
+                } else {
+                  today.setHours(10, 0, 0, 0);
+                }
+              } else if (timeLower.includes('2点') || timeLower.includes('2:00')) {
+                if (timeLower.includes('下午')) {
+                  today.setHours(14, 0, 0, 0);
+                } else {
+                  today.setHours(2, 0, 0, 0);
+                }
+              } else {
+                today.setHours(now.getHours(), now.getMinutes(), 0, 0);
+              }
+              return today;
+            }
+            
+            // 如果无法解析，返回1小时前
+            const oneHourAgo = new Date(now);
+            oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+            return oneHourAgo;
+          };
+          
+          const recordDate = parseRecordTime(record_time);
+          
+          // 创建进展记录
+          const record = await prisma.progressRecord.create({
+            data: {
+              plan_id: targetPlan.plan_id,
+              content: content,
+              thinking: '',
+              gmt_create: recordDate
+            }
+          });
+
+          // 根据任务类型返回不同的响应
+          if (targetPlan.is_recurring) {
+            // 重新获取最新数据以计算状态
+            const updatedPlan = await prisma.plan.findUnique({
+              where: { plan_id: targetPlan.plan_id },
+              include: { progressRecords: true }
+            });
+
+            const { getCurrentPeriodCount, getTargetCount, isRecurringTaskCompleted } = require('@/lib/recurring-utils');
+            const currentCount = getCurrentPeriodCount(updatedPlan);
+            const targetCount = getTargetCount(updatedPlan);
+            const isCompleted = isRecurringTaskCompleted(updatedPlan);
+            
+            return {
+              success: true,
+              data: {
+                plan: updatedPlan,
+                record,
+                message: `已成功记录"${targetPlan.name}"在${record_time}的进展。当前周期进度：${currentCount}/${targetCount} ${isCompleted ? '✅ 已完成' : ''}`
+              }
+            };
+          } else {
+            return {
+              success: true,
+              data: {
+                plan: targetPlan,
+                record,
+                message: `已成功记录"${targetPlan.name}"在${record_time}的进展`
+              }
+            };
+          }
+        } catch (error: any) {
+          console.error("❌ Error:", error);
+          return {
+            success: false,
+            error: `添加进展记录失败: ${error.message}`
           };
         }
       },
