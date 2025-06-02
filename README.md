@@ -27,10 +27,13 @@
 - **数据库**: PostgreSQL
 - **AI集成**: CopilotKit + 阿里云百炼 (DeepSeek-R1)
 - **UI组件**: Radix UI + shadcn/ui
+- **部署**: Docker + Docker Compose
 
 ## 快速开始
 
-### 1. 环境配置
+### 本地开发
+
+#### 1. 环境配置
 
 创建 `.env.local` 文件并配置以下环境变量：
 
@@ -43,13 +46,13 @@ OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 DATABASE_URL="postgresql://username:password@localhost:5432/goalmate"
 ```
 
-### 2. 安装依赖
+#### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 3. 数据库设置
+#### 3. 数据库设置
 
 ```bash
 # 生成 Prisma 客户端
@@ -59,13 +62,78 @@ npx prisma generate
 npx prisma db push
 ```
 
-### 4. 启动开发服务器
+#### 4. 启动开发服务器
 
 ```bash
 npm run dev
 ```
 
 访问 [http://localhost:3000](http://localhost:3000) 开始使用。
+
+### 🐳 Docker 部署
+
+#### 快速部署
+
+1. **使用部署脚本（推荐）**:
+```bash
+# 克隆项目
+git clone <your-repo-url>
+cd goal-mate
+
+# 运行一键部署脚本
+./deploy.sh start
+```
+
+2. **手动部署**:
+```bash
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑环境变量
+nano .env
+
+# 启动服务
+docker-compose up -d
+```
+
+#### 部署脚本功能
+
+部署脚本 `deploy.sh` 提供了完整的应用管理功能：
+
+```bash
+./deploy.sh start    # 检查环境并启动服务
+./deploy.sh stop     # 停止所有服务
+./deploy.sh restart  # 重启服务
+./deploy.sh logs     # 查看应用日志
+./deploy.sh backup   # 备份数据库
+./deploy.sh status   # 查看服务状态
+./deploy.sh cleanup  # 清理Docker资源
+```
+
+#### 部署要求
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+- 至少 2GB 内存
+- 至少 5GB 磁盘空间
+
+#### 环境变量配置
+
+部署时需要配置以下环境变量：
+
+```bash
+# 数据库密码（请设置强密码）
+POSTGRES_PASSWORD=your-secure-password-here
+
+# OpenAI API 配置
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# 如果使用阿里云通义千问
+# OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+详细的部署指南请参考 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
 ## 阿里云百炼配置
 

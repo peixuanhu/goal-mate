@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Goal Mate 应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: goal-mate-app
+    restart: unless-stopped
+    environment:
+      # 数据库连接
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # Next.js 配置
+      NODE_ENV: production
+      PORT: 3000
+      
+      # API Keys (需要在部署时设置)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      
+    ports:
+      - "3000:3000"
+    # 等待数据库启动
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 10 &&
+        npx prisma db push &&
+        node server.js
+      "
