@@ -605,26 +605,53 @@ const runtime = new CopilotRuntime({
           
           // 如果还是没找到，尝试根据进度描述中的关键词查找
           if (!targetPlan && content) {
-            console.log("🔍 Searching plans by progress content keywords");
+            console.log("🔍 Searching plans by progress content keywords:", content);
             
             const contentLower = content.toLowerCase();
             let searchPlans: any[] = [];
             
-            if (contentLower.includes('leetcode') || contentLower.includes('每日一题') || contentLower.includes('刷题')) {
-              searchPlans = await prisma.plan.findMany({
+            // LeetCode相关的精确匹配
+            if (contentLower.includes('leetcode')) {
+              const leetcodePlans = await prisma.plan.findMany({
                 where: {
                   OR: [
                     { name: { contains: 'LeetCode', mode: 'insensitive' } },
-                    { name: { contains: '每日一题', mode: 'insensitive' } },
                     { description: { contains: 'LeetCode', mode: 'insensitive' } }
                   ]
                 },
                 include: { progressRecords: true }
               });
+              
+              console.log("📋 Found LeetCode plans:", leetcodePlans.map(p => p.name));
+              
+              // 优先匹配"每日"相关的计划
+              if (contentLower.includes('每日') || contentLower.includes('日常') || contentLower.includes('daily')) {
+                targetPlan = leetcodePlans.find(p => 
+                  p.name.toLowerCase().includes('每日') || 
+                  p.name.toLowerCase().includes('日常') ||
+                  p.name.toLowerCase().includes('daily')
+                ) || null;
+                console.log("�� Matched daily plan:", targetPlan?.name);
+              }
+              
+              // 如果没找到每日的，再找周赛相关
+              if (!targetPlan && (contentLower.includes('周赛') || contentLower.includes('contest'))) {
+                targetPlan = leetcodePlans.find(p => 
+                  p.name.toLowerCase().includes('周赛') || 
+                  p.name.toLowerCase().includes('contest')
+                ) || null;
+                console.log("🎯 Matched contest plan:", targetPlan?.name);
+              }
+              
+              // 如果都没找到，选择第一个LeetCode计划
+              if (!targetPlan && leetcodePlans.length > 0) {
+                targetPlan = leetcodePlans[0];
+                console.log("🎯 Fallback to first LeetCode plan:", targetPlan?.name);
+              }
             }
             
-            // 添加拳击相关的搜索
-            if (contentLower.includes('拳击') || contentLower.includes('健身') || contentLower.includes('锻炼') || contentLower.includes('运动')) {
+            // 拳击/健身相关
+            else if (contentLower.includes('拳击') || contentLower.includes('健身') || contentLower.includes('锻炼') || contentLower.includes('运动')) {
               const exercisePlans = await prisma.plan.findMany({
                 where: {
                   OR: [
@@ -638,12 +665,40 @@ const runtime = new CopilotRuntime({
                 },
                 include: { progressRecords: true }
               });
-              searchPlans = [...searchPlans, ...exercisePlans];
+              
+              console.log("🏃 Found exercise plans:", exercisePlans.map(p => p.name));
+              
+              // 根据具体关键词匹配
+              if (contentLower.includes('拳击')) {
+                targetPlan = exercisePlans.find(p => p.name.toLowerCase().includes('拳击')) || null;
+              }
+              
+              if (!targetPlan && exercisePlans.length > 0) {
+                targetPlan = exercisePlans[0];
+              }
             }
             
-            if (searchPlans.length > 0) {
-              targetPlan = searchPlans[0];
-              console.log("🎯 Found plan by content keywords:", targetPlan?.name, targetPlan?.plan_id);
+            // 算法/刷题相关（但不包含LeetCode）
+            else if (contentLower.includes('算法') || contentLower.includes('刷题')) {
+              const algorithmPlans = await prisma.plan.findMany({
+                where: {
+                  OR: [
+                    { name: { contains: '算法', mode: 'insensitive' } },
+                    { name: { contains: '刷题', mode: 'insensitive' } }
+                  ]
+                },
+                include: { progressRecords: true }
+              });
+              
+              console.log("🧮 Found algorithm plans:", algorithmPlans.map(p => p.name));
+              
+              if (algorithmPlans.length > 0) {
+                targetPlan = algorithmPlans[0];
+              }
+            }
+            
+            if (targetPlan) {
+              console.log("🎯 Found plan by content keywords:", targetPlan.name, targetPlan.plan_id);
             }
           }
           
@@ -797,12 +852,51 @@ const runtime = new CopilotRuntime({
         try {
           const { plan_name, content, record_time } = args;
           
-          // 搜索计划
+          // 搜索计划 - 改进匹配逻辑
           let targetPlan = null;
           const planNameLower = plan_name.toLowerCase();
           
-          // 根据关键词搜索计划
-          if (planNameLower.includes('拳击') || planNameLower.includes('健身') || planNameLower.includes('锻炼') || planNameLower.includes('运动')) {
+          console.log("🔍 Searching for plan with keywords:", planNameLower);
+          
+          // 精确匹配：LeetCode相关
+          if (planNameLower.includes('leetcode')) {
+            const algorithmPlans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  { name: { contains: 'LeetCode', mode: 'insensitive' } },
+                  { description: { contains: 'LeetCode', mode: 'insensitive' } }
+                ]
+              },
+              include: { progressRecords: true }
+            });
+            
+            console.log("📋 Found LeetCode plans:", algorithmPlans.map(p => p.name));
+            
+            // 优先匹配"每日"相关的计划
+            if (planNameLower.includes('每日') || planNameLower.includes('日常') || planNameLower.includes('daily')) {
+              targetPlan = algorithmPlans.find(p => 
+                p.name.toLowerCase().includes('每日') || 
+                p.name.toLowerCase().includes('日常') ||
+                p.name.toLowerCase().includes('daily')
+              );
+            }
+            
+            // 如果没找到每日的，再找周赛相关
+            if (!targetPlan && (planNameLower.includes('周赛') || planNameLower.includes('contest'))) {
+              targetPlan = algorithmPlans.find(p => 
+                p.name.toLowerCase().includes('周赛') || 
+                p.name.toLowerCase().includes('contest')
+              );
+            }
+            
+            // 如果都没找到，选择第一个LeetCode计划
+            if (!targetPlan && algorithmPlans.length > 0) {
+              targetPlan = algorithmPlans[0];
+            }
+          }
+          
+          // 拳击/健身相关
+          else if (planNameLower.includes('拳击') || planNameLower.includes('健身') || planNameLower.includes('锻炼') || planNameLower.includes('运动')) {
             const exercisePlans = await prisma.plan.findMany({
               where: {
                 OR: [
@@ -816,23 +910,33 @@ const runtime = new CopilotRuntime({
               },
               include: { progressRecords: true }
             });
-            if (exercisePlans.length > 0) {
+            
+            console.log("🏃 Found exercise plans:", exercisePlans.map(p => p.name));
+            
+            // 根据具体关键词匹配
+            if (planNameLower.includes('拳击')) {
+              targetPlan = exercisePlans.find(p => p.name.toLowerCase().includes('拳击'));
+            }
+            
+            if (!targetPlan && exercisePlans.length > 0) {
               targetPlan = exercisePlans[0];
             }
           }
           
-          if (planNameLower.includes('leetcode') || planNameLower.includes('算法') || planNameLower.includes('刷题')) {
+          // 算法/刷题相关（但不包含LeetCode）
+          else if (planNameLower.includes('算法') || planNameLower.includes('刷题')) {
             const algorithmPlans = await prisma.plan.findMany({
               where: {
                 OR: [
-                  { name: { contains: 'LeetCode', mode: 'insensitive' } },
                   { name: { contains: '算法', mode: 'insensitive' } },
-                  { name: { contains: '刷题', mode: 'insensitive' } },
-                  { description: { contains: 'LeetCode', mode: 'insensitive' } }
+                  { name: { contains: '刷题', mode: 'insensitive' } }
                 ]
               },
               include: { progressRecords: true }
             });
+            
+            console.log("🧮 Found algorithm plans:", algorithmPlans.map(p => p.name));
+            
             if (algorithmPlans.length > 0) {
               targetPlan = algorithmPlans[0];
             }
@@ -840,6 +944,8 @@ const runtime = new CopilotRuntime({
           
           // 如果还没找到，尝试直接按名称模糊搜索
           if (!targetPlan) {
+            console.log("🔍 Trying fuzzy search for:", plan_name);
+            
             const searchPlans = await prisma.plan.findMany({
               where: {
                 OR: [
@@ -849,17 +955,26 @@ const runtime = new CopilotRuntime({
               },
               include: { progressRecords: true }
             });
+            
+            console.log("📋 Fuzzy search results:", searchPlans.map(p => p.name));
+            
             if (searchPlans.length > 0) {
-              targetPlan = searchPlans[0];
+              // 优先选择名称更匹配的计划
+              targetPlan = searchPlans.find(p => 
+                p.name.toLowerCase().includes(planNameLower)
+              ) || searchPlans[0];
             }
           }
           
           if (!targetPlan) {
+            console.log("❌ No plan found for:", plan_name);
             return {
               success: false,
-              error: `无法找到名称包含"${plan_name}"的计划`
+              error: `无法找到名称包含"${plan_name}"的计划。请检查计划名称是否正确，或者创建新的计划。`
             };
           }
+
+          console.log("✅ Selected plan:", targetPlan.name);
           
           // 解析时间
           const parseRecordTime = (timeStr: string): Date => {

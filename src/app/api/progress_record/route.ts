@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const data = await req.json()
-    const { id, content, thinking, custom_time } = data
+    const { id, content, thinking, custom_time, plan_id } = data
     
     if (!id) {
       return NextResponse.json(
@@ -85,10 +85,16 @@ export async function PUT(req: NextRequest) {
     const updateData: {
       content: string;
       thinking: string;
+      plan_id?: string;
       gmt_create?: Date;
     } = {
       content: content || '',
       thinking: thinking || ''
+    }
+    
+    // 如果提供了plan_id，更新所属计划
+    if (plan_id) {
+      updateData.plan_id = plan_id;
     }
     
     // 如果提供了自定义时间，更新时间

@@ -1,25 +1,27 @@
 # 使用官方 Node.js 18 Alpine 镜像作为基础镜像
 FROM node:18-alpine AS base
 
-# 安装依赖阶段
-FROM base AS deps
-# 检查 https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine
-# 如果需要，可以安装 libc6-compat
+# 安装系统依赖
 RUN apk add --no-cache libc6-compat
-WORKDIR /app
-
-# 复制包管理文件
-COPY package.json package-lock.json* ./
-# 安装生产依赖
-RUN npm ci --only=production
 
 # 构建阶段
 FROM base AS builder
 WORKDIR /app
-# 复制包管理文件并安装所有依赖（包括devDependencies）
+
+# 安装构建工具 (Python和make对于某些npm包是必需的)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    py3-pip
+
+# 复制包管理文件
 COPY package.json package-lock.json* ./
+
+# 安装所有依赖（包括devDependencies，构建时需要）
 RUN npm ci
 
+# 复制源代码
 COPY . .
 
 # 生成 Prisma 客户端
@@ -40,7 +42,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 复制构建后的应用
+# 从构建阶段复制必要文件
 COPY --from=builder /app/public ./public
 
 # 自动利用输出跟踪来减少镜像大小

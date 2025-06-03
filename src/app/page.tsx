@@ -2,8 +2,17 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MainLayout } from "@/components/main-layout";
+import { redirect } from 'next/navigation';
+import { isAuthenticated } from '@/lib/auth';
 
-export default function Home() {
+export default async function Home() {
+  // 服务器端身份验证检查
+  const authenticated = await isAuthenticated();
+  
+  if (!authenticated) {
+    redirect('/login');
+  }
+
   return (
     <MainLayout>
       <div className="flex flex-col items-center justify-center gap-8 bg-muted p-8 min-h-screen">
@@ -59,12 +68,12 @@ export default function Home() {
             <div className="space-y-2 text-sm">
               <p><strong>你可以这样与AI助手对话：</strong></p>
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>"刚下班有点累，我现在能做些什么轻松的事？"</li>
-                <li>"我现在活力满满，根据我制定的计划的完成情况，我现在合适的任务有哪些？"</li>
-                <li>"我本年的读书计划完成得如何？"</li>
-                <li>"我想读《DDIA》，这本书难度比较高，你帮我新加一条计划"</li>
-                <li>"我把《CSAPP》第3章读完了，你帮我更新进度"</li>
-                <li>"根据我的目标以及完成事项的记录，按照目标类型来分不同板块，生成本周周报"</li>
+                <li>&quot;刚下班有点累，我现在能做些什么轻松的事？&quot;</li>
+                <li>&quot;我现在活力满满，根据我制定的计划的完成情况，我现在合适的任务有哪些？&quot;</li>
+                <li>&quot;我本年的读书计划完成得如何？&quot;</li>
+                <li>&quot;我想读《DDIA》，这本书难度比较高，你帮我新加一条计划&quot;</li>
+                <li>&quot;我把《CSAPP》第3章读完了，你帮我更新进度&quot;</li>
+                <li>&quot;根据我的目标以及完成事项的记录，按照目标类型来分不同板块，生成本周周报&quot;</li>
               </ul>
             </div>
           </CardContent>

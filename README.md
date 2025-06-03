@@ -9,6 +9,7 @@
 - 📊 **进度记录**: 详细记录任务完成情况和思考反思
 - 📈 **智能报告**: 自动生成周报、月报等进展报告
 - 🤖 **AI助手**: 通过自然语言与系统交互，智能调用各种功能
+- 🔐 **身份验证**: 简单但安全的用户认证系统，保护个人数据
 
 ## AI助手能力
 
@@ -27,6 +28,7 @@
 - **数据库**: PostgreSQL
 - **AI集成**: CopilotKit + 阿里云百炼 (DeepSeek-R1)
 - **UI组件**: Radix UI + shadcn/ui
+- **身份验证**: JWT + httpOnly Cookie
 - **部署**: Docker + Docker Compose
 
 ## 快速开始
@@ -44,7 +46,17 @@ OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # 数据库配置
 DATABASE_URL="postgresql://username:password@localhost:5432/goalmate"
+
+# 身份验证配置
+AUTH_USERNAME="admin"
+AUTH_PASSWORD="your-secure-password"
+AUTH_SECRET="your-jwt-secret-key-at-least-32-chars-long"
 ```
+
+**身份验证配置说明**:
+- `AUTH_USERNAME`: 登录用户名，可以自定义
+- `AUTH_PASSWORD`: 登录密码，建议使用强密码
+- `AUTH_SECRET`: JWT签名密钥，必须至少32字符长，可使用 `openssl rand -base64 32` 生成
 
 #### 2. 安装依赖
 
