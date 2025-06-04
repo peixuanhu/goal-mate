@@ -102,14 +102,20 @@ const runtime = new CopilotRuntime({
         {
           name: "userState",
           type: "string",
-          description: "用户描述的当前状态，如：累、活力满满、有点忙、想学习等",
+          description: "用户描述的当前状态",
           required: true,
+        },
+        {
+          name: "filterCriteria",
+          type: "string",
+          description: "筛选条件，如难度、标签等（可选）",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🎯 recommendTasks called:", args);
         try {
-          const { userState } = args;
+          const { userState, filterCriteria } = args;
           
           // 获取所有未完成的计划
           const allPlans = await prisma.plan.findMany({
@@ -126,57 +132,25 @@ const runtime = new CopilotRuntime({
               data: {
                 message: "目前没有未完成的计划，建议先创建一些目标和计划。",
                 tasks: [],
-                recommendation: "可以说'帮我创建一个读书目标'来开始制定计划。"
+                recommendation: "可以创建新的目标和计划来开始。"
               }
             };
           }
 
-          // 根据用户状态智能分析和推荐
-          let recommendedTasks = [];
-          let analysisMessage = "";
-          
-          // 使用简单的关键词匹配和逻辑来分析用户状态
-          const stateText = userState.toLowerCase();
-          
-          if (stateText.includes('累') || stateText.includes('疲劳') || stateText.includes('tired') || stateText.includes('下班')) {
-            // 推荐轻松的任务
-            recommendedTasks = allPlans
-              .filter(plan => plan.difficulty === '低' || plan.name.includes('轻松') || plan.name.includes('简单'))
-              .slice(0, 3);
-            analysisMessage = "检测到你比较疲劳，为你推荐一些轻松的任务";
-          } else if (stateText.includes('活力') || stateText.includes('精力') || stateText.includes('energetic') || stateText.includes('motivated')) {
-            // 推荐有挑战性的任务
-            recommendedTasks = allPlans
-              .filter(plan => plan.difficulty === '高' || plan.difficulty === '中')
-              .slice(0, 3);
-            analysisMessage = "检测到你精力充沛，为你推荐一些有挑战性的任务";
-          } else if (stateText.includes('学习') || stateText.includes('读书') || stateText.includes('study')) {
-            // 推荐学习相关任务
-            recommendedTasks = allPlans
-              .filter(plan => 
-                plan.tags.some(tag => tag.tag.includes('学习') || tag.tag.includes('读书') || tag.tag.includes('技能'))
-              )
-              .slice(0, 3);
-            analysisMessage = "检测到你想学习，为你推荐学习相关的任务";
-          } else if (stateText.includes('忙') || stateText.includes('时间少') || stateText.includes('busy')) {
-            // 推荐快速完成的任务
-            recommendedTasks = allPlans
-              .filter(plan => plan.difficulty === '低')
-              .slice(0, 2);
-            analysisMessage = "检测到你比较忙，为你推荐一些可以快速完成的任务";
-          } else {
-            // 默认推荐：根据进度和优先级
-            recommendedTasks = allPlans
-              .sort((a, b) => a.progress - b.progress) // 优先推荐进度较低的
-              .slice(0, 3);
-            analysisMessage = "根据你的计划进度，为你推荐以下任务";
+          // 应用基本筛选（如果提供了筛选条件）
+          let filteredPlans = allPlans;
+          if (filterCriteria) {
+            // 简单的筛选逻辑，可以根据难度或标签筛选
+            filteredPlans = allPlans.filter(plan => 
+              (plan.difficulty && plan.difficulty.includes(filterCriteria)) ||
+              plan.tags.some(tag => tag.tag.includes(filterCriteria))
+            );
           }
 
-          // 如果没有匹配的任务，回退到通用推荐
-          if (recommendedTasks.length === 0) {
-            recommendedTasks = allPlans.slice(0, 3);
-            analysisMessage = "为你推荐一些待完成的任务";
-          }
+          // 默认推荐逻辑：根据进度和创建时间
+          const recommendedTasks = filteredPlans
+            .sort((a, b) => a.progress - b.progress)
+            .slice(0, 5);
 
           const result = recommendedTasks.map(plan => ({
             ...plan,
@@ -187,7 +161,7 @@ const runtime = new CopilotRuntime({
           return { 
             success: true, 
             data: {
-              message: analysisMessage,
+              message: `基于当前状态"${userState}"为您推荐以下任务`,
               userState: userState,
               tasks: result,
               totalAvailable: allPlans.length
@@ -203,24 +177,57 @@ const runtime = new CopilotRuntime({
     // 查询计划
     {
       name: "queryPlans",
-      description: "查询计划列表，可以按难度筛选，如果不指定难度则返回所有计划",
+      description: "查询计划列表，支持多种筛选条件",
       parameters: [
         {
           name: "difficulty",
           type: "string",
           description: "难度筛选（可选）",
           required: false,
+        },
+        {
+          name: "tag",
+          type: "string",
+          description: "标签筛选（可选）",
+          required: false,
+        },
+        {
+          name: "keyword",
+          type: "string",
+          description: "关键词搜索（可选）",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 queryPlans called:", args);
         try {
-          const where = args.difficulty ? { difficulty: args.difficulty } : {};
-          const plans = await prisma.plan.findMany({
+          const { difficulty, tag, keyword } = args;
+          
+          let where: any = {};
+          
+          if (difficulty) {
+            where.difficulty = difficulty;
+          }
+          
+          if (keyword) {
+            where.OR = [
+              { name: { contains: keyword, mode: 'insensitive' } },
+              { description: { contains: keyword, mode: 'insensitive' } }
+            ];
+          }
+          
+          let plans = await prisma.plan.findMany({
             where,
             include: { tags: true },
             orderBy: { gmt_create: 'desc' }
           });
+          
+          // 如果指定了标签，进一步筛选
+          if (tag) {
+            plans = plans.filter(plan => 
+              plan.tags.some(t => t.tag.includes(tag))
+            );
+          }
           
           const result = plans.map(plan => ({
             ...plan,
@@ -228,7 +235,6 @@ const runtime = new CopilotRuntime({
           }));
 
           console.log("✅ Found", result.length, "plans");
-          console.log("📋 Plan names:", result.map(p => p.name));
           return { success: true, data: result };
         } catch (error: any) {
           console.error("❌ Error:", error);
@@ -339,13 +345,13 @@ const runtime = new CopilotRuntime({
         {
           name: "difficulty",
           type: "string",
-          description: "难度等级，必须使用以下标准值之一：easy、medium、hard。如果用户说中文（如简单、中等、困难），请转换为对应的英文标准值",
+          description: "难度等级，必须使用以下标准值之一：easy、medium、hard",
           required: true,
         },
         {
           name: "tags",
           type: "string",
-          description: "标签，多个标签用逗号分隔。请优先使用已有标签，避免创建重复标签",
+          description: "标签，多个标签用逗号分隔",
           required: true,
         }
       ],
@@ -354,20 +360,9 @@ const runtime = new CopilotRuntime({
         try {
           const { name, description, difficulty, tags } = args;
           
-          // 查询已有标签，提供给AI参考（但实际上AI在调用时已经看到了描述）
-          const existingTags = await prisma.planTagAssociation.findMany({
-            select: { tag: true },
-            distinct: ['tag']
-          });
-          
-          const existingTagList = existingTags.map(t => t.tag);
-          console.log("📋 Existing tags in database:", existingTagList);
-          
           // 验证难度值是否为标准值
           const validDifficulties = ['easy', 'medium', 'hard'];
           if (!validDifficulties.includes(difficulty)) {
-            console.warn(`⚠️ Non-standard difficulty value: ${difficulty}, using 'medium' as default`);
-            // 这里可以返回错误让AI重新选择，或者使用默认值
             return { 
               success: false, 
               error: `难度值必须是以下之一：${validDifficulties.join('、')}。您提供的值是：${difficulty}`,
@@ -377,8 +372,6 @@ const runtime = new CopilotRuntime({
           
           // 处理标签
           const tagList = tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag);
-          console.log("📋 User provided tags:", tagList);
-          console.log("📋 Available existing tags:", existingTagList);
           
           // 生成唯一的plan_id
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
@@ -428,98 +421,43 @@ const runtime = new CopilotRuntime({
       },
     },
 
-    // 查找计划 - 增强版本
+    // 查找计划 - 简化版本
     {
       name: "findPlan",
-      description: "根据名称查找计划，支持模糊搜索，也可以通过标签查找（如exercise、学习等）",
+      description: "根据名称、关键词或标签查找计划，支持模糊搜索",
       parameters: [
         {
-          name: "planName",
+          name: "searchTerm",
           type: "string",
-          description: "计划名称、关键词或标签（如：锻炼、exercise、学习、读书等）",
+          description: "搜索词，可以是计划名称、关键词或标签",
           required: true,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 findPlan called:", args);
         try {
-          const { planName } = args;
+          const { searchTerm } = args;
           
-          // 先尝试精确搜索
-          let plans = await prisma.plan.findMany({
+          // 综合搜索：名称、描述、标签
+          const plans = await prisma.plan.findMany({
             where: {
               OR: [
-                { name: { contains: planName, mode: 'insensitive' } },
-                { description: { contains: planName, mode: 'insensitive' } }
+                { name: { contains: searchTerm, mode: 'insensitive' } },
+                { description: { contains: searchTerm, mode: 'insensitive' } },
+                {
+                  tags: {
+                    some: {
+                      tag: {
+                        contains: searchTerm,
+                        mode: 'insensitive'
+                      }
+                    }
+                  }
+                }
               ]
             },
             include: { tags: true }
           });
-
-          // 如果没找到，尝试通过标签搜索
-          if (plans.length === 0) {
-            console.log("🔍 Trying tag search for:", planName);
-            
-            // 尝试标签搜索
-            const tagSearchResults = await prisma.plan.findMany({
-              where: {
-                tags: {
-                  some: {
-                    tag: {
-                      contains: planName,
-                      mode: 'insensitive'
-                    }
-                  }
-                }
-              },
-              include: { tags: true }
-            });
-            
-            plans = plans.concat(tagSearchResults);
-          }
-
-          // 如果还是没找到，尝试拆分关键词搜索
-          if (plans.length === 0) {
-            const keywords = planName.split(/[\s《》【】()（）]/);
-            console.log("🔍 Trying keyword search with:", keywords);
-            
-            for (const keyword of keywords) {
-              if (keyword.trim()) {
-                // 名称和描述搜索
-                const keywordPlans = await prisma.plan.findMany({
-                  where: {
-                    OR: [
-                      { name: { contains: keyword.trim(), mode: 'insensitive' } },
-                      { description: { contains: keyword.trim(), mode: 'insensitive' } }
-                    ]
-                  },
-                  include: { tags: true }
-                });
-                
-                // 标签搜索
-                const tagPlans = await prisma.plan.findMany({
-                  where: {
-                    tags: {
-                      some: {
-                        tag: {
-                          contains: keyword.trim(),
-                          mode: 'insensitive'
-                        }
-                      }
-                    }
-                  },
-                  include: { tags: true }
-                });
-                
-                plans = plans.concat(keywordPlans, tagPlans);
-              }
-            }
-            
-            // 去重
-            plans = plans.filter((plan, index, self) => 
-              index === self.findIndex(p => p.plan_id === plan.plan_id)
-            );
-          }
 
           const result = plans.map(plan => ({
             ...plan,
@@ -527,8 +465,6 @@ const runtime = new CopilotRuntime({
           }));
 
           console.log("✅ Found", result.length, "plans");
-          console.log("📋 Found plan names:", result.map(p => p.name));
-          console.log("📋 Found plan tags:", result.map(p => p.tags));
           return { success: true, data: result };
         } catch (error: any) {
           console.error("❌ Error:", error);
@@ -537,7 +473,7 @@ const runtime = new CopilotRuntime({
       },
     },
 
-    // 更新进度
+    // 更新进度 - 简化版本
     {
       name: "updateProgress",
       description: "更新计划进度",
@@ -563,159 +499,184 @@ const runtime = new CopilotRuntime({
         {
           name: "custom_time",
           type: "string",
-          description: "自定义时间（ISO格式，如'2025-01-06T22:00'），可选",
+          description: "自定义时间（ISO格式或自然语言描述，如'昨天晚上11点59分'）",
           required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("📈 updateProgress called:", args);
+        
+        // 自然语言时间解析函数
+        function parseNaturalTime(timeStr: string): Date {
+          const now = new Date();
+          const timeLower = timeStr.toLowerCase().trim();
+          
+          // 处理"昨天"相关的时间
+          if (timeLower.includes('昨天') || timeLower.includes('昨晚')) {
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            // 提取时间信息
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              // 判断是否为晚上时间
+              if (hour <= 12 && (timeLower.includes('晚') || timeLower.includes('夜'))) {
+                yesterday.setHours(hour + 12, minute, 0, 0);
+              } else {
+                yesterday.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              // 如果没有具体时间，默认设为晚上8点
+              yesterday.setHours(20, 0, 0, 0);
+            }
+            return yesterday;
+          }
+          
+          // 处理"今天"相关的时间
+          if (timeLower.includes('今天') || timeLower.includes('今晚')) {
+            const today = new Date(now);
+            
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              if (hour <= 12 && (timeLower.includes('下午') || timeLower.includes('晚') || timeLower.includes('夜'))) {
+                today.setHours(hour + 12, minute, 0, 0);
+              } else {
+                today.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              today.setHours(now.getHours(), now.getMinutes(), 0, 0);
+            }
+            return today;
+          }
+          
+          // 处理"前天"相关的时间
+          if (timeLower.includes('前天')) {
+            const dayBeforeYesterday = new Date(now);
+            dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2);
+            
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              if (hour <= 12 && (timeLower.includes('晚') || timeLower.includes('夜'))) {
+                dayBeforeYesterday.setHours(hour + 12, minute, 0, 0);
+              } else {
+                dayBeforeYesterday.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              dayBeforeYesterday.setHours(20, 0, 0, 0);
+            }
+            return dayBeforeYesterday;
+          }
+          
+          // 处理具体的小时前
+          const hoursAgoMatch = timeLower.match(/(\d+)小时前/);
+          if (hoursAgoMatch) {
+            const hoursAgo = parseInt(hoursAgoMatch[1]);
+            const hoursAgoDate = new Date(now);
+            hoursAgoDate.setHours(hoursAgoDate.getHours() - hoursAgo);
+            return hoursAgoDate;
+          }
+          
+          // 处理具体的分钟前
+          const minutesAgoMatch = timeLower.match(/(\d+)分钟前/);
+          if (minutesAgoMatch) {
+            const minutesAgo = parseInt(minutesAgoMatch[1]);
+            const minutesAgoDate = new Date(now);
+            minutesAgoDate.setMinutes(minutesAgoDate.getMinutes() - minutesAgo);
+            return minutesAgoDate;
+          }
+          
+          // 如果都无法解析，返回当前时间
+          return now;
+        }
+        
         try {
           const { plan_id, progress, content, custom_time } = args;
           
-          // 首先尝试直接查找计划
-          let targetPlan = await prisma.plan.findUnique({
+          // 查找计划
+          const targetPlan = await prisma.plan.findUnique({
             where: { plan_id },
             include: {
               progressRecords: true
             }
           });
           
-          // 如果没找到，检查是否传入了 goal_id
-          if (!targetPlan && plan_id.startsWith('goal_')) {
-            console.log("⚠️ Detected goal_id instead of plan_id, searching for plans by context");
-            
-            // 尝试通过上下文查找相关计划
-            const recentPlans = await prisma.plan.findMany({
-              include: { tags: true, progressRecords: true },
-              orderBy: { gmt_modified: 'desc' },
-              take: 10
-            });
-            
-            // 由于我们知道用户想要更新 LeetCode 相关的计划，先查找算法相关的
-            const algorithmPlans = recentPlans.filter(plan => 
-              plan.tags.some(tag => tag.tag.includes('algorithm')) ||
-              plan.name.toLowerCase().includes('leetcode')
-            );
-            
-            if (algorithmPlans.length > 0) {
-              targetPlan = algorithmPlans[0]; // 选择最近的算法计划
-              console.log("🎯 Found algorithm plan:", targetPlan.name, targetPlan.plan_id);
-            }
-          }
-          
-          // 如果还是没找到，尝试根据进度描述中的关键词查找
-          if (!targetPlan && content) {
-            console.log("🔍 Searching plans by progress content keywords:", content);
-            
-            const contentLower = content.toLowerCase();
-            let searchPlans: any[] = [];
-            
-            // LeetCode相关的精确匹配
-            if (contentLower.includes('leetcode')) {
-              const leetcodePlans = await prisma.plan.findMany({
-                where: {
-                  OR: [
-                    { name: { contains: 'LeetCode', mode: 'insensitive' } },
-                    { description: { contains: 'LeetCode', mode: 'insensitive' } }
-                  ]
-                },
-                include: { progressRecords: true }
-              });
-              
-              console.log("📋 Found LeetCode plans:", leetcodePlans.map(p => p.name));
-              
-              // 优先匹配"每日"相关的计划
-              if (contentLower.includes('每日') || contentLower.includes('日常') || contentLower.includes('daily')) {
-                targetPlan = leetcodePlans.find(p => 
-                  p.name.toLowerCase().includes('每日') || 
-                  p.name.toLowerCase().includes('日常') ||
-                  p.name.toLowerCase().includes('daily')
-                ) || null;
-                console.log("�� Matched daily plan:", targetPlan?.name);
-              }
-              
-              // 如果没找到每日的，再找周赛相关
-              if (!targetPlan && (contentLower.includes('周赛') || contentLower.includes('contest'))) {
-                targetPlan = leetcodePlans.find(p => 
-                  p.name.toLowerCase().includes('周赛') || 
-                  p.name.toLowerCase().includes('contest')
-                ) || null;
-                console.log("🎯 Matched contest plan:", targetPlan?.name);
-              }
-              
-              // 如果都没找到，选择第一个LeetCode计划
-              if (!targetPlan && leetcodePlans.length > 0) {
-                targetPlan = leetcodePlans[0];
-                console.log("🎯 Fallback to first LeetCode plan:", targetPlan?.name);
-              }
-            }
-            
-            // 拳击/健身相关
-            else if (contentLower.includes('拳击') || contentLower.includes('健身') || contentLower.includes('锻炼') || contentLower.includes('运动')) {
-              const exercisePlans = await prisma.plan.findMany({
-                where: {
-                  OR: [
-                    { name: { contains: '拳击', mode: 'insensitive' } },
-                    { name: { contains: '健身', mode: 'insensitive' } },
-                    { name: { contains: '锻炼', mode: 'insensitive' } },
-                    { name: { contains: '运动', mode: 'insensitive' } },
-                    { description: { contains: '拳击', mode: 'insensitive' } },
-                    { description: { contains: '健身', mode: 'insensitive' } }
-                  ]
-                },
-                include: { progressRecords: true }
-              });
-              
-              console.log("🏃 Found exercise plans:", exercisePlans.map(p => p.name));
-              
-              // 根据具体关键词匹配
-              if (contentLower.includes('拳击')) {
-                targetPlan = exercisePlans.find(p => p.name.toLowerCase().includes('拳击')) || null;
-              }
-              
-              if (!targetPlan && exercisePlans.length > 0) {
-                targetPlan = exercisePlans[0];
-              }
-            }
-            
-            // 算法/刷题相关（但不包含LeetCode）
-            else if (contentLower.includes('算法') || contentLower.includes('刷题')) {
-              const algorithmPlans = await prisma.plan.findMany({
-                where: {
-                  OR: [
-                    { name: { contains: '算法', mode: 'insensitive' } },
-                    { name: { contains: '刷题', mode: 'insensitive' } }
-                  ]
-                },
-                include: { progressRecords: true }
-              });
-              
-              console.log("🧮 Found algorithm plans:", algorithmPlans.map(p => p.name));
-              
-              if (algorithmPlans.length > 0) {
-                targetPlan = algorithmPlans[0];
-              }
-            }
-            
-            if (targetPlan) {
-              console.log("🎯 Found plan by content keywords:", targetPlan.name, targetPlan.plan_id);
-            }
-          }
-          
-          // 如果仍然没找到计划，返回详细错误信息
           if (!targetPlan) {
-            console.error("❌ Plan not found. Provided ID:", plan_id);
-            console.log("🔍 Available plans:");
-            const allPlans = await prisma.plan.findMany({
-              select: { plan_id: true, name: true },
-              take: 5
+            // 尝试通过名称查找
+            const plans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  { name: { contains: plan_id, mode: 'insensitive' } },
+                  { description: { contains: plan_id, mode: 'insensitive' } }
+                ]
+              },
+              include: { progressRecords: true }
             });
-            allPlans.forEach(p => console.log(`  - ${p.name} (${p.plan_id})`));
             
-            return { 
-              success: false, 
-              error: `无法找到计划 ID: ${plan_id}。请确认计划是否存在，或者重新搜索计划。`,
-              suggestions: allPlans.map(p => ({ name: p.name, plan_id: p.plan_id }))
+            if (plans.length === 0) {
+              return { 
+                success: false, 
+                error: `无法找到计划 ID: ${plan_id}。请确认计划是否存在。`
+              };
+            }
+            
+            // 使用第一个匹配的计划
+            const plan = plans[0];
+            
+            // 创建进度记录
+            const createData: {
+              plan_id: string;
+              content: string;
+              thinking?: string;
+              gmt_create?: Date;
+            } = {
+              plan_id: plan.plan_id,
+              content: content || '进展记录',
+              thinking: ''
+            };
+            
+            if (custom_time) {
+              try {
+                // 首先尝试解析为ISO格式
+                const isoDate = new Date(custom_time);
+                if (!isNaN(isoDate.getTime())) {
+                  createData.gmt_create = isoDate;
+                } else {
+                  // 如果ISO格式解析失败，尝试自然语言解析
+                  createData.gmt_create = parseNaturalTime(custom_time);
+                }
+              } catch {
+                createData.gmt_create = parseNaturalTime(custom_time);
+              }
+            }
+            
+            const record = await prisma.progressRecord.create({
+              data: createData
+            });
+
+            // 更新progress字段（如果提供）
+            if (progress !== undefined) {
+              await prisma.plan.update({
+                where: { plan_id: plan.plan_id },
+                data: { progress: progress / 100 }
+              });
+            }
+
+            return {
+              success: true,
+              data: {
+                plan: plan,
+                record,
+                message: `已成功更新计划"${plan.name}"的进度`
+              }
             };
           }
 
@@ -731,9 +692,8 @@ const runtime = new CopilotRuntime({
             thinking: ''
           };
           
-          // 如果提供了自定义时间，使用该时间
           if (custom_time) {
-            createData.gmt_create = new Date(custom_time);
+            createData.gmt_create = parseNaturalTime(custom_time);
           }
           
           const record = await prisma.progressRecord.create({
@@ -742,37 +702,10 @@ const runtime = new CopilotRuntime({
 
           // 根据任务类型决定如何处理
           if (targetPlan.is_recurring) {
-            // 周期性任务：不更新progress字段，基于进展记录判断完成状态
-            console.log("📅 Processing recurring task:", targetPlan.name);
-            
-            // 重新获取最新的进展记录以计算状态
+            // 周期性任务处理
             const updatedPlan = await prisma.plan.findUnique({
               where: { plan_id: targetPlan.plan_id },
               include: { progressRecords: true }
-            });
-
-            // 计算当前周期内的完成次数
-            const { isRecurringTaskCompleted } = require('@/lib/recurring-utils');
-            const isCompleted = isRecurringTaskCompleted(updatedPlan);
-            
-            // 计算当前周期内的记录次数
-            const { getCurrentPeriodStart, getCurrentPeriodEnd, RecurrenceType } = require('@/lib/recurring-utils');
-            const recurrenceType = targetPlan.recurrence_type as any;
-            const periodStart = getCurrentPeriodStart(recurrenceType);
-            const periodEnd = getCurrentPeriodEnd(recurrenceType);
-            
-            const currentPeriodRecords = updatedPlan?.progressRecords.filter(r => {
-              const recordDate = new Date(r.gmt_create);
-              return recordDate >= periodStart && recordDate <= periodEnd;
-            }).length || 0;
-
-            const targetCount = parseInt(targetPlan.recurrence_value || '1');
-            
-            console.log("✅ Recurring task record added:", {
-              plan: targetPlan.name,
-              currentRecords: currentPeriodRecords,
-              targetCount: targetCount,
-              isCompleted: isCompleted
             });
 
             return {
@@ -780,7 +713,7 @@ const runtime = new CopilotRuntime({
               data: {
                 plan: updatedPlan,
                 record,
-                message: `已成功记录"${targetPlan.name}"的进展。当前周期进度：${currentPeriodRecords}/${targetCount} ${isCompleted ? '✅ 已完成' : ''}`
+                message: `已成功记录"${targetPlan.name}"的进展`
               }
             };
           } else {
@@ -791,7 +724,6 @@ const runtime = new CopilotRuntime({
                 data: { progress: progress / 100 }
               });
               
-              console.log("✅ Progress updated successfully for regular plan:", targetPlan.name);
               return {
                 success: true,
                 data: {
@@ -801,7 +733,6 @@ const runtime = new CopilotRuntime({
                 }
               };
             } else {
-              console.log("✅ Progress record added for regular plan:", targetPlan.name);
               return {
                 success: true,
                 data: {
@@ -816,22 +747,21 @@ const runtime = new CopilotRuntime({
           console.error("❌ Error:", error);
           return { 
             success: false, 
-            error: `更新进度失败: ${error.message}`,
-            details: error.stack
+            error: `更新进度失败: ${error.message}`
           };
         }
       },
     },
 
-    // 添加进展记录（支持自定义时间）
+    // 添加进展记录 - 简化版本
     {
       name: "addProgressRecord",
-      description: "添加进展记录，支持自定义时间，主要用于记录过去时间的进展",
+      description: "添加进展记录，支持自定义时间",
       parameters: [
         {
-          name: "plan_name",
+          name: "plan_identifier",
           type: "string",
-          description: "计划名称或关键词",
+          description: "计划标识符（可以是plan_id、计划名称或关键词）",
           required: true,
         },
         {
@@ -843,190 +773,156 @@ const runtime = new CopilotRuntime({
         {
           name: "record_time",
           type: "string",
-          description: "记录时间（如'昨天晚上10点'、'昨晚10点'、'今天下午2点'等自然语言时间）",
-          required: true,
+          description: "记录时间（ISO格式或自然语言描述）",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("📝 addProgressRecord called:", args);
+        
+        // 自然语言时间解析函数
+        function parseNaturalTime(timeStr: string): Date {
+          const now = new Date();
+          const timeLower = timeStr.toLowerCase().trim();
+          
+          // 处理"昨天"相关的时间
+          if (timeLower.includes('昨天') || timeLower.includes('昨晚')) {
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            // 提取时间信息
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              // 判断是否为晚上时间
+              if (hour <= 12 && (timeLower.includes('晚') || timeLower.includes('夜'))) {
+                yesterday.setHours(hour + 12, minute, 0, 0);
+              } else {
+                yesterday.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              // 如果没有具体时间，默认设为晚上8点
+              yesterday.setHours(20, 0, 0, 0);
+            }
+            return yesterday;
+          }
+          
+          // 处理"今天"相关的时间
+          if (timeLower.includes('今天') || timeLower.includes('今晚')) {
+            const today = new Date(now);
+            
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              if (hour <= 12 && (timeLower.includes('下午') || timeLower.includes('晚') || timeLower.includes('夜'))) {
+                today.setHours(hour + 12, minute, 0, 0);
+              } else {
+                today.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              today.setHours(now.getHours(), now.getMinutes(), 0, 0);
+            }
+            return today;
+          }
+          
+          // 处理"前天"相关的时间
+          if (timeLower.includes('前天')) {
+            const dayBeforeYesterday = new Date(now);
+            dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 2);
+            
+            const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+              
+              if (hour <= 12 && (timeLower.includes('晚') || timeLower.includes('夜'))) {
+                dayBeforeYesterday.setHours(hour + 12, minute, 0, 0);
+              } else {
+                dayBeforeYesterday.setHours(hour, minute, 0, 0);
+              }
+            } else {
+              dayBeforeYesterday.setHours(20, 0, 0, 0);
+            }
+            return dayBeforeYesterday;
+          }
+          
+          // 处理具体的小时前
+          const hoursAgoMatch = timeLower.match(/(\d+)小时前/);
+          if (hoursAgoMatch) {
+            const hoursAgo = parseInt(hoursAgoMatch[1]);
+            const hoursAgoDate = new Date(now);
+            hoursAgoDate.setHours(hoursAgoDate.getHours() - hoursAgo);
+            return hoursAgoDate;
+          }
+          
+          // 处理具体的分钟前
+          const minutesAgoMatch = timeLower.match(/(\d+)分钟前/);
+          if (minutesAgoMatch) {
+            const minutesAgo = parseInt(minutesAgoMatch[1]);
+            const minutesAgoDate = new Date(now);
+            minutesAgoDate.setMinutes(minutesAgoDate.getMinutes() - minutesAgo);
+            return minutesAgoDate;
+          }
+          
+          // 如果都无法解析，返回当前时间
+          return now;
+        }
+        
         try {
-          const { plan_name, content, record_time } = args;
+          const { plan_identifier, content, record_time } = args;
           
-          // 搜索计划 - 改进匹配逻辑
-          let targetPlan = null;
-          const planNameLower = plan_name.toLowerCase();
+          // 搜索计划
+          let targetPlan = await prisma.plan.findUnique({
+            where: { plan_id: plan_identifier },
+            include: { progressRecords: true }
+          });
           
-          console.log("🔍 Searching for plan with keywords:", planNameLower);
-          
-          // 精确匹配：LeetCode相关
-          if (planNameLower.includes('leetcode')) {
-            const algorithmPlans = await prisma.plan.findMany({
-              where: {
-                OR: [
-                  { name: { contains: 'LeetCode', mode: 'insensitive' } },
-                  { description: { contains: 'LeetCode', mode: 'insensitive' } }
-                ]
-              },
-              include: { progressRecords: true }
-            });
-            
-            console.log("📋 Found LeetCode plans:", algorithmPlans.map(p => p.name));
-            
-            // 优先匹配"每日"相关的计划
-            if (planNameLower.includes('每日') || planNameLower.includes('日常') || planNameLower.includes('daily')) {
-              targetPlan = algorithmPlans.find(p => 
-                p.name.toLowerCase().includes('每日') || 
-                p.name.toLowerCase().includes('日常') ||
-                p.name.toLowerCase().includes('daily')
-              );
-            }
-            
-            // 如果没找到每日的，再找周赛相关
-            if (!targetPlan && (planNameLower.includes('周赛') || planNameLower.includes('contest'))) {
-              targetPlan = algorithmPlans.find(p => 
-                p.name.toLowerCase().includes('周赛') || 
-                p.name.toLowerCase().includes('contest')
-              );
-            }
-            
-            // 如果都没找到，选择第一个LeetCode计划
-            if (!targetPlan && algorithmPlans.length > 0) {
-              targetPlan = algorithmPlans[0];
-            }
-          }
-          
-          // 拳击/健身相关
-          else if (planNameLower.includes('拳击') || planNameLower.includes('健身') || planNameLower.includes('锻炼') || planNameLower.includes('运动')) {
-            const exercisePlans = await prisma.plan.findMany({
-              where: {
-                OR: [
-                  { name: { contains: '拳击', mode: 'insensitive' } },
-                  { name: { contains: '健身', mode: 'insensitive' } },
-                  { name: { contains: '锻炼', mode: 'insensitive' } },
-                  { name: { contains: '运动', mode: 'insensitive' } },
-                  { description: { contains: '拳击', mode: 'insensitive' } },
-                  { description: { contains: '健身', mode: 'insensitive' } }
-                ]
-              },
-              include: { progressRecords: true }
-            });
-            
-            console.log("🏃 Found exercise plans:", exercisePlans.map(p => p.name));
-            
-            // 根据具体关键词匹配
-            if (planNameLower.includes('拳击')) {
-              targetPlan = exercisePlans.find(p => p.name.toLowerCase().includes('拳击'));
-            }
-            
-            if (!targetPlan && exercisePlans.length > 0) {
-              targetPlan = exercisePlans[0];
-            }
-          }
-          
-          // 算法/刷题相关（但不包含LeetCode）
-          else if (planNameLower.includes('算法') || planNameLower.includes('刷题')) {
-            const algorithmPlans = await prisma.plan.findMany({
-              where: {
-                OR: [
-                  { name: { contains: '算法', mode: 'insensitive' } },
-                  { name: { contains: '刷题', mode: 'insensitive' } }
-                ]
-              },
-              include: { progressRecords: true }
-            });
-            
-            console.log("🧮 Found algorithm plans:", algorithmPlans.map(p => p.name));
-            
-            if (algorithmPlans.length > 0) {
-              targetPlan = algorithmPlans[0];
-            }
-          }
-          
-          // 如果还没找到，尝试直接按名称模糊搜索
+          // 如果按ID没找到，尝试按名称搜索
           if (!targetPlan) {
-            console.log("🔍 Trying fuzzy search for:", plan_name);
-            
-            const searchPlans = await prisma.plan.findMany({
+            const plans = await prisma.plan.findMany({
               where: {
                 OR: [
-                  { name: { contains: plan_name, mode: 'insensitive' } },
-                  { description: { contains: plan_name, mode: 'insensitive' } }
+                  { name: { contains: plan_identifier, mode: 'insensitive' } },
+                  { description: { contains: plan_identifier, mode: 'insensitive' } }
                 ]
               },
               include: { progressRecords: true }
             });
             
-            console.log("📋 Fuzzy search results:", searchPlans.map(p => p.name));
-            
-            if (searchPlans.length > 0) {
-              // 优先选择名称更匹配的计划
-              targetPlan = searchPlans.find(p => 
-                p.name.toLowerCase().includes(planNameLower)
-              ) || searchPlans[0];
+            if (plans.length > 0) {
+              targetPlan = plans[0];
             }
           }
           
           if (!targetPlan) {
-            console.log("❌ No plan found for:", plan_name);
             return {
               success: false,
-              error: `无法找到名称包含"${plan_name}"的计划。请检查计划名称是否正确，或者创建新的计划。`
+              error: `无法找到标识符为"${plan_identifier}"的计划。请检查计划名称或ID是否正确。`
             };
           }
 
           console.log("✅ Selected plan:", targetPlan.name);
           
-          // 解析时间
-          const parseRecordTime = (timeStr: string): Date => {
-            const now = new Date();
-            const timeLower = timeStr.toLowerCase();
-            
-            // 昨天相关
-            if (timeLower.includes('昨天') || timeLower.includes('昨晚')) {
-              const yesterday = new Date(now);
-              yesterday.setDate(yesterday.getDate() - 1);
-              
-              if (timeLower.includes('10点') || timeLower.includes('10:00')) {
-                yesterday.setHours(22, 0, 0, 0); // 晚上10点
-              } else if (timeLower.includes('9点') || timeLower.includes('9:00')) {
-                yesterday.setHours(21, 0, 0, 0);
-              } else if (timeLower.includes('8点') || timeLower.includes('8:00')) {
-                yesterday.setHours(20, 0, 0, 0);
+          // 处理记录时间
+          let recordDate = new Date();
+          if (record_time) {
+            try {
+              // 首先尝试解析为ISO格式
+              const isoDate = new Date(record_time);
+              if (!isNaN(isoDate.getTime())) {
+                recordDate = isoDate;
               } else {
-                yesterday.setHours(20, 0, 0, 0); // 默认晚上8点
+                // 如果ISO格式解析失败，尝试自然语言解析
+                recordDate = parseNaturalTime(record_time);
               }
-              return yesterday;
+            } catch {
+              recordDate = parseNaturalTime(record_time);
             }
-            
-            // 今天相关
-            if (timeLower.includes('今天') || timeLower.includes('今晚')) {
-              const today = new Date(now);
-              
-              if (timeLower.includes('10点') || timeLower.includes('10:00')) {
-                if (timeLower.includes('下午') || timeLower.includes('晚上')) {
-                  today.setHours(22, 0, 0, 0);
-                } else {
-                  today.setHours(10, 0, 0, 0);
-                }
-              } else if (timeLower.includes('2点') || timeLower.includes('2:00')) {
-                if (timeLower.includes('下午')) {
-                  today.setHours(14, 0, 0, 0);
-                } else {
-                  today.setHours(2, 0, 0, 0);
-                }
-              } else {
-                today.setHours(now.getHours(), now.getMinutes(), 0, 0);
-              }
-              return today;
-            }
-            
-            // 如果无法解析，返回1小时前
-            const oneHourAgo = new Date(now);
-            oneHourAgo.setHours(oneHourAgo.getHours() - 1);
-            return oneHourAgo;
-          };
-          
-          const recordDate = parseRecordTime(record_time);
+          }
           
           // 创建进展记录
           const record = await prisma.progressRecord.create({
@@ -1038,37 +934,14 @@ const runtime = new CopilotRuntime({
             }
           });
 
-          // 根据任务类型返回不同的响应
-          if (targetPlan.is_recurring) {
-            // 重新获取最新数据以计算状态
-            const updatedPlan = await prisma.plan.findUnique({
-              where: { plan_id: targetPlan.plan_id },
-              include: { progressRecords: true }
-            });
-
-            const { getCurrentPeriodCount, getTargetCount, isRecurringTaskCompleted } = require('@/lib/recurring-utils');
-            const currentCount = getCurrentPeriodCount(updatedPlan);
-            const targetCount = getTargetCount(updatedPlan);
-            const isCompleted = isRecurringTaskCompleted(updatedPlan);
-            
-            return {
-              success: true,
-              data: {
-                plan: updatedPlan,
-                record,
-                message: `已成功记录"${targetPlan.name}"在${record_time}的进展。当前周期进度：${currentCount}/${targetCount} ${isCompleted ? '✅ 已完成' : ''}`
-              }
-            };
-          } else {
-            return {
-              success: true,
-              data: {
-                plan: targetPlan,
-                record,
-                message: `已成功记录"${targetPlan.name}"在${record_time}的进展`
-              }
-            };
-          }
+          return {
+            success: true,
+            data: {
+              plan: targetPlan,
+              record,
+              message: `已成功记录"${targetPlan.name}"的进展`
+            }
+          };
         } catch (error: any) {
           console.error("❌ Error:", error);
           return {
