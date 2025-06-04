@@ -55,6 +55,7 @@ export default function PlansPage() {
   const [difficulty, setDifficulty] = useState('all')
   const [selectedGoals, setSelectedGoals] = useState<string[]>([])
   const [taskTypeFilter, setTaskTypeFilter] = useState('all')  // 新增：任务类型筛选
+  const [searchQuery, setSearchQuery] = useState('')
   const [goals, setGoals] = useState<Array<{ goal_id: string; name: string; tag: string }>>([])
   const [pageNum, setPageNum] = useState(1)
   const [pageSize] = useState(10)
@@ -103,6 +104,9 @@ export default function PlansPage() {
   // 筛选函数
   const filterPlans = (plans: Plan[]): Plan[] => {
     return plans.filter(plan => {
+      // 名称搜索
+      const nameMatch = !searchQuery || plan.name.toLowerCase().includes(searchQuery.toLowerCase());
+      
       // 标签筛选（多选）
       const tagMatch = selectedTags.length === 0 || selectedTags.some(tag => plan.tags.includes(tag));
       
@@ -117,7 +121,7 @@ export default function PlansPage() {
         (taskTypeFilter === 'recurring' && plan.is_recurring) ||
         (taskTypeFilter === 'normal' && !plan.is_recurring);
       
-      return tagMatch && difficultyMatch && goalMatch && taskTypeMatch;
+      return nameMatch && tagMatch && difficultyMatch && goalMatch && taskTypeMatch;
     });
   };
 
@@ -175,7 +179,7 @@ export default function PlansPage() {
       setPlans(paginatedPlans);
       setTotal(filteredPlans.length);
     }
-  }, [selectedTags, difficulty, selectedGoals, taskTypeFilter, sortConfig, allPlans, pageSize]);
+  }, [selectedTags, difficulty, selectedGoals, taskTypeFilter, searchQuery, sortConfig, allPlans, pageSize]);
 
   // 当页码变化时重新分页
   useEffect(() => {
@@ -469,7 +473,18 @@ export default function PlansPage() {
                   <Label className="text-sm font-medium">筛选条件</Label>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                  {/* 搜索框 */}
+                  <div className="space-y-2">
+                    <Label>搜索名称</Label>
+                    <Input
+                      placeholder="输入计划名称关键词..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+
                   {/* 标签筛选（多选） */}
                   <div className="space-y-2">
                     <Label>筛选标签（多选）</Label>
@@ -592,35 +607,18 @@ export default function PlansPage() {
               <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[120px]">名称</TableHead>
-                    <TableHead className="min-w-[100px]">标签</TableHead>
-                    <TableHead className="min-w-[80px]">
-                      <button 
-                        className="flex items-center gap-1 hover:text-blue-600 cursor-pointer"
-                        onClick={() => handleSort('difficulty')}
-                      >
-                        难度
-                        {renderSortIcon('difficulty')}
-                      </button>
-                    </TableHead>
-                    <TableHead className="min-w-[100px]">
-                      <button 
-                        className="flex items-center gap-1 hover:text-blue-600 cursor-pointer"
-                        onClick={() => handleSort('status')}
-                      >
-                        状态
-                        {renderSortIcon('status')}
-                      </button>
-                    </TableHead>
-                    <TableHead className="min-w-[80px]">类型</TableHead>
-                    <TableHead className="min-w-[200px]">描述</TableHead>
-                    <TableHead className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                    <TableHead className="w-[220px] min-w-[220px]">计划名称</TableHead>
+                    <TableHead className="w-[100px] min-w-[100px]">难度</TableHead>
+                    <TableHead className="w-[120px] min-w-[120px]">进度</TableHead>
+                    <TableHead className="w-[100px] min-w-[100px]">类型</TableHead>
+                    <TableHead className="w-[350px] min-w-[350px]">描述</TableHead>
+                    <TableHead className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                           加载中...
@@ -629,7 +627,7 @@ export default function PlansPage() {
                     </TableRow>
                   ) : plans.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         <div className="space-y-2">
                           <div className="text-gray-500 dark:text-gray-400">暂无计划记录</div>
                           <div className="text-sm text-gray-400 dark:text-gray-500">开始创建您的第一个计划吧！</div>
@@ -639,7 +637,7 @@ export default function PlansPage() {
                   ) : (
                     plans.map(plan => (
                       <TableRow key={plan.plan_id}>
-                        <TableCell className="min-w-[120px] font-medium">
+                        <TableCell className="w-[220px] min-w-[220px] font-medium">
                           <TextPreview
                             text={plan.name}
                             maxLength={50}
@@ -647,14 +645,7 @@ export default function PlansPage() {
                             truncateLines={2}
                           />
                         </TableCell>
-                        <TableCell className="min-w-[100px]">
-                          <TextPreview
-                            text={plan.tags.join(', ')}
-                            maxLength={30}
-                            truncateLines={1}
-                          />
-                        </TableCell>
-                        <TableCell className="min-w-[80px]">
+                        <TableCell className="w-[100px] min-w-[100px]">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             plan.difficulty === 'easy' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                             plan.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
@@ -663,7 +654,7 @@ export default function PlansPage() {
                             {plan.difficulty}
                           </span>
                         </TableCell>
-                        <TableCell className="min-w-[100px]">
+                        <TableCell className="w-[120px] min-w-[120px]">
                           {plan.is_recurring ? (
                             <div className="flex flex-col gap-1">
                               <span className="text-sm font-medium">
@@ -709,7 +700,7 @@ export default function PlansPage() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="min-w-[80px]">
+                        <TableCell className="w-[100px] min-w-[100px]">
                           {plan.is_recurring ? (
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
                               {getRecurrenceTypeDisplay(plan.recurrence_type || '')}
@@ -720,7 +711,7 @@ export default function PlansPage() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="min-w-[200px]">
+                        <TableCell className="w-[350px] min-w-[350px]">
                           <TextPreview
                             text={plan.description || ''}
                             maxLength={100}
@@ -728,7 +719,7 @@ export default function PlansPage() {
                             truncateLines={2}
                           />
                         </TableCell>
-                        <TableCell className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                        <TableCell className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l">
                           <div className="flex gap-1 items-center justify-start whitespace-nowrap">
                             <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 px-2 text-xs">
                               编辑

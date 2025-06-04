@@ -25,6 +25,7 @@ interface Goal {
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [tag, setTag] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [pageNum, setPageNum] = useState(1)
   const [pageSize] = useState(10)
   const [total, setTotal] = useState(0)
@@ -36,7 +37,12 @@ export default function GoalsPage() {
 
   const fetchGoals = async () => {
     setLoading(true)
-    const params = new URLSearchParams({ tag, pageNum: String(pageNum), pageSize: String(pageSize) })
+    const params = new URLSearchParams({ 
+      tag, 
+      pageNum: String(pageNum), 
+      pageSize: String(pageSize),
+      ...(searchQuery && { search: searchQuery })
+    })
     const res = await fetch(`/api/goal?${params}`)
     const data = await res.json()
     setGoals(data.list)
@@ -48,7 +54,7 @@ export default function GoalsPage() {
     fetch('/api/tag?pageSize=1000').then(res => res.json()).then(setTagOptions)
   }, [])
 
-  useEffect(() => { fetchGoals() }, [tag, pageNum])
+  useEffect(() => { fetchGoals() }, [tag, pageNum, searchQuery])
 
   const handleSubmit = async (e: any) => {
     e.preventDefault()
@@ -157,17 +163,31 @@ export default function GoalsPage() {
 
               {/* 筛选器 */}
               <div className="mb-6 mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <Label className="text-sm font-medium">筛选标签</Label>
-                  <Select value={tag || 'all'} onValueChange={v => { setTag(v === 'all' ? '' : v); setPageNum(1) }}>
-                    <SelectTrigger className="w-full sm:w-60">
-                      <SelectValue placeholder="全部标签" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部标签</SelectItem>
-                      {tagOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">搜索名称</Label>
+                    <Input
+                      placeholder="输入目标名称关键词..."
+                      value={searchQuery}
+                      onChange={e => {
+                        setSearchQuery(e.target.value)
+                        setPageNum(1) // 搜索时重置到第一页
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">筛选标签</Label>
+                    <Select value={tag || 'all'} onValueChange={v => { setTag(v === 'all' ? '' : v); setPageNum(1) }}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="全部标签" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部标签</SelectItem>
+                        {tagOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
@@ -176,10 +196,10 @@ export default function GoalsPage() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[150px]">名称</TableHead>
-                      <TableHead className="min-w-[100px]">标签</TableHead>
-                      <TableHead className="min-w-[250px]">描述</TableHead>
-                      <TableHead className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                      <TableHead className="w-[220px] min-w-[220px]">名称</TableHead>
+                      <TableHead className="w-[140px] min-w-[140px]">标签</TableHead>
+                      <TableHead className="w-[380px] min-w-[380px]">描述</TableHead>
+                      <TableHead className="w-[190px] min-w-[190px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -202,7 +222,7 @@ export default function GoalsPage() {
                     ) : (
                       goals.map(goal => (
                         <TableRow key={goal.goal_id}>
-                          <TableCell className="min-w-[150px] font-medium">
+                          <TableCell className="w-[220px] min-w-[220px] font-medium">
                             <TextPreview
                               text={goal.name}
                               maxLength={50}
@@ -210,20 +230,20 @@ export default function GoalsPage() {
                               truncateLines={2}
                             />
                           </TableCell>
-                          <TableCell className="min-w-[100px]">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs font-medium">
+                          <TableCell className="w-[140px] min-w-[140px]">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                               {goal.tag}
                             </span>
                           </TableCell>
-                          <TableCell className="min-w-[250px]">
+                          <TableCell className="w-[380px] min-w-[380px]">
                             <TextPreview
-                              text={goal.description}
+                              text={goal.description || ''}
                               maxLength={100}
                               className="text-sm text-gray-600 dark:text-gray-400"
-                              truncateLines={3}
+                              truncateLines={2}
                             />
                           </TableCell>
-                          <TableCell className="min-w-[180px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                          <TableCell className="w-[190px] min-w-[190px] sticky right-0 bg-white dark:bg-gray-950 border-l">
                             <div className="flex gap-1 items-center justify-start whitespace-nowrap">
                               <Button 
                                 size="sm" 

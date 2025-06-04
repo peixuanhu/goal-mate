@@ -36,6 +36,7 @@ export default function ProgressPage() {
   const [editingId, setEditingId] = useState<number | null>(null) // 新增：编辑状态
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'all' | 'single'>('all') // 新增视图模式
+  const [searchQuery, setSearchQuery] = useState('')
   const searchParams = useSearchParams();
 
   const fetchPlans = async () => {
@@ -48,7 +49,13 @@ export default function ProgressPage() {
     setLoading(true)
     try {
       // 获取所有进展记录，按时间排序
-      const res = await fetch('/api/progress_record?pageSize=100&orderBy=gmt_create&order=desc')
+      const params = new URLSearchParams({ 
+        pageSize: '100', 
+        orderBy: 'gmt_create', 
+        order: 'desc',
+        ...(searchQuery && { search: searchQuery })
+      })
+      const res = await fetch(`/api/progress_record?${params}`)
       const data = await res.json()
       
       // 为每条记录添加计划名称
@@ -73,7 +80,11 @@ export default function ProgressPage() {
       return
     }
     setLoading(true)
-    const res = await fetch(`/api/progress_record?plan_id=${pid}`)
+    const params = new URLSearchParams({ 
+      plan_id: pid,
+      ...(searchQuery && { search: searchQuery })
+    })
+    const res = await fetch(`/api/progress_record?${params}`)
     const data = await res.json()
     setRecords(data.list)
     setLoading(false)
@@ -85,7 +96,7 @@ export default function ProgressPage() {
     if (plans.length > 0) {
       fetchRecords(planId)
     }
-  }, [planId, plans])
+  }, [planId, plans, searchQuery])
   
   useEffect(() => {
     const urlPlanId = searchParams.get('plan_id');
@@ -236,29 +247,40 @@ export default function ProgressPage() {
             <CardContent>
               {/* 计划选择器 */}
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <Label className="text-sm font-medium">选择计划</Label>
-                  <Combobox
-                    options={[
-                      ...(viewMode === 'all' ? ['查看所有计划'] : []),
-                      ...plans.map(p => p.name)
-                    ]}
-                    value={
-                      planId === 'all' 
-                        ? '查看所有计划' 
-                        : plans.find(p => p.plan_id === planId)?.name || ''
-                    }
-                    onChange={v => {
-                      if (v === '查看所有计划') {
-                        setPlanId('all')
-                      } else {
-                        const p = plans.find(p => p.name === v)
-                        if (p) setPlanId(p.plan_id)
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">选择计划</Label>
+                    <Combobox
+                      options={[
+                        ...(viewMode === 'all' ? ['查看所有计划'] : []),
+                        ...plans.map(p => p.name)
+                      ]}
+                      value={
+                        planId === 'all' 
+                          ? '查看所有计划' 
+                          : plans.find(p => p.plan_id === planId)?.name || ''
                       }
-                    }}
-                    placeholder="请选择计划"
-                    className="w-full sm:w-80"
-                  />
+                      onChange={v => {
+                        if (v === '查看所有计划') {
+                          setPlanId('all')
+                        } else {
+                          const p = plans.find(p => p.name === v)
+                          if (p) setPlanId(p.plan_id)
+                        }
+                      }}
+                      placeholder="请选择计划"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">搜索内容</Label>
+                    <Input
+                      placeholder="搜索进展内容或思考..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               </div>
               
@@ -378,11 +400,11 @@ export default function ProgressPage() {
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[140px]">时间</TableHead>
-                      {planId === 'all' && <TableHead className="min-w-[120px]">计划名称</TableHead>}
-                      <TableHead className="min-w-[250px]">内容</TableHead>
-                      <TableHead className="min-w-[250px]">思考</TableHead>
-                      <TableHead className="min-w-[130px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                      <TableHead className="w-[150px] min-w-[150px]">时间</TableHead>
+                      {planId === 'all' && <TableHead className="w-[160px] min-w-[160px]">计划名称</TableHead>}
+                      <TableHead className="w-[320px] min-w-[320px]">内容</TableHead>
+                      <TableHead className="w-[320px] min-w-[320px]">思考</TableHead>
+                      <TableHead className="w-[140px] min-w-[140px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -407,11 +429,11 @@ export default function ProgressPage() {
                     ) : (
                       records.map(r => (
                         <TableRow key={r.id} className={editingId === r.id ? 'bg-blue-50 dark:bg-blue-950' : ''}>
-                          <TableCell className="min-w-[140px] text-sm font-mono">
+                          <TableCell className="w-[150px] min-w-[150px] text-sm font-mono">
                             {new Date(r.gmt_create).toLocaleString()}
                           </TableCell>
                           {planId === 'all' && (
-                            <TableCell className="min-w-[120px] font-medium">
+                            <TableCell className="w-[160px] min-w-[160px] font-medium">
                               <TextPreview
                                 text={r.plan_name || ''}
                                 maxLength={40}
@@ -420,7 +442,7 @@ export default function ProgressPage() {
                               />
                             </TableCell>
                           )}
-                          <TableCell className="min-w-[250px]">
+                          <TableCell className="w-[320px] min-w-[320px]">
                             <TextPreview
                               text={r.content}
                               maxLength={120}
@@ -428,7 +450,7 @@ export default function ProgressPage() {
                               truncateLines={3}
                             />
                           </TableCell>
-                          <TableCell className="min-w-[250px]">
+                          <TableCell className="w-[320px] min-w-[320px]">
                             <TextPreview
                               text={r.thinking || ''}
                               maxLength={120}
@@ -436,7 +458,7 @@ export default function ProgressPage() {
                               truncateLines={3}
                             />
                           </TableCell>
-                          <TableCell className="min-w-[130px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                          <TableCell className="w-[140px] min-w-[140px] sticky right-0 bg-white dark:bg-gray-950 border-l">
                             <div className="flex gap-1 items-center justify-start whitespace-nowrap">
                               <Button 
                                 size="sm" 

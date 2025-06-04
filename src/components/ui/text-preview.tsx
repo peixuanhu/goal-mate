@@ -23,50 +23,67 @@ export function TextPreview({
   const targetRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const showTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // 改进截断逻辑 - 只要文本存在且长度超过maxLength就显示hover
   const shouldTruncate = text && text.length > maxLength
   const displayText = shouldTruncate ? text.substring(0, maxLength) + '...' : text
 
   const handleMouseEnter = (e: React.MouseEvent) => {
-    // 清除隐藏延迟
+    // 清除所有延迟
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current)
       hideTimeoutRef.current = null
+    }
+    if (showTimeoutRef.current) {
+      clearTimeout(showTimeoutRef.current)
+      showTimeoutRef.current = null
     }
     
     // 只要有文本内容就可以hover，不仅仅是截断的
     if (!text || text.length === 0) return
     
-    const rect = e.currentTarget.getBoundingClientRect()
-    const tooltipHeight = 250 // 估算气泡高度
-    const tooltipWidth = 400
-    const spaceAbove = rect.top
-    const spaceBelow = window.innerHeight - rect.bottom
-    const spaceRight = window.innerWidth - rect.left
-    
-    // 决定气泡显示在上方还是下方
-    const showAbove = spaceBelow < tooltipHeight && spaceAbove > tooltipHeight
-    
-    // 决定水平位置
-    let leftPosition = rect.left
-    if (spaceRight < tooltipWidth) {
-      leftPosition = window.innerWidth - tooltipWidth - 20
-    }
-    
-    setTooltipPosition({
-      top: showAbove ? rect.top : rect.bottom + 10,
-      left: Math.max(10, leftPosition), // 确保不超出左边界
-      showAbove: showAbove
-    })
-    setShowTooltip(true)
+    // 增加进入延迟，减少误触发
+    showTimeoutRef.current = setTimeout(() => {
+      if (!targetRef.current) return // 确保元素仍然存在
+      
+      const rect = targetRef.current.getBoundingClientRect()
+      const tooltipHeight = 250 // 估算气泡高度
+      const tooltipWidth = 400
+      const spaceAbove = rect.top
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceRight = window.innerWidth - rect.left
+      
+      // 决定气泡显示在上方还是下方
+      const showAbove = spaceBelow < tooltipHeight && spaceAbove > tooltipHeight
+      
+      // 决定水平位置
+      let leftPosition = rect.left
+      if (spaceRight < tooltipWidth) {
+        leftPosition = window.innerWidth - tooltipWidth - 20
+      }
+      
+      setTooltipPosition({
+        top: showAbove ? rect.top : rect.bottom + 10,
+        left: Math.max(10, leftPosition), // 确保不超出左边界
+        showAbove: showAbove
+      })
+      setShowTooltip(true)
+      showTimeoutRef.current = null
+    }, 300) // 添加300ms延迟
   }
 
   const handleMouseLeave = () => {
-    // 增加延迟时间，给用户足够时间移动到气泡框
+    // 清除显示延迟
+    if (showTimeoutRef.current) {
+      clearTimeout(showTimeoutRef.current)
+      showTimeoutRef.current = null
+    }
+    
+    // 减少延迟时间，给用户足够时间移动到气泡框但不会太久
     hideTimeoutRef.current = setTimeout(() => {
       setShowTooltip(false)
-    }, 500) // 从100ms增加到500ms
+    }, 500) // 从800ms减少到500ms
   }
 
   const handleTooltipMouseEnter = () => {
@@ -79,10 +96,10 @@ export function TextPreview({
   }
 
   const handleTooltipMouseLeave = () => {
-    // 鼠标离开气泡框时立即隐藏，或者添加短延迟
+    // 鼠标离开气泡框时添加较短延迟
     hideTimeoutRef.current = setTimeout(() => {
       setShowTooltip(false)
-    }, 200)
+    }, 200) // 从300ms减少到200ms
   }
 
   const handleCopy = async () => {
@@ -136,9 +153,12 @@ export function TextPreview({
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
-      // 清理定时器
+      // 清理所有定时器
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current)
+      }
+      if (showTimeoutRef.current) {
+        clearTimeout(showTimeoutRef.current)
       }
     }
   }, [showTooltip])
