@@ -604,15 +604,33 @@ export default function PlansPage() {
 
             {/* 带排序功能的表格 */}
             <div className="overflow-x-auto border rounded-lg">
-              <Table className="min-w-full">
+              <Table className="min-w-full" style={{ tableLayout: 'fixed', width: '1160px' }}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[220px] min-w-[220px]">计划名称</TableHead>
-                    <TableHead className="w-[100px] min-w-[100px]">难度</TableHead>
-                    <TableHead className="w-[120px] min-w-[120px]">进度</TableHead>
-                    <TableHead className="w-[100px] min-w-[100px]">类型</TableHead>
-                    <TableHead className="w-[350px] min-w-[350px]">描述</TableHead>
-                    <TableHead className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                    <TableHead className="w-[220px] min-w-[220px]" style={{ width: '220px', maxWidth: '220px' }}>计划名称</TableHead>
+                    <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold flex items-center gap-1 hover:bg-transparent"
+                        onClick={() => handleSort('difficulty')}
+                      >
+                        难度
+                        {renderSortIcon('difficulty')}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[120px] min-w-[120px]" style={{ width: '120px', maxWidth: '120px' }}>
+                      <Button
+                        variant="ghost"
+                        className="h-auto p-0 font-semibold flex items-center gap-1 hover:bg-transparent"
+                        onClick={() => handleSort('status')}
+                      >
+                        进度
+                        {renderSortIcon('status')}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>类型</TableHead>
+                    <TableHead className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px' }}>描述</TableHead>
+                    <TableHead className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l" style={{ width: '170px', maxWidth: '170px' }}>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -637,15 +655,15 @@ export default function PlansPage() {
                   ) : (
                     plans.map(plan => (
                       <TableRow key={plan.plan_id}>
-                        <TableCell className="w-[220px] min-w-[220px] font-medium">
+                        <TableCell className="w-[220px] min-w-[220px] font-medium" style={{ width: '220px', maxWidth: '220px', overflow: 'hidden' }}>
                           <TextPreview
                             text={plan.name}
-                            maxLength={50}
+                            maxLength={30}
                             className="font-medium"
-                            truncateLines={2}
+                            truncateLines={1}
                           />
                         </TableCell>
-                        <TableCell className="w-[100px] min-w-[100px]">
+                        <TableCell className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             plan.difficulty === 'easy' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                             plan.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
@@ -654,7 +672,7 @@ export default function PlansPage() {
                             {plan.difficulty}
                           </span>
                         </TableCell>
-                        <TableCell className="w-[120px] min-w-[120px]">
+                        <TableCell className="w-[120px] min-w-[120px]" style={{ width: '120px', maxWidth: '120px' }}>
                           {plan.is_recurring ? (
                             <div className="flex flex-col gap-1">
                               <span className="text-sm font-medium">
@@ -700,7 +718,7 @@ export default function PlansPage() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="w-[100px] min-w-[100px]">
+                        <TableCell className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
                           {plan.is_recurring ? (
                             <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
                               {getRecurrenceTypeDisplay(plan.recurrence_type || '')}
@@ -711,15 +729,15 @@ export default function PlansPage() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="w-[350px] min-w-[350px]">
+                        <TableCell className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px', overflow: 'hidden' }}>
                           <TextPreview
                             text={plan.description || ''}
-                            maxLength={100}
+                            maxLength={60}
                             className="text-sm text-gray-600 dark:text-gray-400"
-                            truncateLines={2}
+                            truncateLines={1}
                           />
                         </TableCell>
-                        <TableCell className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l">
+                        <TableCell className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l" style={{ width: '170px', maxWidth: '170px' }}>
                           <div className="flex gap-1 items-center justify-start whitespace-nowrap">
                             <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 px-2 text-xs">
                               编辑

@@ -476,7 +476,7 @@ const runtime = new CopilotRuntime({
     // 更新进度 - 简化版本
     {
       name: "updateProgress",
-      description: "更新计划进度",
+      description: "更新计划进度，支持思考内容记录",
       parameters: [
         {
           name: "plan_id",
@@ -494,6 +494,12 @@ const runtime = new CopilotRuntime({
           name: "content",
           type: "string",
           description: "进度描述",
+          required: false,
+        },
+        {
+          name: "thinking",
+          type: "string",
+          description: "思考内容，记录完成该进展时的心得体会、遇到的问题、学到的知识等",
           required: false,
         },
         {
@@ -599,7 +605,7 @@ const runtime = new CopilotRuntime({
         }
         
         try {
-          const { plan_id, progress, content, custom_time } = args;
+          const { plan_id, progress, content, thinking, custom_time } = args;
           
           // 查找计划
           const targetPlan = await prisma.plan.findUnique({
@@ -640,7 +646,7 @@ const runtime = new CopilotRuntime({
             } = {
               plan_id: plan.plan_id,
               content: content || '进展记录',
-              thinking: ''
+              thinking: thinking || ''
             };
             
             if (custom_time) {
@@ -675,7 +681,7 @@ const runtime = new CopilotRuntime({
               data: {
                 plan: plan,
                 record,
-                message: `已成功更新计划"${plan.name}"的进度`
+                message: `已成功更新计划"${plan.name}"的进度${thinking ? '，并记录了思考内容' : ''}`
               }
             };
           }
@@ -689,7 +695,7 @@ const runtime = new CopilotRuntime({
           } = {
             plan_id: targetPlan.plan_id,
             content: content || '进展记录',
-            thinking: ''
+            thinking: thinking || ''
           };
           
           if (custom_time) {
@@ -713,7 +719,7 @@ const runtime = new CopilotRuntime({
               data: {
                 plan: updatedPlan,
                 record,
-                message: `已成功记录"${targetPlan.name}"的进展`
+                message: `已成功记录"${targetPlan.name}"的进展${thinking ? '，并记录了思考内容' : ''}`
               }
             };
           } else {
@@ -729,7 +735,7 @@ const runtime = new CopilotRuntime({
                 data: {
                   plan: updatedPlan,
                   record,
-                  message: `已成功更新计划"${targetPlan.name}"的进度至${progress}%`
+                  message: `已成功更新计划"${targetPlan.name}"的进度至${progress}%${thinking ? '，并记录了思考内容' : ''}`
                 }
               };
             } else {
@@ -738,7 +744,7 @@ const runtime = new CopilotRuntime({
                 data: {
                   plan: targetPlan,
                   record,
-                  message: `已成功添加计划"${targetPlan.name}"的进展记录`
+                  message: `已成功添加计划"${targetPlan.name}"的进展记录${thinking ? '，并记录了思考内容' : ''}`
                 }
               };
             }
@@ -756,7 +762,7 @@ const runtime = new CopilotRuntime({
     // 添加进展记录 - 简化版本
     {
       name: "addProgressRecord",
-      description: "添加进展记录，支持自定义时间",
+      description: "添加进展记录，支持自定义时间和思考内容",
       parameters: [
         {
           name: "plan_identifier",
@@ -769,6 +775,12 @@ const runtime = new CopilotRuntime({
           type: "string",
           description: "进展内容",
           required: true,
+        },
+        {
+          name: "thinking",
+          type: "string",
+          description: "思考内容，记录完成该进展时的心得体会、遇到的问题、学到的知识等",
+          required: false,
         },
         {
           name: "record_time",
@@ -873,7 +885,7 @@ const runtime = new CopilotRuntime({
         }
         
         try {
-          const { plan_identifier, content, record_time } = args;
+          const { plan_identifier, content, thinking, record_time } = args;
           
           // 搜索计划
           let targetPlan = await prisma.plan.findUnique({
@@ -929,7 +941,7 @@ const runtime = new CopilotRuntime({
             data: {
               plan_id: targetPlan.plan_id,
               content: content,
-              thinking: '',
+              thinking: thinking || '',
               gmt_create: recordDate
             }
           });
@@ -939,7 +951,7 @@ const runtime = new CopilotRuntime({
             data: {
               plan: targetPlan,
               record,
-              message: `已成功记录"${targetPlan.name}"的进展`
+              message: `已成功记录"${targetPlan.name}"的进展${thinking ? '，并记录了思考内容' : ''}`
             }
           };
         } catch (error: any) {
@@ -947,6 +959,217 @@ const runtime = new CopilotRuntime({
           return {
             success: false,
             error: `添加进展记录失败: ${error.message}`
+          };
+        }
+      },
+    },
+
+    // 智能进展分析和记录
+    {
+      name: "analyzeAndRecordProgress",
+      description: "智能分析用户的完成汇报，自动提取进展内容、思考内容和时间信息，然后记录到相应的计划中",
+      parameters: [
+        {
+          name: "user_report",
+          type: "string",
+          description: "用户的完成汇报原文，包含所做的事情、时间、思考等信息",
+          required: true,
+        }
+      ],
+      handler: async (args: any) => {
+        console.log("🧠 analyzeAndRecordProgress called:", args);
+        
+        try {
+          const { user_report } = args;
+          
+          // 智能解析用户汇报
+          const parseUserReport = (report: string) => {
+            const result = {
+              activity: '',
+              thinking: '',
+              time: '',
+              keywords: [] as string[]
+            };
+            
+            // 提取活动内容的常见模式
+            const activityPatterns = [
+              /我(完成了|做了|打了|练了|学了|读了|看了|写了)(.+?)(?=[，。；！？]|$)/,
+              /我把(.+?)完成了/,
+              /我(.+?)了/,
+            ];
+            
+            for (const pattern of activityPatterns) {
+              const match = report.match(pattern);
+              if (match) {
+                result.activity = match[0];
+                // 提取关键词
+                const keywords = match[0].match(/[\u4e00-\u9fa5a-zA-Z0-9]+/g) || [];
+                result.keywords = keywords.filter(k => k.length > 1 && !['完成', '了', '我', '把', '的'].includes(k));
+                break;
+              }
+            }
+            
+            // 提取思考内容的模式
+            const thinkingPatterns = [
+              /思考[是：:](.*?)(?=[，。；！？]|$)/,
+              /感觉(.*?)(?=[，。；！？]|$)/,
+              /发现(.*?)(?=[，。；！？]|$)/,
+              /学到[了的](.*?)(?=[，。；！？]|$)/,
+              /复习了(.*?)(?=[，。；！？]|$)/,
+              /参考了(.*?)(?=[，。；！？]|$)/,
+              /是个?(.*?)题?[，。；！？]/,
+              /(模板题|算法题|简单题|中等题|困难题)/,
+              /参考.*?(笔记|资料|模板)/,
+            ];
+            
+            for (const pattern of thinkingPatterns) {
+              const match = report.match(pattern);
+              if (match) {
+                result.thinking += (result.thinking ? '；' : '') + match[0];
+              }
+            }
+            
+            // 提取时间信息
+            const timePatterns = [
+              /昨天.*?(\d{1,2}[点:]?\d{0,2})/,
+              /今天.*?(\d{1,2}[点:]?\d{0,2})/,
+              /前天.*?(\d{1,2}[点:]?\d{0,2})/,
+              /(\d+)小时前/,
+              /(\d+)分钟前/,
+              /(昨天|今天|前天|昨晚|今晚)/,
+            ];
+            
+            for (const pattern of timePatterns) {
+              const match = report.match(pattern);
+              if (match) {
+                result.time = match[0];
+                break;
+              }
+            }
+            
+            return result;
+          };
+          
+          const parsed = parseUserReport(user_report);
+          console.log("🧠 Parsed report:", parsed);
+          
+          // 如果没有提取到活动内容，使用原文作为内容
+          if (!parsed.activity) {
+            parsed.activity = user_report;
+          }
+          
+          // 智能查找相关计划
+          let targetPlan = null;
+          
+          if (parsed.keywords.length > 0) {
+            // 根据关键词搜索计划
+            const plans = await prisma.plan.findMany({
+              where: {
+                OR: [
+                  ...parsed.keywords.map(keyword => ({
+                    name: { contains: keyword, mode: 'insensitive' as const }
+                  })),
+                  ...parsed.keywords.map(keyword => ({
+                    description: { contains: keyword, mode: 'insensitive' as const }
+                  }))
+                ]
+              },
+              include: { progressRecords: true }
+            });
+            
+            if (plans.length > 0) {
+              // 选择最匹配的计划（简单匹配逻辑）
+              targetPlan = plans[0];
+            }
+          }
+          
+          if (!targetPlan) {
+            return {
+              success: false,
+              error: `无法根据描述"${user_report}"找到相关的计划。可能的关键词：${parsed.keywords.join(', ')}。请手动指定计划或确保计划名称包含相关关键词。`,
+              data: {
+                parsed,
+                suggestions: "建议在描述中包含更具体的计划名称或关键词"
+              }
+            };
+          }
+          
+          console.log("✅ Found target plan:", targetPlan.name);
+          
+          // 处理时间信息
+          const parseNaturalTime = (timeStr: string): Date => {
+            const now = new Date();
+            const timeLower = timeStr.toLowerCase().trim();
+            
+            if (timeLower.includes('昨天') || timeLower.includes('昨晚')) {
+              const yesterday = new Date(now);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+              if (timeMatch) {
+                const hour = parseInt(timeMatch[1]);
+                const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+                
+                if (hour <= 12 && (timeLower.includes('晚') || timeLower.includes('夜'))) {
+                  yesterday.setHours(hour + 12, minute, 0, 0);
+                } else {
+                  yesterday.setHours(hour, minute, 0, 0);
+                }
+              } else {
+                yesterday.setHours(20, 0, 0, 0);
+              }
+              return yesterday;
+            }
+            
+            if (timeLower.includes('今天') || timeLower.includes('今晚')) {
+              const today = new Date(now);
+              const timeMatch = timeLower.match(/(\d{1,2})[点:](\d{1,2})?/);
+              if (timeMatch) {
+                const hour = parseInt(timeMatch[1]);
+                const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+                
+                if (hour <= 12 && (timeLower.includes('下午') || timeLower.includes('晚') || timeLower.includes('夜'))) {
+                  today.setHours(hour + 12, minute, 0, 0);
+                } else {
+                  today.setHours(hour, minute, 0, 0);
+                }
+              }
+              return today;
+            }
+            
+            return now;
+          };
+          
+          let recordDate = new Date();
+          if (parsed.time) {
+            recordDate = parseNaturalTime(parsed.time);
+          }
+          
+          // 创建进展记录
+          const record = await prisma.progressRecord.create({
+            data: {
+              plan_id: targetPlan.plan_id,
+              content: parsed.activity,
+              thinking: parsed.thinking || '',
+              gmt_create: recordDate
+            }
+          });
+          
+          return {
+            success: true,
+            data: {
+              plan: targetPlan,
+              record,
+              parsed,
+              message: `已成功分析并记录到计划"${targetPlan.name}"：\n\n📝 进展内容：${parsed.activity}\n💭 思考内容：${parsed.thinking || '无'}\n⏰ 记录时间：${recordDate.toLocaleString()}`
+            }
+          };
+          
+        } catch (error: any) {
+          console.error("❌ Error:", error);
+          return {
+            success: false,
+            error: `智能分析失败: ${error.message}`
           };
         }
       },
