@@ -13,10 +13,13 @@ import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
+import { Slider } from '@/components/ui/slider'
 
 interface Plan {
   plan_id: string
   name: string
+  is_recurring?: boolean
+  progress?: number
 }
 interface ProgressRecord {
   id: number
@@ -26,6 +29,7 @@ interface ProgressRecord {
   thinking: string
   gmt_create: string
   custom_time?: string
+  progress_update?: number
 }
 
 export default function ProgressPage() {
@@ -121,14 +125,19 @@ export default function ProgressPage() {
     
     setLoading(true)
     try {
+      // 准备提交数据
+      const submitData = {
+        ...form,
+        plan_id: submitPlanId
+      }
+
       if (editingId) {
         // 更新记录
         await fetch('/api/progress_record', {
           method: 'PUT',
           body: JSON.stringify({ 
-            ...form, 
-            id: editingId,
-            plan_id: submitPlanId 
+            ...submitData, 
+            id: editingId
           }),
           headers: { 'Content-Type': 'application/json' }
         })
@@ -136,9 +145,18 @@ export default function ProgressPage() {
         // 新增记录
         await fetch('/api/progress_record', {
           method: 'POST',
-          body: JSON.stringify({ 
-            ...form, 
-            plan_id: submitPlanId 
+          body: JSON.stringify(submitData),
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+
+      // 如果有进度更新，同时更新计划进度
+      if (form.progress_update !== undefined) {
+        await fetch('/api/plan', {
+          method: 'PUT',
+          body: JSON.stringify({
+            plan_id: submitPlanId,
+            progress: form.progress_update
           }),
           headers: { 'Content-Type': 'application/json' }
         })
@@ -147,6 +165,7 @@ export default function ProgressPage() {
       setForm({})
       setEditingId(null)
       await fetchRecords(planId)
+      await fetchPlans() // 重新获取计划数据以更新进度显示
     } catch (error) {
       console.error('保存进展记录失败:', error)
       alert('保存失败，请重试')
@@ -332,6 +351,44 @@ export default function ProgressPage() {
                           required 
                         />
                       </div>
+
+                      {/* 计划进度调整（仅限非周期性任务） */}
+                      {(() => {
+                        const currentPlan = editingId 
+                          ? plans.find(p => p.plan_id === form.plan_id) 
+                          : plans.find(p => p.plan_id === planId)
+                        
+                        if (currentPlan && !currentPlan.is_recurring) {
+                          const currentProgress = form.progress_update !== undefined 
+                            ? form.progress_update 
+                            : (currentPlan.progress || 0)
+                          
+                          return (
+                            <div className="space-y-2">
+                              <Label>调整计划进度 ({Math.round(currentProgress * 100)}%)</Label>
+                              <div className="space-y-3">
+                                <Slider
+                                  value={[currentProgress]}
+                                  onValueChange={(value) => setForm(f => ({ ...f, progress_update: value[0] }))}
+                                  max={1}
+                                  min={0}
+                                  step={0.01}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                                  <span>0%</span>
+                                  <span className="font-medium">{Math.round(currentProgress * 100)}%</span>
+                                  <span>100%</span>
+                                </div>
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                💡 提示：可选择更新计划的整体进度，仅适用于普通任务
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
 
                       {/* 记录时间（可选） */}
                       <div className="space-y-2">

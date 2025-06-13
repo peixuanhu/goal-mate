@@ -14,6 +14,7 @@ import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import { getRecurringTaskStatus, getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
 import { ChevronUp, ChevronDown, Filter, X } from 'lucide-react'
+import { Slider } from '@/components/ui/slider'
 
 interface Plan {
   id: number
@@ -53,10 +54,9 @@ export default function PlansPage() {
   const [allPlans, setAllPlans] = useState<Plan[]>([])  // 存储所有计划用于本地排序
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [difficulty, setDifficulty] = useState('all')
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([])
   const [taskTypeFilter, setTaskTypeFilter] = useState('all')  // 新增：任务类型筛选
+  const [progressFilter, setProgressFilter] = useState('incomplete')  // 新增：进度筛选，默认为未完成
   const [searchQuery, setSearchQuery] = useState('')
-  const [goals, setGoals] = useState<Array<{ goal_id: string; name: string; tag: string }>>([])
   const [pageNum, setPageNum] = useState(1)
   const [pageSize] = useState(10)
   const [total, setTotal] = useState(0)
@@ -67,6 +67,16 @@ export default function PlansPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tagOptions, setTagOptions] = useState<string[]>([])
+
+  // 判断计划是否已完成的函数
+  const isPlanCompleted = (plan: Plan): boolean => {
+    if (plan.is_recurring) {
+      const details = getRecurringTaskDetails(plan);
+      return details ? details.isCompleted : false;
+    } else {
+      return (plan.progress || 0) >= 1.0;
+    }
+  };
 
   // 排序函数
   const sortPlans = (plans: Plan[], config: SortConfig): Plan[] => {
@@ -113,15 +123,17 @@ export default function PlansPage() {
       // 难度筛选
       const difficultyMatch = difficulty === 'all' || plan.difficulty === difficulty;
       
-      // 目标筛选（多选）- 这里需要根据实际的goal-plan关联逻辑调整
-      const goalMatch = selectedGoals.length === 0 || selectedGoals.includes('all');
-      
       // 任务类型筛选
       const taskTypeMatch = taskTypeFilter === 'all' || 
         (taskTypeFilter === 'recurring' && plan.is_recurring) ||
         (taskTypeFilter === 'normal' && !plan.is_recurring);
       
-      return nameMatch && tagMatch && difficultyMatch && goalMatch && taskTypeMatch;
+      // 进度筛选
+      const progressMatch = progressFilter === 'all' || 
+        (progressFilter === 'completed' && isPlanCompleted(plan)) ||
+        (progressFilter === 'incomplete' && !isPlanCompleted(plan));
+      
+      return nameMatch && tagMatch && difficultyMatch && taskTypeMatch && progressMatch;
     });
   };
 
@@ -149,12 +161,6 @@ export default function PlansPage() {
     setEditingId(null)
   }
 
-  const fetchGoals = async () => {
-    const res = await fetch('/api/goal?pageSize=1000')
-    const data = await res.json()
-    setGoals(data.list || data)
-  }
-
   useEffect(() => {
     // 如果URL有tag参数，自动筛选
     const urlTag = searchParams.get('tag');
@@ -179,7 +185,7 @@ export default function PlansPage() {
       setPlans(paginatedPlans);
       setTotal(filteredPlans.length);
     }
-  }, [selectedTags, difficulty, selectedGoals, taskTypeFilter, searchQuery, sortConfig, allPlans, pageSize]);
+  }, [selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, sortConfig, allPlans, pageSize]);
 
   // 当页码变化时重新分页
   useEffect(() => {
@@ -197,7 +203,6 @@ export default function PlansPage() {
 
   useEffect(() => { 
     fetchPlans();
-    fetchGoals();
   }, [])
 
   useEffect(() => {
@@ -307,19 +312,23 @@ export default function PlansPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="progress">进度（0-1）</Label>
-                  <Input 
-                    id="progress" 
-                    type="number" 
-                    min={0} 
-                    max={1} 
-                    step={0.01} 
-                    className="w-full" 
-                    placeholder="0.5"
-                    value={form.progress} 
-                    onChange={e => setForm(f => ({ ...f, progress: e.target.value }))} 
-                    disabled={form.is_recurring}
-                  />
+                  <Label htmlFor="progress">进度 ({Math.round((parseFloat(form.progress) || 0) * 100)}%)</Label>
+                  <div className="space-y-3">
+                    <Slider
+                      value={[parseFloat(form.progress) || 0]}
+                      onValueChange={(value) => setForm(f => ({ ...f, progress: value[0].toString() }))}
+                      max={1}
+                      min={0}
+                      step={0.01}
+                      className="w-full"
+                      disabled={form.is_recurring}
+                    />
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>0%</span>
+                      <span className="font-medium">{Math.round((parseFloat(form.progress) || 0) * 100)}%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2 lg:col-span-1 xl:col-span-1">
                   <Label>操作</Label>
@@ -485,6 +494,50 @@ export default function PlansPage() {
                     />
                   </div>
 
+                  {/* 难度筛选 */}
+                  <div className="space-y-2">
+                    <Label>筛选难度</Label>
+                    <Select value={difficulty} onValueChange={setDifficulty}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="全部难度" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部难度</SelectItem>
+                        {DIFFICULTY.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 任务类型筛选 */}
+                  <div className="space-y-2">
+                    <Label>任务类型</Label>
+                    <Select value={taskTypeFilter} onValueChange={setTaskTypeFilter}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="全部类型" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部类型</SelectItem>
+                        <SelectItem value="normal">普通任务</SelectItem>
+                        <SelectItem value="recurring">周期性任务</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 进度筛选 */}
+                  <div className="space-y-2">
+                    <Label>筛选进度</Label>
+                    <Select value={progressFilter} onValueChange={setProgressFilter}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="全部进度" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部进度</SelectItem>
+                        <SelectItem value="completed">已完成</SelectItem>
+                        <SelectItem value="incomplete">未完成</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* 标签筛选（多选） */}
                   <div className="space-y-2">
                     <Label>筛选标签（多选）</Label>
@@ -520,79 +573,6 @@ export default function PlansPage() {
                           <SelectItem value="clear">清除所有</SelectItem>
                           {tagOptions.filter(tag => !selectedTags.includes(tag)).map(tag => (
                             <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* 难度筛选 */}
-                  <div className="space-y-2">
-                    <Label>筛选难度</Label>
-                    <Select value={difficulty} onValueChange={setDifficulty}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="全部难度" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部难度</SelectItem>
-                        {DIFFICULTY.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* 任务类型筛选 */}
-                  <div className="space-y-2">
-                    <Label>任务类型</Label>
-                    <Select value={taskTypeFilter} onValueChange={setTaskTypeFilter}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="全部类型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">全部类型</SelectItem>
-                        <SelectItem value="normal">普通任务</SelectItem>
-                        <SelectItem value="recurring">周期性任务</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* 目标筛选（多选） */}
-                  <div className="space-y-2">
-                    <Label>筛选目标（多选）</Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex flex-wrap gap-1 min-h-[32px] p-2 border rounded-md bg-white dark:bg-gray-700">
-                        {selectedGoals.length === 0 && (
-                          <span className="text-gray-400 text-sm">全部目标</span>
-                        )}
-                        {selectedGoals.map(goalId => {
-                          const goal = goals.find(g => g.goal_id === goalId);
-                          return goal ? (
-                            <span key={goalId} className="inline-flex items-center gap-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded text-xs">
-                              {goal.name}
-                              <X 
-                                className="w-3 h-3 cursor-pointer hover:text-red-500" 
-                                onClick={() => setSelectedGoals(prev => prev.filter(id => id !== goalId))}
-                              />
-                            </span>
-                          ) : null;
-                        })}
-                      </div>
-                      <Select 
-                        value="" 
-                        onValueChange={v => {
-                          if (v === 'clear') {
-                            setSelectedGoals([]);
-                          } else if (v && !selectedGoals.includes(v)) {
-                            setSelectedGoals(prev => [...prev, v]);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="w-[120px]">
-                          <SelectValue placeholder="添加" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="clear">清除所有</SelectItem>
-                          {goals.filter(goal => !selectedGoals.includes(goal.goal_id)).map(goal => (
-                            <SelectItem key={goal.goal_id} value={goal.goal_id}>{goal.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
