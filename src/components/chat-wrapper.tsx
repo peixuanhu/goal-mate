@@ -38,12 +38,31 @@ export function ChatWrapper() {
       });
     };
 
-    // 初始样式化
-    styleMessages();
+    // 修复 hydration 错误的函数
+    const fixHydrationIssues = () => {
+      // 查找所有可能导致 hydration 错误的元素
+      const problematicElements = document.querySelectorAll('p > div, p > pre, p > blockquote, p > ul, p > ol, p > table');
+      
+      problematicElements.forEach((element) => {
+        const parent = element.parentElement;
+        if (parent && parent.tagName.toLowerCase() === 'p') {
+          // 为问题元素添加特殊样式类
+          element.classList.add('markdown-block-fix');
+          parent.classList.add('markdown-paragraph-fix');
+        }
+      });
+    };
 
-    // 监听DOM变化，当有新消息时重新样式化
+    // 初始样式化和修复
+    styleMessages();
+    fixHydrationIssues();
+
+    // 监听DOM变化，当有新消息时重新样式化和修复
     const observer = new MutationObserver(() => {
-      setTimeout(styleMessages, 100); // 延迟执行确保DOM已更新
+      setTimeout(() => {
+        styleMessages();
+        fixHydrationIssues();
+      }, 100); // 延迟执行确保DOM已更新
     });
 
     const messagesContainer = document.querySelector('[role="log"]');
@@ -55,7 +74,10 @@ export function ChatWrapper() {
     }
 
     // 定期检查并应用样式（备用方案）
-    const interval = setInterval(styleMessages, 2000);
+    const interval = setInterval(() => {
+      styleMessages();
+      fixHydrationIssues();
+    }, 2000);
 
     return () => {
       observer.disconnect();
@@ -84,7 +106,7 @@ export function ChatWrapper() {
   }
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden">
+    <div className="h-full w-full flex flex-col overflow-hidden" suppressHydrationWarning>
       <style jsx global>{`
         /* 确保聊天容器的高度和滚动行为 */
         .copilotKitChat {
@@ -215,6 +237,245 @@ export function ChatWrapper() {
           border-bottom: none;
         }
         
+        /* === Markdown 样式增强 === */
+        
+        /* 修复 hydration 错误 - 确保 p 元素内的 div 正确显示 */
+        .copilotKitMarkdownElement p {
+          display: block !important;
+        }
+        
+        .copilotKitMarkdownElement p > div {
+          display: block !important;
+          margin: 0.5rem 0 !important;
+        }
+        
+        /* 代码块容器修复 */
+        .copilotKitCodeBlockContainer,
+        .copilotKitCodeBlock {
+          display: block !important;
+          margin: 0.75rem 0 !important;
+        }
+        
+        /* 工具栏按钮容器 */
+        .copilotKitCodeBlockToolbarButtons {
+          display: flex !important;
+          justify-content: flex-end !important;
+          margin-bottom: 0.5rem !important;
+        }
+        
+        /* 全局修复 - 防止 div 在 p 内部导致的 hydration 错误 */
+        .copilotKitMessages p {
+          display: block !important;
+          overflow: visible !important;
+        }
+        
+        .copilotKitMessages p > * {
+          display: inline !important;
+        }
+        
+        .copilotKitMessages p > div,
+        .copilotKitMessages p > pre,
+        .copilotKitMessages p > blockquote,
+        .copilotKitMessages p > ul,
+        .copilotKitMessages p > ol,
+        .copilotKitMessages p > table {
+          display: block !important;
+          margin: 0.5rem 0 !important;
+        }
+        
+        /* 确保代码块正确渲染 */
+        .copilotKitMessages code {
+          display: inline !important;
+        }
+        
+        .copilotKitMessages pre {
+          display: block !important;
+        }
+        
+        .copilotKitMessages pre code {
+          display: block !important;
+        }
+        
+        /* 修复特定的 CopilotKit 组件 */
+        .copilotKit-markdown,
+        .copilotKitMarkdown,
+        .copilotKitMarkdownElement {
+          display: block !important;
+        }
+        
+        .copilotKit-markdown p,
+        .copilotKitMarkdown p,
+        .copilotKitMarkdownElement p {
+          display: block !important;
+          margin: 0.75rem 0 !important;
+        }
+        
+        /* 强制所有嵌套元素正确显示 */
+        .copilotKitMessages * {
+          box-sizing: border-box !important;
+        }
+        
+        /* Hydration 错误修复样式 */
+        .markdown-paragraph-fix {
+          display: block !important;
+          overflow: visible !important;
+        }
+        
+        .markdown-block-fix {
+          display: block !important;
+          margin: 0.5rem 0 !important;
+          clear: both !important;
+        }
+        
+        /* 特殊处理代码块 */
+        .markdown-paragraph-fix > .markdown-block-fix[class*="code"],
+        .markdown-paragraph-fix > .markdown-block-fix pre {
+          background: #f9fafb !important;
+          border: 1px solid #e5e7eb !important;
+          border-radius: 0.5rem !important;
+          padding: 1rem !important;
+          font-family: 'Courier New', monospace !important;
+        }
+        
+        /* 确保内联元素正确显示 */
+        .markdown-paragraph-fix > span,
+        .markdown-paragraph-fix > code:not(.markdown-block-fix),
+        .markdown-paragraph-fix > strong,
+        .markdown-paragraph-fix > em,
+        .markdown-paragraph-fix > a {
+          display: inline !important;
+        }
+        
+        /* Markdown 标题样式 */
+        .ai-message-bubble h1,
+        .ai-message-bubble h2,
+        .ai-message-bubble h3,
+        .ai-message-bubble h4,
+        .ai-message-bubble h5,
+        .ai-message-bubble h6 {
+          font-weight: 600 !important;
+          margin: 1rem 0 0.5rem 0 !important;
+          line-height: 1.4 !important;
+          color: #1f2937 !important;
+        }
+        
+        .ai-message-bubble h1 { font-size: 1.5rem !important; }
+        .ai-message-bubble h2 { font-size: 1.3rem !important; }
+        .ai-message-bubble h3 { font-size: 1.1rem !important; }
+        .ai-message-bubble h4 { font-size: 1rem !important; }
+        
+        /* Markdown 列表样式 */
+        .ai-message-bubble ul,
+        .ai-message-bubble ol {
+          margin: 0.75rem 0 !important;
+          padding-left: 1.5rem !important;
+        }
+        
+        .ai-message-bubble li {
+          margin: 0.25rem 0 !important;
+          line-height: 1.5 !important;
+        }
+        
+        .ai-message-bubble ul li {
+          list-style-type: disc !important;
+        }
+        
+        .ai-message-bubble ol li {
+          list-style-type: decimal !important;
+        }
+        
+        /* Markdown 段落样式 */
+        .ai-message-bubble p {
+          margin: 0.75rem 0 !important;
+          line-height: 1.6 !important;
+        }
+        
+        /* Markdown 粗体和斜体 */
+        .ai-message-bubble strong {
+          font-weight: 600 !important;
+          color: #1f2937 !important;
+        }
+        
+        .ai-message-bubble em {
+          font-style: italic !important;
+        }
+        
+        /* Markdown 代码样式 */
+        .ai-message-bubble code {
+          background: #f3f4f6 !important;
+          padding: 0.125rem 0.25rem !important;
+          border-radius: 0.25rem !important;
+          font-family: 'Courier New', monospace !important;
+          font-size: 0.85rem !important;
+          color: #dc2626 !important;
+        }
+        
+        .ai-message-bubble pre {
+          background: #f9fafb !important;
+          border: 1px solid #e5e7eb !important;
+          border-radius: 0.5rem !important;
+          padding: 1rem !important;
+          margin: 0.75rem 0 !important;
+          overflow-x: auto !important;
+        }
+        
+        .ai-message-bubble pre code {
+          background: transparent !important;
+          padding: 0 !important;
+          color: #374151 !important;
+        }
+        
+        /* Markdown 链接样式 */
+        .ai-message-bubble a {
+          color: #2563eb !important;
+          text-decoration: underline !important;
+        }
+        
+        .ai-message-bubble a:hover {
+          color: #1d4ed8 !important;
+        }
+        
+        /* Markdown 分割线 */
+        .ai-message-bubble hr {
+          border: none !important;
+          border-top: 1px solid #e5e7eb !important;
+          margin: 1.5rem 0 !important;
+        }
+        
+        /* Markdown 引用块 */
+        .ai-message-bubble blockquote {
+          border-left: 4px solid #3b82f6 !important;
+          background: #f8fafc !important;
+          margin: 0.75rem 0 !important;
+          padding: 0.75rem 1rem !important;
+          font-style: italic !important;
+        }
+        
+        /* Markdown 表格样式 */
+        .ai-message-bubble table {
+          border-collapse: collapse !important;
+          width: 100% !important;
+          margin: 0.75rem 0 !important;
+          font-size: 0.875rem !important;
+        }
+        
+        .ai-message-bubble th,
+        .ai-message-bubble td {
+          border: 1px solid #e5e7eb !important;
+          padding: 0.5rem !important;
+          text-align: left !important;
+        }
+        
+        .ai-message-bubble th {
+          background: #f9fafb !important;
+          font-weight: 600 !important;
+        }
+        
+        /* 特殊表情符号样式 */
+        .ai-message-bubble h2:first-child {
+          margin-top: 0 !important;
+        }
+        
         /* 强制覆盖任何默认样式 */
         .copilotKitMessages * {
           box-sizing: border-box;
@@ -225,23 +486,28 @@ export function ChatWrapper() {
         .ai-message-bubble p,
         .user-message-bubble span,
         .ai-message-bubble span {
-          margin: 0 !important;
-          padding: 0 !important;
           color: inherit !important;
         }
         
-        /* 列表样式 */
-        .user-message-bubble ul,
-        .ai-message-bubble ul,
-        .user-message-bubble ol,
-        .ai-message-bubble ol {
-          margin: 0.5rem 0 !important;
-          padding-left: 1rem !important;
+        /* 用户消息中的 markdown 样式（白色主题） */
+        .user-message-bubble h1,
+        .user-message-bubble h2,
+        .user-message-bubble h3,
+        .user-message-bubble h4,
+        .user-message-bubble h5,
+        .user-message-bubble h6,
+        .user-message-bubble strong {
+          color: white !important;
         }
         
-        .user-message-bubble li,
-        .ai-message-bubble li {
-          margin: 0.25rem 0 !important;
+        .user-message-bubble code {
+          background: rgba(255, 255, 255, 0.2) !important;
+          color: white !important;
+        }
+        
+        .user-message-bubble blockquote {
+          border-left-color: rgba(255, 255, 255, 0.5) !important;
+          background: rgba(255, 255, 255, 0.1) !important;
         }
         
         /* 输入区域样式 */
@@ -376,8 +642,8 @@ export function ChatWrapper() {
       <CopilotChat
         labels={{
           title: "Goal Mate AI助手",
-          initial: "你好！我是你的AI助手，可以帮你管理目标、制定计划、跟踪进度。\n\n试试说：\n• 我想看看有什么轻松的任务可以做\n• 帮我创建一个读书目标\n• 更新我的学习进度",
-          placeholder: "输入你的问题或指令...",
+          initial: "你好！我是你的AI助手，可以帮你管理目标、制定计划、跟踪进度。\n\n**🎯 智能工作流程**：\n• \"我想了解《深入理解计算机系统》这本书\"\n• \"我想提高编程能力\"（创建目标）\n• \"我想读完CSAPP这本书\"（创建计划）",
+          placeholder: "输入你问题或指令...",
         }}
         className="h-full w-full"
       />

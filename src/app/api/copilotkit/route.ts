@@ -30,17 +30,17 @@ console.log("- OPENAI_BASE_URL:", baseURL || "未设置");
 
 // 创建自定义的 OpenAI 客户端，拦截 chat.completions.create
 class CustomOpenAI extends OpenAI {
-  constructor(config: any) {
+  constructor(config: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     super(config);
     
     // 拦截 chat.completions.create 方法
     const originalCreate = this.chat.completions.create;
     
-    this.chat.completions.create = (body: any, options?: any): any => {
+    this.chat.completions.create = (body: any, options?: any): any => { // eslint-disable-line @typescript-eslint/no-explicit-any
       console.log("🚨 Intercepting OpenAI chat.completions.create");
       
       // 深度清理所有 developer 角色
-      const cleanMessages = (messages: any[]): any[] => {
+      const cleanMessages = (messages: any[]): any[] => { // eslint-disable-line @typescript-eslint/no-explicit-any
         return messages.map(message => {
           const cleaned = { ...message };
           
@@ -52,7 +52,7 @@ class CustomOpenAI extends OpenAI {
           // 也检查嵌套的内容
           if (cleaned.content && typeof cleaned.content === 'object') {
             if (Array.isArray(cleaned.content)) {
-              cleaned.content = cleaned.content.map((item: any) => {
+              cleaned.content = cleaned.content.map((item: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                 if (item.role === 'developer') {
                   console.log("🚨 FOUND AND REPLACING DEVELOPER ROLE in content!");
                   return { ...item, role: 'user' };
@@ -68,10 +68,144 @@ class CustomOpenAI extends OpenAI {
       
       // 清理请求体中的消息
       if (body.messages && Array.isArray(body.messages)) {
-        console.log("📝 Original message roles:", body.messages.map((m: any) => m.role));
+        console.log("📝 Original message roles:", body.messages.map((m: any) => m.role)); // eslint-disable-line @typescript-eslint/no-explicit-any
         body.messages = cleanMessages(body.messages);
-        console.log("✅ Cleaned message roles:", body.messages.map((m: any) => m.role));
+        
+        // 注入读书相关的系统提示词
+        const systemPrompt = `你是Goal Mate AI助手，专注于帮助用户管理目标、制定计划和跟踪进度。
+
+**核心工作流程（重要）：**
+当用户提到任何与学习、完成、进展相关的内容时，请按以下顺序操作：
+
+1. **首先查询已有计划**：使用 \`queryPlans\` 或 \`findPlan\` 查询用户的现有计划
+2. **智能匹配判断**：
+   - 如果找到相关计划 → 直接使用 \`analyzeAndRecordProgress\` 或 \`addProgressRecord\` 添加进展记录
+   - 如果没有找到相关计划 → 询问用户是否需要创建新的目标或计划
+3. **标签优先级**：创建计划前，先使用 \`getSystemOptions\` 获取已有标签，优先选择现有标签
+
+**特别指令 - 读书问题处理：**
+当用户询问关于书籍、阅读计划或读书相关的问题时，请遵循以下格式：
+
+1. **自动联网搜索** - 使用已启用的搜索功能获取最新的书籍信息
+2. **使用Markdown格式** 输出，包含以下结构：
+
+## 📚 [书名]
+
+### 📖 基本信息
+- **作者**：[作者姓名]
+- **出版时间**：[出版年份]
+- **页数**：[大约页数]
+- **难度等级**：⭐⭐⭐ (1-5星)
+- **推荐阅读时间**：[预估时间]
+
+### 📋 内容简介
+[书籍的核心内容和价值]
+
+### 📑 章节大纲
+1. **第一章** - [章节标题和要点]
+2. **第二章** - [章节标题和要点]
+3. **第三章** - [章节标题和要点]
+...
+
+### 💡 阅读建议
+- **适合人群**：[目标读者]
+- **阅读方法**：[建议的阅读策略]
+- **重点章节**：[特别需要关注的章节]
+
+### 🎯 学习计划建议
+根据用户现有计划，推荐具体的阅读计划和进度安排。
+
+---
+
+**重要指令 - 进展记录智能处理：**
+当用户更新某个计划的进展记录时，需要智能地理解和分析用户的输入文本：
+
+1. **智能分割内容**：
+   - 将用户描述分割成"事项"和"思考"两部分
+   - "事项"：用户实际完成的具体行动、任务或学习内容
+   - "思考"：用户的心得体会、遇到的问题、学到的知识、感悟等
+   
+2. **分析示例**：
+   - 输入："我今天读完了《CSAPP》第3章，这章讲的是机器级编程，感觉汇编语言还是有点复杂"
+   - 分析结果：
+     - 事项：读完了《CSAPP》第3章机器级编程
+     - 思考：感觉汇编语言还是有点复杂
+
+**重要指令 - 智能处理流程示例：**
+
+用户说："我听了巴赫的众赞歌，听到第9首了。和声好神奇！"
+
+正确处理流程：
+1. **必须先调用findPlan**：使用 \`findPlan\` 搜索关键词"巴赫 众赞歌 音乐"等
+2. 如果找到相关计划：
+   - 使用 \`addProgressRecord\` 记录进展（推荐）
+   - 或使用 \`analyzeAndRecordProgress\` 智能分析记录
+   - 事项：听了巴赫众赞歌到第9首
+   - 思考：对和声产生浓厚兴趣，觉得很神奇
+3. 如果没找到相关计划：
+   - 询问用户是否需要创建"提高音乐欣赏能力"（目标）或"系统学习巴赫众赞歌"（计划）
+
+**重要：绝对不要直接调用analyzeAndRecordProgress而不先调用findPlan！**
+
+**重要指令 - 目标与计划创建区分：**
+当用户表达想做某件事且确认需要创建时，需要智能判断应该创建"目标"还是"计划"：
+
+1. **判断原则**：
+   - **创建目标**：用户描述比较抽象、宏观，无法直接分割成具体执行步骤
+     - 例如："我想提高编程能力"、"我想学会机器学习"、"我想变得更健康"
+   - **创建计划**：用户描述比较具体、明确，可以直接执行或有明确的完成标准
+     - 例如："我想读完《CSAPP》这本书"、"我想学会Python"、"我想每天跑步30分钟"
+
+2. **标签处理规则**：
+   - **创建前必须先查询**：使用 \`getSystemOptions\` 获取已有标签列表
+   - **目标标签**：只能单选一个标签
+   - **计划标签**：可以多选标签，用逗号分隔
+   - **标签语言**：统一使用英文填写
+   - **标签优先级**：优先使用系统中已有的标签，避免创建重复标签
+
+3. **常用标签参考**（在已有标签不足时使用）：
+   - 学习类：study, programming, reading, learning, music
+   - 工作类：work, career, project
+   - 健康类：health, fitness, exercise
+   - 技能类：skill, language, development
+   - 生活类：life, hobby, personal
+
+**对于其他问题**，继续使用正常的对话方式，但在需要时也适当使用markdown格式来提升可读性。
+
+**核心功能**：
+- 智能任务推荐：根据用户状态推荐合适的任务
+- 计划管理：创建、查询、更新各种学习和工作计划
+- 进度跟踪：记录用户的学习进展和思考
+- 数据分析：基于用户数据生成报告和建议
+
+请始终以友好、专业的态度协助用户，并充分利用联网搜索功能提供准确、最新的信息。`;
+        
+        // 如果没有系统消息，或者第一条消息不是系统消息，则添加系统提示
+        if (body.messages.length === 0 || body.messages[0].role !== 'system') {
+          body.messages.unshift({
+            role: 'system',
+            content: systemPrompt
+          });
+        } else {
+          // 如果已存在系统消息，则更新内容
+          body.messages[0].content = systemPrompt + '\n\n' + body.messages[0].content;
+        }
+        
+        console.log("✅ Cleaned message roles:", body.messages.map((m: any) => m.role)); // eslint-disable-line @typescript-eslint/no-explicit-any
       }
+      
+      // 添加联网搜索功能
+      if (!options) {
+        options = {};
+      }
+      
+      // 为通义千问模型启用联网搜索
+      options.extra_body = {
+        ...(options.extra_body || {}),
+        enable_search: true
+      };
+      
+      console.log("🔍 Enabled search functionality for Qwen model");
       
       return originalCreate.call(this.chat.completions, body, options);
     };
@@ -141,20 +275,20 @@ const runtime = new CopilotRuntime({
           let filteredPlans = allPlans;
           if (filterCriteria) {
             // 简单的筛选逻辑，可以根据难度或标签筛选
-            filteredPlans = allPlans.filter(plan => 
+            filteredPlans = allPlans.filter((plan: any) => 
               (plan.difficulty && plan.difficulty.includes(filterCriteria)) ||
-              plan.tags.some(tag => tag.tag.includes(filterCriteria))
+              plan.tags.some((tag: any) => tag.tag.includes(filterCriteria))
             );
           }
 
           // 默认推荐逻辑：根据进度和创建时间
           const recommendedTasks = filteredPlans
-            .sort((a, b) => a.progress - b.progress)
+            .sort((a: any, b: any) => a.progress - b.progress)
             .slice(0, 5);
 
-          const result = recommendedTasks.map(plan => ({
+          const result = recommendedTasks.map((plan: any) => ({
             ...plan,
-            tags: plan.tags.map(t => t.tag)
+            tags: plan.tags.map((t: any) => t.tag)
           }));
 
           console.log("✅ Found", result.length, "recommended tasks");
@@ -224,14 +358,14 @@ const runtime = new CopilotRuntime({
           
           // 如果指定了标签，进一步筛选
           if (tag) {
-            plans = plans.filter(plan => 
-              plan.tags.some(t => t.tag.includes(tag))
+            plans = plans.filter((plan: any) => 
+              plan.tags.some((t: any) => t.tag.includes(tag))
             );
           }
           
-          const result = plans.map(plan => ({
+          const result = plans.map((plan: any) => ({
             ...plan,
-            tags: plan.tags.map(t => t.tag)
+            tags: plan.tags.map((t: any) => t.tag)
           }));
 
           console.log("✅ Found", result.length, "plans");
@@ -302,7 +436,7 @@ const runtime = new CopilotRuntime({
             distinct: ['tag']
           });
           
-          const tagList = existingTags.map(t => t.tag);
+          const tagList = existingTags.map((t: any) => t.tag);
           
           // 标准难度选项
           const difficultyOptions = ['easy', 'medium', 'hard'];
@@ -405,7 +539,7 @@ const runtime = new CopilotRuntime({
 
           const result = {
             ...createdPlan,
-            tags: createdPlan?.tags.map(t => t.tag) || []
+            tags: createdPlan?.tags.map((t: any) => t.tag) || []
           };
 
           console.log("✅ Plan created:", result);
@@ -438,33 +572,69 @@ const runtime = new CopilotRuntime({
         try {
           const { searchTerm } = args;
           
+          // 将搜索词分割成多个关键词
+          const keywords = searchTerm.split(/[\s,，、]+/).filter((word: string) => word.length > 0);
+          console.log("🔍 Search keywords:", keywords);
+          
+          // 构建搜索条件：任何一个关键词匹配即可
+          const searchConditions = keywords.flatMap((keyword: string) => [
+            { name: { contains: keyword, mode: 'insensitive' as const } },
+            { description: { contains: keyword, mode: 'insensitive' as const } },
+            {
+              tags: {
+                some: {
+                  tag: {
+                    contains: keyword,
+                    mode: 'insensitive' as const
+                  }
+                }
+              }
+            }
+          ]);
+          
           // 综合搜索：名称、描述、标签
           const plans = await prisma.plan.findMany({
             where: {
-              OR: [
-                { name: { contains: searchTerm, mode: 'insensitive' } },
-                { description: { contains: searchTerm, mode: 'insensitive' } },
-                {
-                  tags: {
-                    some: {
-                      tag: {
-                        contains: searchTerm,
-                        mode: 'insensitive'
-                      }
-                    }
-                  }
-                }
-              ]
+              OR: searchConditions
             },
             include: { tags: true }
           });
 
-          const result = plans.map(plan => ({
+          // 按匹配度排序：匹配更多关键词的计划排在前面
+          const plansWithScore = plans.map(plan => {
+            let score = 0;
+            const planText = `${plan.name} ${plan.description || ''} ${plan.tags.map(t => t.tag).join(' ')}`.toLowerCase();
+            
+            keywords.forEach((keyword: string) => {
+              const keywordLower = keyword.toLowerCase();
+              // 名称匹配得分更高
+              if (plan.name.toLowerCase().includes(keywordLower)) {
+                score += 3;
+              }
+              // 描述匹配
+              if ((plan.description || '').toLowerCase().includes(keywordLower)) {
+                score += 2;
+              }
+              // 标签匹配
+              if (plan.tags.some(tag => tag.tag.toLowerCase().includes(keywordLower))) {
+                score += 1;
+              }
+            });
+            
+            return { ...plan, matchScore: score };
+          });
+          
+          // 按匹配分数排序，分数高的在前
+          const sortedPlans = plansWithScore
+            .filter(plan => plan.matchScore > 0)
+            .sort((a, b) => b.matchScore - a.matchScore);
+
+          const result = sortedPlans.map((plan: any) => ({
             ...plan,
-            tags: plan.tags.map(t => t.tag)
+            tags: plan.tags.map((t: any) => t.tag)
           }));
 
-          console.log("✅ Found", result.length, "plans");
+          console.log("✅ Found", result.length, "plans with scores:", result.map(p => ({ name: p.name, score: p.matchScore })));
           return { success: true, data: result };
         } catch (error: any) {
           console.error("❌ Error:", error);
@@ -1062,24 +1232,70 @@ const runtime = new CopilotRuntime({
           let targetPlan = null;
           
           if (parsed.keywords.length > 0) {
+            // 使用改进的搜索逻辑，添加音乐相关的常见词汇
+            const musicKeywords = ['巴赫', '众赞歌', '音乐', '和声', '四部', '听'];
+            const allKeywords = [...parsed.keywords, ...musicKeywords];
+            const uniqueKeywords = [...new Set(allKeywords)]; // 去重
+            
+            console.log("🔍 Searching with enhanced keywords:", uniqueKeywords);
+            
+            // 构建搜索条件：任何一个关键词匹配即可
+            const searchConditions = uniqueKeywords.flatMap((keyword: string) => [
+              { name: { contains: keyword, mode: 'insensitive' as const } },
+              { description: { contains: keyword, mode: 'insensitive' as const } },
+              {
+                tags: {
+                  some: {
+                    tag: {
+                      contains: keyword,
+                      mode: 'insensitive' as const
+                    }
+                  }
+                }
+              }
+            ]);
+            
             // 根据关键词搜索计划
             const plans = await prisma.plan.findMany({
               where: {
-                OR: [
-                  ...parsed.keywords.map(keyword => ({
-                    name: { contains: keyword, mode: 'insensitive' as const }
-                  })),
-                  ...parsed.keywords.map(keyword => ({
-                    description: { contains: keyword, mode: 'insensitive' as const }
-                  }))
-                ]
+                OR: searchConditions
               },
-              include: { progressRecords: true }
+              include: { progressRecords: true, tags: true }
             });
             
             if (plans.length > 0) {
-              // 选择最匹配的计划（简单匹配逻辑）
-              targetPlan = plans[0];
+              // 按匹配度排序：匹配更多关键词的计划排在前面
+              const plansWithScore = plans.map(plan => {
+                let score = 0;
+                
+                uniqueKeywords.forEach((keyword: string) => {
+                  const keywordLower = keyword.toLowerCase();
+                  // 名称匹配得分更高
+                  if (plan.name.toLowerCase().includes(keywordLower)) {
+                    score += 3;
+                  }
+                  // 描述匹配
+                  if ((plan.description || '').toLowerCase().includes(keywordLower)) {
+                    score += 2;
+                  }
+                  // 标签匹配
+                  if (plan.tags.some(tag => tag.tag.toLowerCase().includes(keywordLower))) {
+                    score += 1;
+                  }
+                });
+                
+                return { ...plan, matchScore: score };
+              });
+              
+              // 选择匹配分数最高的计划
+              const sortedPlans = plansWithScore
+                .filter(plan => plan.matchScore > 0)
+                .sort((a, b) => b.matchScore - a.matchScore);
+              
+              if (sortedPlans.length > 0) {
+                targetPlan = sortedPlans[0];
+                console.log("✅ Found best matching plan:", targetPlan.name, "with score:", targetPlan.matchScore);
+              }
             }
           }
           
