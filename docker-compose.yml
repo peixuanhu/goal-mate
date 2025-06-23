@@ -8,8 +8,13 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
+      # 增加构建超时时间
+      timeout: 1800  # 30分钟
     container_name: goal-mate-app
     restart: unless-stopped
+    # 添加网络配置
+    networks:
+      - goal-mate-network
     environment:
       # 数据库连接
       DATABASE_URL: ${DATABASE_URL}
@@ -40,4 +45,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s 
+      start_period: 60s
+    # 添加资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+# 创建自定义网络
+networks:
+  goal-mate-network:
+    driver: bridge 
