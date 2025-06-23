@@ -64,6 +64,7 @@ export default function PlansPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' })
+  const [highlightPlanId, setHighlightPlanId] = useState<string | null>(null)  // 新增：高亮计划ID
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tagOptions, setTagOptions] = useState<string[]>([])
@@ -167,6 +168,16 @@ export default function PlansPage() {
     if (urlTag && !selectedTags.includes(urlTag)) {
       setSelectedTags([urlTag]);
     }
+    
+    // 如果URL有highlight参数，设置高亮计划
+    const highlightId = searchParams.get('highlight');
+    if (highlightId) {
+      setHighlightPlanId(highlightId);
+      // 5秒后取消高亮
+      setTimeout(() => {
+        setHighlightPlanId(null);
+      }, 5000);
+    }
   }, [searchParams, selectedTags]);
 
   // 当筛选条件或排序配置变化时重新筛选和排序
@@ -175,17 +186,32 @@ export default function PlansPage() {
       let filteredPlans = filterPlans(allPlans);
       let sortedPlans = sortPlans(filteredPlans, sortConfig);
       
-      // 重置到第一页
-      setPageNum(1);
+      // 如果有高亮计划且不在筛选结果中，则添加到结果中
+      if (highlightPlanId) {
+        const highlightPlan = allPlans.find(plan => plan.plan_id === highlightPlanId);
+        if (highlightPlan && !sortedPlans.find(plan => plan.plan_id === highlightPlanId)) {
+          sortedPlans.unshift(highlightPlan); // 将高亮计划添加到列表最前面
+        }
+      }
+      
+      // 重置到第一页，但如果有高亮计划，找到包含该计划的页面
+      let targetPageNum = 1;
+      if (highlightPlanId) {
+        const highlightIndex = sortedPlans.findIndex(plan => plan.plan_id === highlightPlanId);
+        if (highlightIndex >= 0) {
+          targetPageNum = Math.floor(highlightIndex / pageSize) + 1;
+        }
+      }
+      setPageNum(targetPageNum);
       
       // 应用分页
-      const startIndex = 0;
+      const startIndex = (targetPageNum - 1) * pageSize;
       const paginatedPlans = sortedPlans.slice(startIndex, startIndex + pageSize);
       
       setPlans(paginatedPlans);
-      setTotal(filteredPlans.length);
+      setTotal(filteredPlans.length + (highlightPlanId && !filteredPlans.find(plan => plan.plan_id === highlightPlanId) ? 1 : 0));
     }
-  }, [selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, sortConfig, allPlans, pageSize]);
+  }, [selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, sortConfig, allPlans, pageSize, highlightPlanId]);
 
   // 当页码变化时重新分页
   useEffect(() => {
@@ -193,13 +219,21 @@ export default function PlansPage() {
       let filteredPlans = filterPlans(allPlans);
       let sortedPlans = sortPlans(filteredPlans, sortConfig);
       
+      // 如果有高亮计划且不在筛选结果中，则添加到结果中
+      if (highlightPlanId) {
+        const highlightPlan = allPlans.find(plan => plan.plan_id === highlightPlanId);
+        if (highlightPlan && !sortedPlans.find(plan => plan.plan_id === highlightPlanId)) {
+          sortedPlans.unshift(highlightPlan);
+        }
+      }
+      
       // 应用分页
       const startIndex = (pageNum - 1) * pageSize;
       const paginatedPlans = sortedPlans.slice(startIndex, startIndex + pageSize);
       
       setPlans(paginatedPlans);
     }
-  }, [pageNum]);
+  }, [pageNum, highlightPlanId, allPlans, sortConfig, selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, pageSize]);
 
   useEffect(() => { 
     fetchPlans();
@@ -634,7 +668,10 @@ export default function PlansPage() {
                     </TableRow>
                   ) : (
                     plans.map(plan => (
-                      <TableRow key={plan.plan_id}>
+                      <TableRow 
+                        key={plan.plan_id}
+                        className={highlightPlanId === plan.plan_id ? 'bg-yellow-100 dark:bg-yellow-900/20 animate-pulse' : ''}
+                      >
                         <TableCell className="w-[220px] min-w-[220px] font-medium" style={{ width: '220px', maxWidth: '220px', overflow: 'hidden' }}>
                           <TextPreview
                             text={plan.name}

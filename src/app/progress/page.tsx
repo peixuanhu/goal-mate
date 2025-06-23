@@ -491,12 +491,17 @@ export default function ProgressPage() {
                           </TableCell>
                           {planId === 'all' && (
                             <TableCell className="w-[160px] min-w-[160px] font-medium">
-                              <TextPreview
-                                text={r.plan_name || ''}
-                                maxLength={40}
-                                className="font-medium"
-                                truncateLines={1}
-                              />
+                              <Link 
+                                href={`/plans?highlight=${r.plan_id}`}
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                              >
+                                <TextPreview
+                                  text={r.plan_name || ''}
+                                  maxLength={40}
+                                  className="font-medium"
+                                  truncateLines={1}
+                                />
+                              </Link>
                             </TableCell>
                           )}
                           <TableCell className="w-[320px] min-w-[320px]">
