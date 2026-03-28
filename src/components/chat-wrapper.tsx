@@ -182,7 +182,7 @@ export function ChatWrapper() {
           line-height: 1.55 !important;
           overflow-wrap: anywhere !important;
           word-break: break-word !important;
-          white-space: pre-wrap !important;
+          white-space: normal !important;
           position: relative !important;
           overflow: visible !important;
           visibility: visible !important;
@@ -211,7 +211,7 @@ export function ChatWrapper() {
           line-height: 1.55 !important;
           overflow-wrap: anywhere !important;
           word-wrap: break-word !important;
-          white-space: pre-wrap !important;
+          white-space: normal !important;
           position: relative !important;
           overflow: visible !important;
           border: 1px solid rgba(148, 163, 184, 0.35) !important;
@@ -331,7 +331,19 @@ export function ChatWrapper() {
         .copilotKitMarkdown p,
         .copilotKitMarkdownElement p {
           display: block !important;
-          margin: 0.75rem 0 !important;
+          margin: 0.35rem 0 !important;
+        }
+        
+        .copilotKit-markdown p:first-child,
+        .copilotKitMarkdown p:first-child,
+        .copilotKitMarkdownElement p:first-child {
+          margin-top: 0 !important;
+        }
+        
+        .copilotKit-markdown p:last-child,
+        .copilotKitMarkdown p:last-child,
+        .copilotKitMarkdownElement p:last-child {
+          margin-bottom: 0 !important;
         }
         
         /* 强制所有嵌套元素正确显示 */
@@ -378,9 +390,19 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage h5,
         .copilotKitAssistantMessage h6 {
           font-weight: 600 !important;
-          margin: 1rem 0 0.5rem 0 !important;
+          margin: 0.5rem 0 0.35rem 0 !important;
           line-height: 1.4 !important;
           color: #1f2937 !important;
+        }
+        
+        /* 消息中的第一个标题无顶部间距 */
+        .copilotKitAssistantMessage h1:first-child,
+        .copilotKitAssistantMessage h2:first-child,
+        .copilotKitAssistantMessage h3:first-child,
+        .copilotKitAssistantMessage h4:first-child,
+        .copilotKitAssistantMessage h5:first-child,
+        .copilotKitAssistantMessage h6:first-child {
+          margin-top: 0 !important;
         }
         
         .copilotKitAssistantMessage h1 { font-size: 1.5rem !important; }
@@ -391,7 +413,7 @@ export function ChatWrapper() {
         /* Markdown 列表样式 */
         .copilotKitAssistantMessage ul,
         .copilotKitAssistantMessage ol {
-          margin: 0.75rem 0 !important;
+          margin: 0.35rem 0 !important;
           padding-left: 1.5rem !important;
         }
         
@@ -410,8 +432,18 @@ export function ChatWrapper() {
         
         /* Markdown 段落样式 */
         .copilotKitAssistantMessage p {
-          margin: 0.75rem 0 !important;
-          line-height: 1.6 !important;
+          margin: 0.35rem 0 !important;
+          line-height: 1.5 !important;
+        }
+        
+        /* 移除第一个段落的顶部间距 */
+        .copilotKitAssistantMessage p:first-child {
+          margin-top: 0 !important;
+        }
+        
+        /* 移除最后一个段落的底部间距 */
+        .copilotKitAssistantMessage p:last-child {
+          margin-bottom: 0 !important;
         }
         
         /* Markdown 粗体和斜体 */
@@ -479,7 +511,7 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage table {
           border-collapse: collapse !important;
           width: 100% !important;
-          margin: 0.75rem 0 !important;
+          margin: 0.35rem 0 !important;
           font-size: 0.875rem !important;
         }
         
