@@ -35,6 +35,8 @@ model Plan {
   is_recurring Boolean  @default(false)
   recurrence_type String?
   recurrence_value String?
+  priority_quadrant String?  // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
+  is_scheduled Boolean  @default(false) // 是否被安排到四象限中显示
   tags         PlanTagAssociation[]
   progressRecords ProgressRecord[]
 }

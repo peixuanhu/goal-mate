@@ -4,17 +4,28 @@ import { randomUUID } from 'crypto'
 
 const prisma = new PrismaClient()
 
-// GET: ListPlans 支持分页、tag、difficulty、goal_id筛选
+// GET: ListPlans 支持分页、tag、difficulty、goal_id、is_scheduled、priority_quadrant筛选
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const tag = searchParams.get('tag')
   const difficulty = searchParams.get('difficulty')
   const goal_id = searchParams.get('goal_id')
+  const is_scheduled = searchParams.get('is_scheduled')
+  const priority_quadrant = searchParams.get('priority_quadrant')
+  const unscheduled = searchParams.get('unscheduled')
   const pageNum = parseInt(searchParams.get('pageNum') || '1')
   const pageSize = parseInt(searchParams.get('pageSize') || '10')
 
   const where: Record<string, unknown> = {}
   if (difficulty) where.difficulty = difficulty
+  if (is_scheduled !== null && is_scheduled !== undefined) {
+    where.is_scheduled = is_scheduled === 'true'
+  }
+  if (priority_quadrant) where.priority_quadrant = priority_quadrant
+  // unscheduled=true 时获取未安排的任务
+  if (unscheduled === 'true') {
+    where.is_scheduled = false
+  }
 
   // goal_id筛选时，取goal的tag，过滤出带该tag的plan
   if (goal_id) {

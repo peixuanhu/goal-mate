@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,8 +13,9 @@ import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import { getRecurringTaskStatus, getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
-import { ChevronUp, ChevronDown, Filter, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
+
 
 interface Plan {
   id: number
@@ -48,6 +49,52 @@ type SortConfig = {
   key: 'difficulty' | 'status' | null;
   direction: 'asc' | 'desc';
 };
+
+// Draggable table row component using HTML5 drag and drop
+function DraggableTableRow({ 
+  plan, 
+  highlightPlanId, 
+  children,
+}: { 
+  plan: Plan; 
+  highlightPlanId: string | null;
+  children: React.ReactNode;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    setIsDragging(true);
+    // Store plan data in dataTransfer for cross-component drag
+    e.dataTransfer.setData('application/json', JSON.stringify(plan));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <TableRow 
+      className={`
+        ${highlightPlanId === plan.plan_id ? 'bg-yellow-100 dark:bg-yellow-900/20 animate-pulse' : ''}
+        ${isDragging ? 'opacity-50' : ''}
+      `}
+    >
+      <TableCell className="w-[40px] min-w-[40px] p-2" style={{ width: '40px' }}>
+        <div
+          draggable
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+          title="拖拽到四象限"
+        >
+          <GripVertical className="w-4 h-4 text-gray-400" />
+        </div>
+      </TableCell>
+      {children}
+    </TableRow>
+  );
+}
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([])
@@ -493,14 +540,37 @@ export default function PlansPage() {
                       placeholder="添加新标签"
                       value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
                       onChange={e => {
-                        const val = e.target.value.trim();
+                        // 只更新输入框的值，不立即添加到tags
+                        const val = e.target.value;
+                        // 临时存储在tags中用于保持输入框值，但会在回车时重新处理
                         setForm(f => ({
                           ...f,
                           tags: [
                             ...(f.tags?.filter(tag => tagOptions.includes(tag)) || []),
                             ...(val ? [val] : [])
                           ]
-                        }))
+                        }));
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const input = e.currentTarget.value.trim();
+                          if (input) {
+                            // 检查是否已存在（包括已有的和新添加的）
+                            const existingTags = form.tags?.filter(tag => tagOptions.includes(tag)) || [];
+                            const newTags = form.tags?.filter(tag => !tagOptions.includes(tag) && tag !== input) || [];
+                            
+                            // 只有当该标签不在已有选项中时才添加
+                            if (!tagOptions.includes(input) && !newTags.includes(input)) {
+                              setForm(f => ({
+                                ...f,
+                                tags: [...existingTags, ...newTags, input]
+                              }));
+                            }
+                            // 清空输入框
+                            e.currentTarget.value = '';
+                          }
+                        }
                       }}
                     />
                   </div>
@@ -618,9 +688,10 @@ export default function PlansPage() {
 
             {/* 带排序功能的表格 */}
             <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
-              <Table className="min-w-[1160px]" style={{ tableLayout: 'fixed', width: '1160px' }}>
+              <Table className="min-w-[1200px]" style={{ tableLayout: 'fixed', width: '1200px' }}>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px] min-w-[40px] p-2" style={{ width: '40px' }}></TableHead>
                     <TableHead className="w-[220px] min-w-[220px]" style={{ width: '220px', maxWidth: '220px' }}>计划名称</TableHead>
                     <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
                       <Button
@@ -668,9 +739,10 @@ export default function PlansPage() {
                     </TableRow>
                   ) : (
                     plans.map(plan => (
-                      <TableRow 
+                      <DraggableTableRow 
                         key={plan.plan_id}
-                        className={highlightPlanId === plan.plan_id ? 'bg-yellow-100 dark:bg-yellow-900/20 animate-pulse' : ''}
+                        plan={plan}
+                        highlightPlanId={highlightPlanId}
                       >
                         <TableCell className="w-[220px] min-w-[220px] font-medium" style={{ width: '220px', maxWidth: '220px', overflow: 'hidden' }}>
                           <TextPreview
@@ -767,7 +839,7 @@ export default function PlansPage() {
                             </Button>
                           </div>
                         </TableCell>
-                      </TableRow>
+                      </DraggableTableRow>
                     ))
                   )}
                 </TableBody>

@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { ChatWrapper } from "./chat-wrapper";
 import UserMenu from "./UserMenu";
+import { QuadrantLeftSidebar } from "./quadrant-left-sidebar";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -11,6 +12,11 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   return (
     <div className="min-h-screen flex flex-col bg-background md:flex-row md:h-screen md:max-h-dvh md:overflow-hidden">
+      {/* 左侧四象限侧边栏 */}
+      <div className="hidden md:flex shrink-0">
+        <QuadrantLeftSidebar />
+      </div>
+
       {/* 主要内容区域：移动端优先占满宽度，避免与固定宽度侧栏并排时被挤没 */}
       <main className="w-full min-w-0 shrink-0 overflow-y-auto md:min-h-0 md:shrink md:flex-1">
         {children}
