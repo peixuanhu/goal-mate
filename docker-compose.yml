@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Goal Mate 应用 - 中国网络优化版本
   app:
@@ -8,8 +6,6 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
-      # 增加构建超时时间
-      timeout: 1800  # 30分钟
     container_name: goal-mate-app
     restart: unless-stopped
     # 添加网络配置
