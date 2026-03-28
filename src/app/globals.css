@@ -44,6 +44,11 @@
 }
 
 :root {
+  /* 系统字体栈：不依赖 Google CDN，离线/国内网络也可构建与运行 */
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -157,87 +162,9 @@
   color: hsl(var(--foreground)) !important;
 }
 
-/* 强制覆盖所有可能的CopilotKit类 */
-[class*="copilot"],
-[data-copilot-chat="true"] [class*="copilot"],
-[data-copilot-chat="true"] > div,
-[data-copilot-chat="true"] > div > div {
-  background: hsl(var(--background)) !important;
-  color: hsl(var(--foreground)) !important;
-  border: none !important;
-  font-family: inherit !important;
-}
+/* 勿用 [class*="copilot"] 全盘覆盖 background/border，会破坏聊天气泡；消息与输入样式由 chat-wrapper 接管 */
 
-/* 输入框样式 */
-[data-copilot-chat="true"] textarea,
-[data-copilot-chat="true"] input[type="text"],
-[class*="copilot"] textarea,
-[class*="copilot"] input {
-  background: hsl(var(--input)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-  color: hsl(var(--foreground)) !important;
-  border-radius: calc(var(--radius) - 2px) !important;
-  padding: 0.75rem !important;
-  font-family: inherit !important;
-  font-size: 0.875rem !important;
-  resize: none !important;
-}
-
-[data-copilot-chat="true"] textarea:focus,
-[data-copilot-chat="true"] input:focus {
-  outline: 2px solid hsl(var(--ring)) !important;
-  outline-offset: 2px !important;
-}
-
-/* 按钮样式 */
-[data-copilot-chat="true"] button,
-[class*="copilot"] button {
-  background: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  border: none !important;
-  border-radius: var(--radius) !important;
-  padding: 0.5rem 1rem !important;
-  cursor: pointer !important;
-  font-family: inherit !important;
-  font-size: 0.875rem !important;
-  transition: background-color 0.2s !important;
-}
-
-[data-copilot-chat="true"] button:hover,
-[class*="copilot"] button:hover {
-  background: hsl(var(--primary) / 0.9) !important;
-}
-
-/* 消息样式 */
-[data-copilot-chat="true"] [class*="message"],
-[class*="copilot"] [class*="message"] {
-  margin-bottom: 0.75rem !important;
-  padding: 0.75rem !important;
-  border-radius: var(--radius) !important;
-  max-width: 85% !important;
-  word-wrap: break-word !important;
-  font-family: inherit !important;
-}
-
-/* 用户消息 */
-[data-copilot-chat="true"] [class*="user"],
-[class*="copilot"] [class*="user"] {
-  background: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-  margin-left: auto !important;
-  margin-right: 0 !important;
-}
-
-/* 助手消息 */
-[data-copilot-chat="true"] [class*="assistant"],
-[class*="copilot"] [class*="assistant"] {
-  background: hsl(var(--muted)) !important;
-  color: hsl(var(--muted-foreground)) !important;
-  margin-right: auto !important;
-  margin-left: 0 !important;
-}
-
-/* 滚动条样式 */
+/* 仅当页面显式标注 data-copilot-chat 时（如 test-chat）提供轻量滚动条与盒模型 */
 [data-copilot-chat="true"] *::-webkit-scrollbar {
   width: 0.25rem !important;
 }
@@ -253,22 +180,6 @@
 
 [data-copilot-chat="true"] *::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground)) !important;
-}
-
-/* 强制重置可能冲突的样式 */
-[data-copilot-chat="true"] * {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-[data-copilot-chat="true"] div {
-  padding: 0.5rem !important;
-}
-
-[data-copilot-chat="true"] textarea,
-[data-copilot-chat="true"] button {
-  margin: 0.25rem !important;
-  padding: 0.75rem !important;
 }
 
 /* 自定义工具类 */

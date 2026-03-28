@@ -10,6 +10,62 @@ import OpenAI from "openai";
 
 const prisma = new PrismaClient();
 
+/**
+ * 通义千问等 OpenAI 兼容 API：带 tool_calls 的 assistant 之后必须为每个 tool_call_id
+ * 提供 role 为 tool 的消息。CopilotKit 在多轮里偶发插入 user，打断 tool 序列，会触发 400。
+ * 在缺失处插入占位 tool 消息，仅用于通过校验；模型一般会据此继续对话。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function repairAssistantToolCallSequence(messages: any[]): any[] {
+  const out = [...messages];
+  let i = 0;
+  while (i < out.length) {
+    const m = out[i];
+    const toolCalls =
+      m?.role === "assistant" && Array.isArray(m.tool_calls) ? m.tool_calls : null;
+    if (!toolCalls || toolCalls.length === 0) {
+      i++;
+      continue;
+    }
+    const required = new Set<string>();
+    for (const tc of toolCalls) {
+      const id = tc?.id;
+      if (typeof id === "string" && id.length > 0) required.add(id);
+    }
+    if (required.size === 0) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    const got = new Set<string>();
+    while (j < out.length && out[j]?.role === "tool") {
+      const tid = out[j]?.tool_call_id;
+      if (typeof tid === "string" && required.has(tid)) got.add(tid);
+      j++;
+    }
+    const missing = [...required].filter((id) => !got.has(id));
+    if (missing.length === 0) {
+      i++;
+      continue;
+    }
+    const insertAt = j;
+    const placeholders = missing.map((tool_call_id) => ({
+      role: "tool" as const,
+      tool_call_id,
+      content: JSON.stringify({
+        ok: false,
+        note: "Goal Mate: missing tool result in history; placeholder for API compliance.",
+      }),
+    }));
+    out.splice(insertAt, 0, ...placeholders);
+    console.log(
+      `🔧 repairAssistantToolCallSequence: inserted ${placeholders.length} tool placeholder(s) before index ${insertAt} (assistant index ${i})`,
+    );
+    i++;
+  }
+  return out;
+}
+
 // 检查环境变量并初始化
 console.log("🔧 Initializing CopilotKit...");
 
@@ -190,6 +246,8 @@ class CustomOpenAI extends OpenAI {
           // 如果已存在系统消息，则更新内容
           body.messages[0].content = systemPrompt + '\n\n' + body.messages[0].content;
         }
+
+        body.messages = repairAssistantToolCallSequence(body.messages);
         
         console.log("✅ Cleaned message roles:", body.messages.map((m: any) => m.role)); // eslint-disable-line @typescript-eslint/no-explicit-any
       }

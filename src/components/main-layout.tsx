@@ -17,7 +17,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </main>
 
       {/* AI 助手：大屏为右侧栏；小屏为底部固定高度面板，主内容在上方完整可见 */}
-      <div className="flex w-full flex-col border-t border-border bg-background md:h-screen md:w-[min(100%,480px)] md:shrink-0 md:border-l md:border-t-0 md:sticky md:top-0 z-10 h-[min(44dvh,380px)] min-h-[260px] max-h-[50dvh]">
+      <div className="z-10 flex w-full flex-col border-t border-border bg-background h-[min(44dvh,380px)] max-h-[50dvh] min-h-[260px] md:h-screen md:max-h-none md:min-h-0 md:w-[min(100%,480px)] md:shrink-0 md:border-l md:border-t-0 md:sticky md:top-0">
         {/* 头部 */}
         <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950 md:p-6">
           <div className="flex items-center justify-between gap-2">
