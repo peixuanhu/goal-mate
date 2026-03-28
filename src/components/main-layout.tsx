@@ -10,19 +10,19 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* 主要内容区域 */}
-      <main className="flex-1 min-w-0 overflow-auto">
+    <div className="min-h-screen flex flex-col bg-background md:flex-row md:h-screen md:max-h-dvh md:overflow-hidden">
+      {/* 主要内容区域：移动端优先占满宽度，避免与固定宽度侧栏并排时被挤没 */}
+      <main className="w-full min-w-0 shrink-0 overflow-y-auto md:min-h-0 md:shrink md:flex-1">
         {children}
       </main>
-      
-      {/* 右侧AI助手聊天区域 */}
-      <div className="w-[480px] border-l bg-background flex flex-col h-screen sticky top-0 right-0 z-10 shrink-0">
+
+      {/* AI 助手：大屏为右侧栏；小屏为底部固定高度面板，主内容在上方完整可见 */}
+      <div className="flex w-full flex-col border-t border-border bg-background md:h-screen md:w-[min(100%,480px)] md:shrink-0 md:border-l md:border-t-0 md:sticky md:top-0 z-10 h-[min(44dvh,380px)] min-h-[260px] max-h-[50dvh]">
         {/* 头部 */}
-        <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+        <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950 md:p-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center space-x-2 md:space-x-3">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
                   className="h-5 w-5 text-white" 
@@ -38,11 +38,11 @@ export function MainLayout({ children }: MainLayoutProps) {
                   />
                 </svg>
               </div>
-              <div>
-                <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200">
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-gray-800 md:text-lg dark:text-gray-200">
                   Goal Mate AI助手
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="truncate text-xs text-gray-600 md:text-sm dark:text-gray-400">
                   智能目标管理助手
                 </p>
               </div>

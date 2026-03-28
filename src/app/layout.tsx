@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   description: "基于AI助手的智能目标和计划管理系统",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

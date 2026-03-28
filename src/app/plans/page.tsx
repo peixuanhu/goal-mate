@@ -308,17 +308,17 @@ export default function PlansPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-7xl mx-auto p-4 space-y-8">
-        <div className="mb-4">
-          <Button asChild variant="outline">
+      <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
+        <div className="mb-2 sm:mb-4">
+          <Button asChild variant="outline" className="w-full sm:w-auto">
             <Link href="/">返回首页</Link>
           </Button>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>计划管理</CardTitle>
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">计划管理</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6 px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* 表单字段 - 响应式布局 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -366,15 +366,15 @@ export default function PlansPage() {
                 </div>
                 <div className="space-y-2 lg:col-span-1 xl:col-span-1">
                   <Label>操作</Label>
-                  <div className="flex gap-2 pt-2">
-                    <Button type="submit" disabled={loading} className="flex-1 min-w-[80px]">
+                  <div className="flex flex-col gap-2 pt-0 sm:flex-row sm:pt-2">
+                    <Button type="submit" disabled={loading} className="min-h-10 w-full flex-1 sm:min-w-[80px]">
                       {editingId ? '更新' : '新增'}
                     </Button>
                     {editingId && (
                       <Button 
                         type="button" 
                         variant="secondary" 
-                        className="flex-1 min-w-[80px]" 
+                        className="min-h-10 w-full flex-1 sm:min-w-[80px]" 
                         onClick={() => { setForm({ tags: [], progress: '', is_recurring: false }); setEditingId(null) }}
                       >
                         取消
@@ -385,7 +385,7 @@ export default function PlansPage() {
               </div>
 
               {/* 周期性任务配置 */}
-              <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="space-y-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -472,7 +472,7 @@ export default function PlansPage() {
               {/* 标签字段 - 独立行 */}
               <div className="space-y-3">
                 <Label>标签</Label>
-                <div className="flex flex-wrap gap-3 items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
                   {tagOptions.map(t => (
                     <label key={t} className="flex items-center gap-2 bg-white dark:bg-gray-700 px-3 py-2 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer">
                       <input 
@@ -486,10 +486,10 @@ export default function PlansPage() {
                       <span className="text-sm">{t}</span>
                     </label>
                   ))}
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm text-gray-600 dark:text-gray-400">新标签:</Label>
+                  <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <Label className="shrink-0 text-sm text-gray-600 dark:text-gray-400">新标签:</Label>
                     <Input
-                      className="w-32"
+                      className="w-full min-w-0 sm:w-32"
                       placeholder="添加新标签"
                       value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
                       onChange={e => {
@@ -509,7 +509,7 @@ export default function PlansPage() {
             </form>
 
             {/* 增强的筛选器 */}
-            <div className="mb-6 mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="mb-6 mt-8 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Filter className="w-4 h-4" />
@@ -575,8 +575,8 @@ export default function PlansPage() {
                   {/* 标签筛选（多选） */}
                   <div className="space-y-2">
                     <Label>筛选标签（多选）</Label>
-                    <div className="flex gap-2">
-                      <div className="flex-1 flex flex-wrap gap-1 min-h-[32px] p-2 border rounded-md bg-white dark:bg-gray-700">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <div className="flex min-h-[32px] flex-1 flex-wrap gap-1 rounded-md border bg-white p-2 dark:bg-gray-700">
                         {selectedTags.length === 0 && (
                           <span className="text-gray-400 text-sm">全部标签</span>
                         )}
@@ -600,7 +600,7 @@ export default function PlansPage() {
                           }
                         }}
                       >
-                        <SelectTrigger className="w-[120px]">
+                        <SelectTrigger className="h-9 w-full shrink-0 sm:w-[120px]">
                           <SelectValue placeholder="添加" />
                         </SelectTrigger>
                         <SelectContent>
@@ -617,8 +617,8 @@ export default function PlansPage() {
             </div>
 
             {/* 带排序功能的表格 */}
-            <div className="overflow-x-auto border rounded-lg">
-              <Table className="min-w-full" style={{ tableLayout: 'fixed', width: '1160px' }}>
+            <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
+              <Table className="min-w-[1160px]" style={{ tableLayout: 'fixed', width: '1160px' }}>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[220px] min-w-[220px]" style={{ width: '220px', maxWidth: '220px' }}>计划名称</TableHead>
@@ -644,7 +644,7 @@ export default function PlansPage() {
                     </TableHead>
                     <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>类型</TableHead>
                     <TableHead className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px' }}>描述</TableHead>
-                    <TableHead className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l" style={{ width: '170px', maxWidth: '170px' }}>操作</TableHead>
+                    <TableHead className="sticky right-0 z-[1] w-[170px] min-w-[170px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '170px', maxWidth: '170px' }}>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -754,8 +754,8 @@ export default function PlansPage() {
                             truncateLines={1}
                           />
                         </TableCell>
-                        <TableCell className="w-[170px] min-w-[170px] sticky right-0 bg-white dark:bg-gray-950 border-l" style={{ width: '170px', maxWidth: '170px' }}>
-                          <div className="flex gap-1 items-center justify-start whitespace-nowrap">
+                        <TableCell className="sticky right-0 z-[1] w-[170px] min-w-[170px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '170px', maxWidth: '170px' }}>
+                          <div className="flex flex-wrap gap-1 items-center justify-start">
                             <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 px-2 text-xs">
                               编辑
                             </Button>
@@ -775,16 +775,16 @@ export default function PlansPage() {
             </div>
 
             {/* 分页 */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="mt-6 flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:bg-gray-800">
+              <div className="text-center text-sm text-gray-600 sm:text-left dark:text-gray-400">
                 共 {total} 条记录，第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页
               </div>
-              <div className="flex gap-2">
+              <div className="flex w-full gap-2 sm:w-auto">
                 <Button 
                   variant="outline" 
                   disabled={pageNum === 1} 
                   onClick={() => setPageNum(p => p - 1)} 
-                  className="min-w-[80px]"
+                  className="min-h-10 flex-1 sm:min-w-[80px] sm:flex-initial"
                 >
                   上一页
                 </Button>
@@ -792,7 +792,7 @@ export default function PlansPage() {
                   variant="outline" 
                   disabled={pageNum * pageSize >= total} 
                   onClick={() => setPageNum(p => p + 1)} 
-                  className="min-w-[80px]"
+                  className="min-h-10 flex-1 sm:min-w-[80px] sm:flex-initial"
                 >
                   下一页
                 </Button>

@@ -179,7 +179,7 @@ export function ChatWrapper() {
           line-height: 1.6 !important;
           word-wrap: break-word;
           position: relative;
-          max-width: 400px !important;
+          max-width: min(400px, 85vw) !important;
           margin-bottom: 0.5rem !important;
           background: white !important;
           color: #374151 !important;
@@ -195,7 +195,7 @@ export function ChatWrapper() {
           margin-right: 1rem !important;
           border-radius: 1.25rem 1.25rem 0.5rem 1.25rem !important;
           box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
-          max-width: 360px !important;
+          max-width: min(360px, 82vw) !important;
           border: none !important;
         }
         
@@ -221,7 +221,7 @@ export function ChatWrapper() {
           border: 1px solid #e5e7eb !important;
           border-radius: 1.25rem 1.25rem 1.25rem 0.5rem !important;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-          max-width: 400px !important;
+          max-width: min(400px, 85vw) !important;
         }
         
         /* AI助手消息气泡尾巴 */
@@ -595,17 +595,17 @@ export function ChatWrapper() {
         /* 响应式设计 */
         @media (max-width: 768px) {
           .user-message-bubble {
-            margin-right: 0.75rem !important;
-            max-width: 280px !important;
+            margin-right: 0.5rem !important;
+            max-width: min(280px, 82vw) !important;
           }
           
           .ai-message-bubble {
-            margin-left: 0.75rem !important;
-            max-width: 300px !important;
+            margin-left: 0.5rem !important;
+            max-width: min(300px, 85vw) !important;
           }
           
           .copilotKitMessages {
-            padding: 1rem !important;
+            padding: 0.875rem 0.75rem !important;
           }
         }
         

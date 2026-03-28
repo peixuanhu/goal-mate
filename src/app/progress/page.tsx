@@ -234,22 +234,23 @@ export default function ProgressPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="max-w-7xl mx-auto p-4 space-y-8">
-          <div className="mb-4">
-            <Button asChild variant="outline">
+        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
+          <div className="mb-2 sm:mb-4">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link href="/">返回首页</Link>
             </Button>
           </div>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="flex flex-col gap-3 text-lg sm:flex-row sm:items-center sm:justify-between sm:text-xl">
                 <span>进展记录</span>
-                <div className="flex gap-2">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                   <Button 
                     size="sm" 
                     variant={viewMode === 'all' ? 'default' : 'outline'}
                     onClick={() => handleViewModeChange('all')}
+                    className="w-full sm:w-auto"
                   >
                     查看所有进展
                   </Button>
@@ -257,15 +258,16 @@ export default function ProgressPage() {
                     size="sm" 
                     variant={viewMode === 'single' ? 'default' : 'outline'}
                     onClick={() => handleViewModeChange('single')}
+                    className="w-full sm:w-auto"
                   >
                     单个计划管理
                   </Button>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6 px-4 sm:px-6">
               {/* 计划选择器 */}
-              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="mb-6 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">选择计划</Label>
@@ -305,13 +307,13 @@ export default function ProgressPage() {
               
               {/* 只在单个计划模式或编辑状态时显示表单 */}
               {(planId !== 'all' || editingId) && (
-                <Card className="mb-8">
-                  <CardHeader>
-                    <CardTitle className="text-lg">
+                <Card className="mb-8 min-w-0 overflow-hidden">
+                  <CardHeader className="px-4 sm:px-6">
+                    <CardTitle className="text-base sm:text-lg">
                       {editingId ? '编辑进展记录' : '添加新进展'}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 sm:px-6">
                     <form onSubmit={handleSubmit} className="space-y-6">
                       {/* 如果是编辑状态，显示所属计划选择器 */}
                       {editingId && (
@@ -392,9 +394,9 @@ export default function ProgressPage() {
 
                       {/* 记录时间（可选） */}
                       <div className="space-y-2">
-                        <Label htmlFor="recordTime" className="flex items-center gap-2">
-                          记录时间（可选）
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <Label htmlFor="recordTime" className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                            <span>记录时间（可选）</span>
+                          <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
                             留空则使用当前时间
                           </span>
                         </Label>
@@ -424,8 +426,8 @@ export default function ProgressPage() {
                       </div>
 
                       {/* 操作按钮 */}
-                      <div className="flex gap-3 pt-4">
-                        <Button type="submit" disabled={loading} className="min-w-[120px]">
+                      <div className="flex flex-col gap-3 pt-4 sm:flex-row">
+                        <Button type="submit" disabled={loading} className="min-h-10 w-full sm:min-w-[120px] sm:w-auto">
                           {loading ? '保存中...' : (editingId ? '更新进展' : '添加进展')}
                         </Button>
                         {editingId && (
@@ -433,7 +435,7 @@ export default function ProgressPage() {
                             type="button" 
                             variant="secondary" 
                             onClick={handleCancelEdit}
-                            className="min-w-[100px]"
+                            className="min-h-10 w-full sm:min-w-[100px] sm:w-auto"
                             disabled={loading}
                           >
                             取消编辑
@@ -447,21 +449,21 @@ export default function ProgressPage() {
               
               {/* 记录列表标题 */}
               <div className="mb-4">
-                <h3 className="text-lg font-semibold">
+                <h3 className="break-words text-base font-semibold sm:text-lg">
                   {planId === 'all' ? '所有计划的最新进展' : `${plans.find(p => p.plan_id === planId)?.name || ''} 的进展记录`}
                 </h3>
               </div>
               
               {/* 表格 - 添加横向滚动 */}
-              <div className="overflow-x-auto border rounded-lg">
-                <Table className="min-w-full">
+              <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
+                <Table className="w-full min-w-[1090px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[150px] min-w-[150px]">时间</TableHead>
                       {planId === 'all' && <TableHead className="w-[160px] min-w-[160px]">计划名称</TableHead>}
                       <TableHead className="w-[320px] min-w-[320px]">内容</TableHead>
                       <TableHead className="w-[320px] min-w-[320px]">思考</TableHead>
-                      <TableHead className="w-[140px] min-w-[140px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                      <TableHead className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -520,8 +522,8 @@ export default function ProgressPage() {
                               truncateLines={3}
                             />
                           </TableCell>
-                          <TableCell className="w-[140px] min-w-[140px] sticky right-0 bg-white dark:bg-gray-950 border-l">
-                            <div className="flex gap-1 items-center justify-start whitespace-nowrap">
+                          <TableCell className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
+                            <div className="flex flex-wrap gap-1 items-center justify-start">
                               <Button 
                                 size="sm" 
                                 variant="outline" 

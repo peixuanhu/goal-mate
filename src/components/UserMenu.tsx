@@ -73,7 +73,9 @@ export default function UserMenu() {
         <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
           {user.username.charAt(0).toUpperCase()}
         </div>
-        <span className="text-sm font-medium text-gray-700">{user.username}</span>
+        <span className="hidden max-w-[120px] truncate text-sm font-medium text-gray-700 sm:inline">
+          {user.username}
+        </span>
         <svg 
           className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none" 

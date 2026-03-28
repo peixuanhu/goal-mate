@@ -15,10 +15,12 @@ export default async function Home() {
 
   return (
     <MainLayout>
-      <div className="flex flex-col items-center justify-center gap-8 bg-muted p-8 min-h-screen">
-        <h1 className="text-3xl font-bold mb-8">Goal Mate - AI智能目标管理</h1>
-        <div className="flex flex-wrap gap-8 justify-center">
-          <Card className="w-64">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted p-4 sm:gap-8 sm:p-8">
+        <h1 className="mb-4 text-center text-2xl font-bold tracking-tight sm:mb-8 sm:text-3xl">
+          Goal Mate - AI智能目标管理
+        </h1>
+        <div className="flex w-full max-w-5xl flex-col items-stretch gap-6 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-8">
+          <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
             <CardHeader>
               <CardTitle>目标管理</CardTitle>
             </CardHeader>
@@ -31,7 +33,7 @@ export default async function Home() {
               </Button>
             </CardContent>
           </Card>
-          <Card className="w-64">
+          <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
             <CardHeader>
               <CardTitle>计划管理</CardTitle>
             </CardHeader>
@@ -44,7 +46,7 @@ export default async function Home() {
               </Button>
             </CardContent>
           </Card>
-          <Card className="w-64">
+          <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
             <CardHeader>
               <CardTitle>进展记录</CardTitle>
             </CardHeader>
@@ -60,7 +62,7 @@ export default async function Home() {
         </div>
         
         {/* AI助手使用提示 */}
-        <Card className="w-full max-w-2xl mt-8">
+        <Card className="mt-6 w-full max-w-2xl sm:mt-8">
           <CardHeader>
             <CardTitle>🤖 AI助手使用指南</CardTitle>
           </CardHeader>

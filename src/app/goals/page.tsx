@@ -93,17 +93,17 @@ export default function GoalsPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="max-w-7xl mx-auto p-4 space-y-8">
-          <div className="mb-4">
-            <Button asChild variant="outline">
+        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
+          <div className="mb-2 sm:mb-4">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link href="/">返回首页</Link>
             </Button>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>目标管理</CardTitle>
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">目标管理</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6 px-4 sm:px-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 表单字段 - 响应式布局 */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -130,15 +130,15 @@ export default function GoalsPage() {
                   </div>
                   <div className="space-y-2 lg:col-span-1">
                     <Label>操作</Label>
-                    <div className="flex gap-2 pt-2">
-                      <Button type="submit" disabled={loading} className="flex-1 min-w-[80px]">
+                    <div className="flex flex-col gap-2 pt-0 sm:flex-row sm:pt-2">
+                      <Button type="submit" disabled={loading} className="min-h-10 w-full flex-1 sm:min-w-[80px]">
                         {loading ? '保存中...' : (editingId ? '更新' : '新增')}
                       </Button>
                       {editingId && (
                         <Button 
                           type="button" 
                           variant="secondary" 
-                          className="flex-1 min-w-[80px]" 
+                          className="min-h-10 w-full flex-1 sm:min-w-[80px]" 
                           onClick={() => { setForm({}); setEditingId(null) }}
                         >
                           取消
@@ -162,7 +162,7 @@ export default function GoalsPage() {
               </form>
 
               {/* 筛选器 */}
-              <div className="mb-6 mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="mb-6 mt-8 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">搜索名称</Label>
@@ -192,14 +192,14 @@ export default function GoalsPage() {
               </div>
 
               {/* 表格 - 添加横向滚动 */}
-              <div className="overflow-x-auto border rounded-lg">
-                <Table className="min-w-full">
+              <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
+                <Table className="min-w-[930px] w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[220px] min-w-[220px]">名称</TableHead>
                       <TableHead className="w-[140px] min-w-[140px]">标签</TableHead>
                       <TableHead className="w-[380px] min-w-[380px]">描述</TableHead>
-                      <TableHead className="w-[190px] min-w-[190px] sticky right-0 bg-white dark:bg-gray-950 border-l">操作</TableHead>
+                      <TableHead className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -243,8 +243,8 @@ export default function GoalsPage() {
                               truncateLines={2}
                             />
                           </TableCell>
-                          <TableCell className="w-[190px] min-w-[190px] sticky right-0 bg-white dark:bg-gray-950 border-l">
-                            <div className="flex gap-1 items-center justify-start whitespace-nowrap">
+                          <TableCell className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
+                            <div className="flex flex-wrap gap-1 items-center justify-start">
                               <Button 
                                 size="sm" 
                                 variant="outline" 
@@ -281,16 +281,16 @@ export default function GoalsPage() {
               </div>
 
               {/* 分页 */}
-              <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="mt-6 flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:bg-gray-800">
+                <div className="text-center text-sm text-gray-600 sm:text-left dark:text-gray-400">
                   共 {total} 条记录，第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页
                 </div>
-                <div className="flex gap-2">
+                <div className="flex w-full gap-2 sm:w-auto">
                   <Button 
                     variant="outline" 
                     disabled={pageNum === 1} 
                     onClick={() => setPageNum(p => p - 1)} 
-                    className="min-w-[80px]"
+                    className="min-h-10 flex-1 sm:min-w-[80px] sm:flex-initial"
                   >
                     上一页
                   </Button>
@@ -298,7 +298,7 @@ export default function GoalsPage() {
                     variant="outline" 
                     disabled={pageNum * pageSize >= total} 
                     onClick={() => setPageNum(p => p + 1)} 
-                    className="min-w-[80px]"
+                    className="min-h-10 flex-1 sm:min-w-[80px] sm:flex-initial"
                   >
                     下一页
                   </Button>
