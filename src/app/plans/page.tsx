@@ -115,6 +115,7 @@ export default function PlansPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tagOptions, setTagOptions] = useState<string[]>([])
+  const [newTagInput, setNewTagInput] = useState<string>('')  // 新增：独立管理新标签输入框的值
 
   // 判断计划是否已完成的函数
   const isPlanCompleted = (plan: Plan): boolean => {
@@ -538,29 +539,18 @@ export default function PlansPage() {
                     <Input
                       className="w-full min-w-0 sm:w-32"
                       placeholder="添加新标签"
-                      value={form.tags?.find(tag => !tagOptions.includes(tag)) || ''}
-                      onChange={e => {
-                        // 只更新输入框的值，不立即添加到tags
-                        const val = e.target.value;
-                        // 临时存储在tags中用于保持输入框值，但会在回车时重新处理
-                        setForm(f => ({
-                          ...f,
-                          tags: [
-                            ...(f.tags?.filter(tag => tagOptions.includes(tag)) || []),
-                            ...(val ? [val] : [])
-                          ]
-                        }));
-                      }}
+                      value={newTagInput}
+                      onChange={e => setNewTagInput(e.target.value)}
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          const input = e.currentTarget.value.trim();
+                          const input = newTagInput.trim();
                           if (input) {
                             // 检查是否已存在（包括已有的和新添加的）
                             const existingTags = form.tags?.filter(tag => tagOptions.includes(tag)) || [];
-                            const newTags = form.tags?.filter(tag => !tagOptions.includes(tag) && tag !== input) || [];
+                            const newTags = form.tags?.filter(tag => !tagOptions.includes(tag)) || [];
                             
-                            // 只有当该标签不在已有选项中时才添加
+                            // 只有当该标签不在已有选项中且不在新添加的标签中时才添加
                             if (!tagOptions.includes(input) && !newTags.includes(input)) {
                               setForm(f => ({
                                 ...f,
@@ -568,7 +558,7 @@ export default function PlansPage() {
                               }));
                             }
                             // 清空输入框
-                            e.currentTarget.value = '';
+                            setNewTagInput('');
                           }
                         }
                       }}
