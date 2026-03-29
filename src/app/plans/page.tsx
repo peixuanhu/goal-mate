@@ -15,6 +15,7 @@ import { TextPreview } from "@/components/ui/text-preview"
 import { getRecurringTaskStatus, getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
 import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
+import { refreshQuadrantSidebar } from "@/lib/utils"
 
 
 interface Plan {
@@ -332,6 +333,8 @@ export default function PlansPage() {
     setForm({ tags: [], progress: '', is_recurring: false })
     setEditingId(null)
     await fetchPlans()
+    // Refresh quadrant sidebar to reflect changes
+    refreshQuadrantSidebar()
     setLoading(false)
   }
 

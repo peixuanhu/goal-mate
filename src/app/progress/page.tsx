@@ -14,6 +14,7 @@ import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
+import { refreshQuadrantSidebar } from "@/lib/utils"
 
 interface Plan {
   plan_id: string
@@ -166,6 +167,8 @@ export default function ProgressPage() {
       setEditingId(null)
       await fetchRecords(planId)
       await fetchPlans() // 重新获取计划数据以更新进度显示
+      // Refresh quadrant sidebar to reflect progress changes
+      refreshQuadrantSidebar()
     } catch (error) {
       console.error('保存进展记录失败:', error)
       alert('保存失败，请重试')

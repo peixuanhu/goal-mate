@@ -29,7 +29,7 @@ export async function GET() {
       q4: plans.filter(p => p.priority_quadrant === 'q4')
     }
 
-    // 转换tags为字符串数组
+    // 转换tags为字符串数组，并保留progressRecords
     const result = {
       q1: grouped.q1.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) })),
       q2: grouped.q2.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) })),

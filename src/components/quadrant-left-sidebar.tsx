@@ -164,12 +164,32 @@ function getCurrentPeriodCount(plan: Plan): number {
 // 判断任务是否已完成（周期性任务按周期完成次数判断，普通任务按进度判断）
 function isTaskCompleted(plan: Plan): boolean {
   if (plan.is_recurring && plan.recurrence_type) {
+    // 如果周期性任务没有设置目标次数，则视为未完成
+    if (!plan.recurrence_value || plan.recurrence_value === 'null') {
+      return false;
+    }
     const currentCount = getCurrentPeriodCount(plan);
     const targetCount = getTargetCount(plan);
     return currentCount >= targetCount;
   } else {
-    return plan.progress >= 100;
+    return plan.progress >= 1; // progress is 0-1, not 0-100
   }
+}
+
+// 排序任务：未完成的在前，已完成的在后，各自按名称排序
+function sortTasksByCompletion(plans: Plan[]): Plan[] {
+  return [...plans].sort((a, b) => {
+    const aCompleted = isTaskCompleted(a);
+    const bCompleted = isTaskCompleted(b);
+    
+    // 如果完成状态不同，未完成的在前
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    
+    // 如果完成状态相同，按名称排序
+    return a.name.localeCompare(b.name, 'zh-CN');
+  });
 }
 
 function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
@@ -354,10 +374,10 @@ export function QuadrantLeftSidebar() {
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setQuadrantData({
-        q1: data.q1 || [],
-        q2: data.q2 || [],
-        q3: data.q3 || [],
-        q4: data.q4 || [],
+        q1: sortTasksByCompletion(data.q1 || []),
+        q2: sortTasksByCompletion(data.q2 || []),
+        q3: sortTasksByCompletion(data.q3 || []),
+        q4: sortTasksByCompletion(data.q4 || []),
       });
     } catch (error) {
       console.error("Error fetching quadrant data:", error);
@@ -368,7 +388,18 @@ export function QuadrantLeftSidebar() {
     fetchQuadrantData();
     // Refresh every 30 seconds
     const interval = setInterval(fetchQuadrantData, 30000);
-    return () => clearInterval(interval);
+    
+    // Listen for refresh events from other components
+    const handleRefresh = () => {
+      fetchQuadrantData();
+    };
+    
+    window.addEventListener('quadrant-refresh', handleRefresh);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('quadrant-refresh', handleRefresh);
+    };
   }, []);
 
   const updatePlanQuadrant = async (planId: string, targetQuadrant: string) => {
