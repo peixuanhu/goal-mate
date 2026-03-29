@@ -31,10 +31,26 @@ export async function GET() {
 
     // 转换tags为字符串数组，并保留progressRecords
     const result = {
-      q1: grouped.q1.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) })),
-      q2: grouped.q2.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) })),
-      q3: grouped.q3.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) })),
-      q4: grouped.q4.map(plan => ({ ...plan, tags: plan.tags.map(t => t.tag) }))
+      q1: grouped.q1.map(plan => ({
+        ...plan,
+        tags: plan.tags.map(t => t.tag),
+        progressRecords: plan.progressRecords || []
+      })),
+      q2: grouped.q2.map(plan => ({
+        ...plan,
+        tags: plan.tags.map(t => t.tag),
+        progressRecords: plan.progressRecords || []
+      })),
+      q3: grouped.q3.map(plan => ({
+        ...plan,
+        tags: plan.tags.map(t => t.tag),
+        progressRecords: plan.progressRecords || []
+      })),
+      q4: grouped.q4.map(plan => ({
+        ...plan,
+        tags: plan.tags.map(t => t.tag),
+        progressRecords: plan.progressRecords || []
+      }))
     }
 
     return NextResponse.json(result)

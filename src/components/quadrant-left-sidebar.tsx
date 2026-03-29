@@ -145,6 +145,23 @@ function getTargetCount(plan: Plan): number {
   if (plan.recurrence_value && plan.recurrence_value !== 'null') {
     return parseInt(plan.recurrence_value) || 1;
   }
+  
+  // 根据任务名称智能推测目标次数（与 recurring-utils.ts 保持一致）
+  const planName = plan.name?.toLowerCase() || '';
+  if (planName.includes('2-3次') || planName.includes('2～3次')) {
+    return 3;
+  }
+  if (planName.includes('一次') || planName.includes('1次')) {
+    return 1;
+  }
+  if (planName.includes('三次') || planName.includes('3次')) {
+    return 3;
+  }
+  if (planName.includes('两次') || planName.includes('2次')) {
+    return 2;
+  }
+  
+  // 默认返回1
   return 1;
 }
 
@@ -165,10 +182,6 @@ function getCurrentPeriodCount(plan: Plan): number {
 // 判断任务是否已完成（周期性任务按周期完成次数判断，普通任务按进度判断）
 function isTaskCompleted(plan: Plan): boolean {
   if (plan.is_recurring && plan.recurrence_type) {
-    // 如果周期性任务没有设置目标次数，则视为未完成
-    if (!plan.recurrence_value || plan.recurrence_value === 'null') {
-      return false;
-    }
     const currentCount = getCurrentPeriodCount(plan);
     const targetCount = getTargetCount(plan);
     return currentCount >= targetCount;
