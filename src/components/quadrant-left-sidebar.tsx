@@ -22,6 +22,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+interface ProgressRecord {
+  gmt_create: string;
+}
+
 interface Plan {
   plan_id: string;
   name: string;
@@ -31,6 +35,16 @@ interface Plan {
   tags: string[];
   priority_quadrant: string | null;
   is_scheduled: boolean;
+  is_recurring: boolean;
+  recurrence_type: string | null;
+  recurrence_value: string | null;
+  progressRecords?: ProgressRecord[];
+}
+
+enum RecurrenceType {
+  DAILY = 'daily',
+  WEEKLY = 'weekly',
+  MONTHLY = 'monthly'
 }
 
 interface QuadrantData {
@@ -90,6 +104,74 @@ interface TaskCardProps {
   onRemove?: (planId: string) => void;
 }
 
+// 获取当前周期的开始时间
+function getCurrentPeriodStart(recurrenceType: RecurrenceType): Date {
+  const now = new Date();
+  switch (recurrenceType) {
+    case RecurrenceType.DAILY:
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case RecurrenceType.WEEKLY:
+      const currentDay = now.getDay();
+      const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+    case RecurrenceType.MONTHLY:
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    default:
+      return new Date(0);
+  }
+}
+
+// 获取当前周期的结束时间
+function getCurrentPeriodEnd(recurrenceType: RecurrenceType): Date {
+  const now = new Date();
+  switch (recurrenceType) {
+    case RecurrenceType.DAILY:
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, -1);
+    case RecurrenceType.WEEKLY:
+      const currentDay = now.getDay();
+      const sundayOffset = currentDay === 0 ? 0 : 7 - currentDay;
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + sundayOffset + 1, 0, 0, 0, -1);
+    case RecurrenceType.MONTHLY:
+      return new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, -1);
+    default:
+      return new Date();
+  }
+}
+
+// 获取目标次数
+function getTargetCount(plan: Plan): number {
+  if (!plan.is_recurring) return 1;
+  if (plan.recurrence_value && plan.recurrence_value !== 'null') {
+    return parseInt(plan.recurrence_value) || 1;
+  }
+  return 1;
+}
+
+// 获取当前周期内的进展记录次数
+function getCurrentPeriodCount(plan: Plan): number {
+  if (!plan.is_recurring || !plan.recurrence_type || !plan.progressRecords) {
+    return 0;
+  }
+  const recurrenceType = plan.recurrence_type as RecurrenceType;
+  const periodStart = getCurrentPeriodStart(recurrenceType);
+  const periodEnd = getCurrentPeriodEnd(recurrenceType);
+  return plan.progressRecords.filter(record => {
+    const recordDate = new Date(record.gmt_create);
+    return recordDate >= periodStart && recordDate <= periodEnd;
+  }).length;
+}
+
+// 判断任务是否已完成（周期性任务按周期完成次数判断，普通任务按进度判断）
+function isTaskCompleted(plan: Plan): boolean {
+  if (plan.is_recurring && plan.recurrence_type) {
+    const currentCount = getCurrentPeriodCount(plan);
+    const targetCount = getTargetCount(plan);
+    return currentCount >= targetCount;
+  } else {
+    return plan.progress >= 100;
+  }
+}
+
 function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
   const {
     attributes,
@@ -100,6 +182,7 @@ function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
     isDragging,
   } = useSortable({ id: plan.plan_id, data: { plan } });
   const [isHovered, setIsHovered] = useState(false);
+  const isCompleted = isTaskCompleted(plan);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -144,7 +227,7 @@ function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
         </button>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800 leading-tight break-words">
+        <p className={`text-sm font-medium leading-tight break-words ${isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
           {plan.name}
         </p>
         {plan.tags.length > 0 && (
