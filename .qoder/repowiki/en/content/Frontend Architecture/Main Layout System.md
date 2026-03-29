@@ -9,7 +9,9 @@
 - [AuthGuard.tsx](file://src/components/AuthGuard.tsx)
 - [UserMenu.tsx](file://src/components/UserMenu.tsx)
 - [quadrant-left-sidebar.tsx](file://src/components/quadrant-left-sidebar.tsx)
+- [task-pool.tsx](file://src/components/task-pool.tsx)
 - [chat-wrapper.tsx](file://src/components/chat-wrapper.tsx)
+- [plans/page.tsx](file://src/app/plans/page.tsx)
 - [globals.css](file://src/app/globals.css)
 - [page.tsx](file://src/app/plans/page.tsx)
 - [page.tsx](file://src/app/goals/page.tsx)
@@ -18,22 +20,33 @@
 - [next.config.ts](file://next.config.ts)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced drag-and-drop capabilities section with improved collision detection
+- Added HTML5 drag-and-drop support documentation
+- Updated quadrant sidebar component analysis with new features
+- Added task pool component documentation showing complementary drag-and-drop functionality
+- Updated dependency analysis to reflect @dnd-kit improvements
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
+6. [Enhanced Drag-and-Drop System](#enhanced-drag-and-drop-system)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
 
 ## Introduction
 
 The Main Layout System is the foundational framework that orchestrates the user interface structure for the Goal Mate application. This system provides a responsive, AI-integrated layout that adapts seamlessly across different screen sizes while maintaining consistent navigation and functionality. The layout system combines traditional web layout patterns with modern AI assistant integration, creating a unified user experience that supports goal management, plan tracking, and progress monitoring.
 
 The system is built around three core pillars: responsive layout architecture, AI assistant integration, and authentication-aware routing. It ensures optimal user experience across desktop, tablet, and mobile devices while providing intelligent assistance through integrated AI capabilities.
+
+**Updated** Enhanced with advanced drag-and-drop capabilities featuring improved collision detection and HTML5 support for seamless task management across the application.
 
 ## Project Structure
 
@@ -47,6 +60,7 @@ MainLayout[MainLayout<br/>src/components/main-layout.tsx]
 end
 subgraph "UI Components"
 Sidebar[QuadrantLeftSidebar<br/>src/components/quadrant-left-sidebar.tsx]
+TaskPool[TaskPool<br/>src/components/task-pool.tsx]
 Chat[ChatWrapper<br/>src/components/chat-wrapper.tsx]
 UserMenu[UserMenu<br/>src/components/UserMenu.tsx]
 end
@@ -61,6 +75,7 @@ Tailwind[tailwind.config<br/>package.json]
 end
 RootLayout --> MainLayout
 MainLayout --> Sidebar
+MainLayout --> TaskPool
 MainLayout --> Chat
 MainLayout --> UserMenu
 AuthGuard --> MainLayout
@@ -74,6 +89,7 @@ Tailwind --> Globals
 - [layout.tsx:16-30](file://src/app/layout.tsx#L16-L30)
 - [main-layout.tsx:12-69](file://src/components/main-layout.tsx#L12-L69)
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
+- [task-pool.tsx:114-264](file://src/components/task-pool.tsx#L114-L264)
 - [chat-wrapper.tsx:7-709](file://src/components/chat-wrapper.tsx#L7-L709)
 
 **Section sources**
@@ -239,7 +255,7 @@ The layout system coordinates multiple UI components that work together to provi
 
 #### Quadrant Left Sidebar
 
-The Quadrant Left Sidebar implements an advanced drag-and-drop interface for task management:
+The Quadrant Left Sidebar implements an advanced drag-and-drop interface for task management with enhanced collision detection and HTML5 support:
 
 ```mermaid
 classDiagram
@@ -258,6 +274,7 @@ class QuadrantColumn {
 +Quadrant quadrant
 +Plan[] plans
 +boolean isOver
++boolean isHtmlOver
 +handleDragOver() void
 +handleDragLeave() void
 +handleDrop() void
@@ -268,15 +285,25 @@ class TaskCard {
 +useSortable() object
 +handleClick() void
 }
+class DndContext {
++collisionDetection rectIntersection
++sensors PointerSensor, KeyboardSensor
++onDragStart() void
++onDragEnd() void
+}
 QuadrantLeftSidebar --> QuadrantColumn : "renders"
 QuadrantColumn --> TaskCard : "contains"
 TaskCard --> Plan : "displays"
+QuadrantLeftSidebar --> DndContext : "uses"
 ```
 
 **Diagram sources**
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
 - [quadrant-left-sidebar.tsx:156-227](file://src/components/quadrant-left-sidebar.tsx#L156-L227)
 - [quadrant-left-sidebar.tsx:92-148](file://src/components/quadrant-left-sidebar.tsx#L92-L148)
+- [quadrant-left-sidebar.tsx:524-546](file://src/components/quadrant-left-sidebar.tsx#L524-L546)
+
+**Updated** Enhanced with HTML5 drag-and-drop support for cross-component task movement and improved collision detection using rectangle intersection algorithms.
 
 #### User Menu System
 
@@ -299,7 +326,7 @@ Error --> Idle : Retry
 - [UserMenu.tsx:10-104](file://src/components/UserMenu.tsx#L10-L104)
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:1-395](file://src/components/quadrant-left-sidebar.tsx#L1-L395)
+- [quadrant-left-sidebar.tsx:1-558](file://src/components/quadrant-left-sidebar.tsx#L1-L558)
 - [UserMenu.tsx:1-104](file://src/components/UserMenu.tsx#L1-L104)
 - [auth.ts:1-69](file://src/lib/auth.ts#L1-L69)
 
@@ -327,6 +354,84 @@ Responsive --> Mobile
 - [main-layout.tsx:1-69](file://src/components/main-layout.tsx#L1-L69)
 - [globals.css:359-380](file://src/app/globals.css#L359-L380)
 
+## Enhanced Drag-and-Drop System
+
+**New Section** The Main Layout System now features an advanced drag-and-drop system that provides seamless task management across multiple components with enhanced collision detection and HTML5 support.
+
+### Advanced Collision Detection
+
+The system implements sophisticated collision detection algorithms to ensure precise task placement:
+
+```mermaid
+flowchart TD
+CollisionDetection[Collision Detection] --> RectIntersection[Rectangle Intersection]
+CollisionDetection --> ClosestCorners[Closest Corners]
+RectIntersection --> PreciseDropping[Precise Dropping Accuracy]
+ClosestCorners --> FlexiblePositioning[Flexible Positioning]
+PreciseDropping --> QuadrantValidation[Quadrant Validation]
+FlexiblePositioning --> TaskReordering[Task Reordering]
+QuadrantValidation --> APIUpdate[API Update]
+TaskReordering --> UIRefresh[UI Refresh]
+APIUpdate --> DataSync[Data Synchronization]
+UIRefresh --> VisualFeedback[Visual Feedback]
+DataSync --> Complete[Complete]
+```
+
+**Diagram sources**
+- [quadrant-left-sidebar.tsx:525-526](file://src/components/quadrant-left-sidebar.tsx#L525-L526)
+- [task-pool.tsx:229](file://src/components/task-pool.tsx#L229)
+
+### HTML5 Drag-and-Drop Integration
+
+The system supports native HTML5 drag-and-drop for cross-component task movement:
+
+```mermaid
+sequenceDiagram
+participant TaskPool as Task Pool
+participant HTML5 as HTML5 Drag API
+participant QuadrantSidebar as Quadrant Sidebar
+participant API as Backend API
+TaskPool->>HTML5 : Drag Start (JSON Data)
+HTML5->>QuadrantSidebar : Drag Over Event
+QuadrantSidebar->>QuadrantSidebar : Collision Detection
+QuadrantSidebar->>API : Update Task Position
+API->>QuadrantSidebar : Confirmation
+QuadrantSidebar->>TaskPool : Remove from Pool
+TaskPool->>TaskPool : Update Local State
+```
+
+**Diagram sources**
+- [quadrant-left-sidebar.tsx:284-310](file://src/components/quadrant-left-sidebar.tsx#L284-L310)
+- [plans/page.tsx:66-75](file://src/app/plans/page.tsx#L66-L75)
+
+### Component Coordination
+
+The drag-and-drop system coordinates multiple components for seamless task management:
+
+```mermaid
+graph TB
+subgraph "Drag-and-Drop Ecosystem"
+TaskPool[Task Pool Component] --> DndKit[DnD Kit Core]
+QuadrantSidebar[Quadrant Sidebar] --> DndKit
+PlansPage[Plans Page] --> HTML5[HTML5 Drag API]
+DndKit --> CollisionDetection[Collision Detection]
+HTML5 --> CollisionDetection
+CollisionDetection --> APIIntegration[API Integration]
+APIIntegration --> StateManagement[State Management]
+StateManagement --> UIUpdates[UI Updates]
+end
+```
+
+**Diagram sources**
+- [task-pool.tsx:114-192](file://src/components/task-pool.tsx#L114-L192)
+- [quadrant-left-sidebar.tsx:435-454](file://src/components/quadrant-left-sidebar.tsx#L435-L454)
+- [plans/page.tsx:54-98](file://src/app/plans/page.tsx#L54-L98)
+
+**Section sources**
+- [quadrant-left-sidebar.tsx:278-310](file://src/components/quadrant-left-sidebar.tsx#L278-L310)
+- [task-pool.tsx:114-192](file://src/components/task-pool.tsx#L114-L192)
+- [plans/page.tsx:54-98](file://src/app/plans/page.tsx#L54-L98)
+
 ## Dependency Analysis
 
 The Main Layout System has well-defined dependencies that support modularity and maintainability:
@@ -338,7 +443,10 @@ NextJS[Next.js 15.3.6]
 Tailwind[Tailwind CSS 4]
 CopilotKit[@copilotkit/react-ui 1.8.13]
 DnDKit[@dnd-kit/core 6.3.1]
+DnDKitSortable[@dnd-kit/sortable 10.0.0]
+DnDKitUtilities[@dnd-kit/utilities 3.2.2]
 RadixUI[@radix-ui/react-*]
+HTML5[Native HTML5 Drag API]
 end
 subgraph "Internal Dependencies"
 LayoutSystem[Layout System]
@@ -355,6 +463,9 @@ NextJS --> LayoutSystem
 Tailwind --> LayoutSystem
 CopilotKit --> LayoutSystem
 DnDKit --> UIComponents
+DnDKitSortable --> UIComponents
+DnDKitUtilities --> UIComponents
+HTML5 --> UIComponents
 RadixUI --> UIComponents
 LayoutSystem --> AuthSystem
 LayoutSystem --> UIComponents
@@ -366,7 +477,9 @@ Prisma --> APIHandlers
 
 **Diagram sources**
 - [package.json:16-43](file://package.json#L16-L43)
-- [next.config.ts:1-29](file://next.config.ts#L1-L29)
+- [next.config.ts:1-29](file://next.config.ts#L1-29)
+
+**Updated** Enhanced with @dnd-kit/sortable 10.0.0 and @dnd-kit/utilities 3.2.2 for improved drag-and-drop functionality and collision detection.
 
 **Section sources**
 - [package.json:1-60](file://package.json#L1-L60)
@@ -382,6 +495,7 @@ The layout system incorporates several performance optimization strategies:
 - **Lazy Loading**: AI assistant components load after initial page render
 - **Memory Management**: Proper cleanup of event listeners and intervals in sidebar component
 - **Efficient State Updates**: Minimal re-renders through optimized state management
+- **Collision Detection Optimization**: Rectangle intersection algorithm provides efficient collision detection
 
 ### Network Performance
 
@@ -394,6 +508,19 @@ The layout system incorporates several performance optimization strategies:
 - **Touch Optimization**: Proper touch event handling for drag-and-drop operations
 - **Reduced Animations**: Motion reduction support for accessibility compliance
 - **Battery Efficiency**: Minimized background processes and polling intervals
+- **HTML5 Performance**: Native drag-and-drop APIs provide optimal mobile performance
+
+### Drag-and-Drop Performance
+
+**New Section** The enhanced drag-and-drop system includes several performance optimizations:
+- **Collision Detection Efficiency**: Rectangle intersection algorithm minimizes computational overhead
+- **Smooth Animations**: CSS transforms provide hardware-accelerated animations
+- **Event Delegation**: Efficient event handling reduces memory footprint
+- **State Management**: Optimized state updates prevent unnecessary re-renders
+
+**Section sources**
+- [quadrant-left-sidebar.tsx:525-526](file://src/components/quadrant-left-sidebar.tsx#L525-L526)
+- [task-pool.tsx:229](file://src/components/task-pool.tsx#L229)
 
 ## Troubleshooting Guide
 
@@ -415,6 +542,25 @@ The layout system incorporates several performance optimization strategies:
 **Issue**: Sidebar not responding to drag operations
 **Solution**: Check DnD Kit initialization and sensor configuration
 
+#### Drag-and-Drop Issues
+
+**New Section** Enhanced troubleshooting for drag-and-drop functionality:
+
+**Issue**: Tasks not dropping into quadrants
+**Solution**: Verify collision detection configuration and rectangle intersection settings
+
+**Issue**: HTML5 drag-and-drop not working between components
+**Solution**: Check dataTransfer API implementation and JSON serialization
+
+**Issue**: Poor drag performance on mobile devices
+**Solution**: Adjust activation constraints and pointer sensor settings
+
+**Issue**: Task reordering not working within quadrants
+**Solution**: Verify sortable context configuration and item IDs
+
+**Issue**: Drag overlay not appearing correctly
+**Solution**: Check DragOverlay component implementation and z-index stacking
+
 #### Performance Issues
 
 **Issue**: Slow page loading times
@@ -427,6 +573,8 @@ The layout system incorporates several performance optimization strategies:
 - [middleware.ts:19-35](file://middleware.ts#L19-L35)
 - [quadrant-left-sidebar.tsx:266-271](file://src/components/quadrant-left-sidebar.tsx#L266-L271)
 - [next.config.ts:8-25](file://next.config.ts#L8-L25)
+- [quadrant-left-sidebar.tsx:525-526](file://src/components/quadrant-left-sidebar.tsx#L525-L526)
+- [task-pool.tsx:229](file://src/components/task-pool.tsx#L229)
 
 ## Conclusion
 
@@ -437,6 +585,9 @@ Key achievements include:
 - **AI Integration**: Natural incorporation of AI assistant functionality without disrupting user workflow
 - **Security Excellence**: Multi-layered authentication and authorization system
 - **Performance Optimization**: Careful consideration of rendering, network, and memory efficiency
+- **Drag-and-Drop Excellence**: Advanced collision detection and HTML5 support for seamless task management
 - **Maintainability**: Clear component separation and well-defined dependencies
 
-The system serves as a foundation for the Goal Mate application's productivity-focused workflow, enabling users to manage goals, plans, and progress through an intuitive, AI-enhanced interface that adapts to their needs and context.
+**Updated** The enhanced drag-and-drop system with improved collision detection and HTML5 support provides unprecedented flexibility in task management, allowing users to seamlessly move tasks between different components and quadrants with precise positioning and real-time feedback.
+
+The system serves as a foundation for the Goal Mate application's productivity-focused workflow, enabling users to manage goals, plans, and progress through an intuitive, AI-enhanced interface that adapts to their needs and context while providing powerful drag-and-drop capabilities for efficient task organization.

@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "crypto";
 import OpenAI from "openai";
+import { isRecurringTaskCompleted } from "@/lib/recurring-utils";
 
 const prisma = new PrismaClient();
 
@@ -234,6 +235,24 @@ class CustomOpenAI extends OpenAI {
 - 进度跟踪：记录用户的学习进展和思考
 - 数据分析：基于用户数据生成报告和建议
 
+**重要指令 - 任务推荐过滤规则（必须遵守）：**
+
+1. **仅推荐未完成任务**：
+   - 当使用 'recommendTasks'、'queryPlans' 或 'findPlan' 查询任务时，**只返回未完成的任务**
+   - 未完成任务定义：
+     - 普通任务：进度(progress) < 100%（即小于1）
+     - 周期性任务：当前周期内完成次数未达到目标次数(recurrence_value)
+   - **绝对不要**在推荐中显示已完成状态的任务
+
+2. **已完成任务处理**：
+   - 除非用户**明确询问**"我有哪些已完成的任务"或"我完成了什么"，否则不要输出已完成任务
+   - 当用户询问已完成任务时，才查询并显示已完成状态的任务
+
+3. **推荐时的过滤逻辑**：
+   - 调用 'recommendTasks' 时，系统会自动过滤已完成任务
+   - 在回复用户时，确保只展示未完成的任务列表
+   - 如果所有任务都已完成，告知用户"目前没有未完成的任务，建议创建新计划"
+
 请始终以友好、专业的态度协助用户，并充分利用联网搜索功能提供准确、最新的信息。`;
         
         // 如果没有系统消息，或者第一条消息不是系统消息，则添加系统提示
@@ -309,20 +328,30 @@ const runtime = new CopilotRuntime({
         try {
           const { userState, filterCriteria } = args;
           
-          // 获取所有未完成的计划
+          // 获取所有计划（包括周期性任务需要检查progressRecords）
           const allPlans = await prisma.plan.findMany({
-            where: {
-              progress: { lt: 1 }
+            include: { 
+              tags: true,
+              progressRecords: true 
             },
-            include: { tags: true },
             orderBy: { gmt_create: 'desc' }
           });
 
-          if (allPlans.length === 0) {
+          // 过滤出未完成的任务
+          const incompletePlans = allPlans.filter((plan: any) => {
+            // 周期性任务：检查当前周期是否已完成
+            if (plan.is_recurring) {
+              return !isRecurringTaskCompleted(plan);
+            }
+            // 普通任务：检查进度是否小于100%
+            return plan.progress < 1;
+          });
+
+          if (incompletePlans.length === 0) {
             return { 
               success: true, 
               data: {
-                message: "目前没有未完成的计划，建议先创建一些目标和计划。",
+                message: "目前没有未完成的任务，建议先创建一些目标和计划。",
                 tasks: [],
                 recommendation: "可以创建新的目标和计划来开始。"
               }
@@ -330,10 +359,10 @@ const runtime = new CopilotRuntime({
           }
 
           // 应用基本筛选（如果提供了筛选条件）
-          let filteredPlans = allPlans;
+          let filteredPlans = incompletePlans;
           if (filterCriteria) {
             // 简单的筛选逻辑，可以根据难度或标签筛选
-            filteredPlans = allPlans.filter((plan: any) => 
+            filteredPlans = incompletePlans.filter((plan: any) => 
               (plan.difficulty && plan.difficulty.includes(filterCriteria)) ||
               plan.tags.some((tag: any) => tag.tag.includes(filterCriteria))
             );
@@ -356,7 +385,7 @@ const runtime = new CopilotRuntime({
               message: `基于当前状态"${userState}"为您推荐以下任务`,
               userState: userState,
               tasks: result,
-              totalAvailable: allPlans.length
+              totalAvailable: incompletePlans.length
             }
           };
         } catch (error: any) {
@@ -369,7 +398,7 @@ const runtime = new CopilotRuntime({
     // 查询计划
     {
       name: "queryPlans",
-      description: "查询计划列表，支持多种筛选条件",
+      description: "查询计划列表，支持多种筛选条件。默认只返回未完成的任务，除非用户明确询问已完成的任务",
       parameters: [
         {
           name: "difficulty",
@@ -388,12 +417,18 @@ const runtime = new CopilotRuntime({
           type: "string",
           description: "关键词搜索（可选）",
           required: false,
+        },
+        {
+          name: "includeCompleted",
+          type: "boolean",
+          description: "是否包含已完成的任务。默认为false，只在用户明确询问已完成任务时设为true",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 queryPlans called:", args);
         try {
-          const { difficulty, tag, keyword } = args;
+          const { difficulty, tag, keyword, includeCompleted } = args;
           
           let where: any = {};
           
@@ -410,7 +445,10 @@ const runtime = new CopilotRuntime({
           
           let plans = await prisma.plan.findMany({
             where,
-            include: { tags: true },
+            include: { 
+              tags: true,
+              progressRecords: true 
+            },
             orderBy: { gmt_create: 'desc' }
           });
           
@@ -419,6 +457,18 @@ const runtime = new CopilotRuntime({
             plans = plans.filter((plan: any) => 
               plan.tags.some((t: any) => t.tag.includes(tag))
             );
+          }
+          
+          // 默认过滤掉已完成的任务，除非明确要求包含已完成
+          if (!includeCompleted) {
+            plans = plans.filter((plan: any) => {
+              // 周期性任务：检查当前周期是否已完成
+              if (plan.is_recurring) {
+                return !isRecurringTaskCompleted(plan);
+              }
+              // 普通任务：检查进度是否小于100%
+              return plan.progress < 1;
+            });
           }
           
           const result = plans.map((plan: any) => ({
@@ -616,19 +666,25 @@ const runtime = new CopilotRuntime({
     // 查找计划 - 简化版本
     {
       name: "findPlan",
-      description: "根据名称、关键词或标签查找计划，支持模糊搜索",
+      description: "根据名称、关键词或标签查找计划，支持模糊搜索。默认只返回未完成的任务，除非用户明确询问已完成的任务",
       parameters: [
         {
           name: "searchTerm",
           type: "string",
           description: "搜索词，可以是计划名称、关键词或标签",
           required: true,
+        },
+        {
+          name: "includeCompleted",
+          type: "boolean",
+          description: "是否包含已完成的任务。默认为false，只在用户明确询问已完成任务时设为true",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 findPlan called:", args);
         try {
-          const { searchTerm } = args;
+          const { searchTerm, includeCompleted } = args;
           
           // 将搜索词分割成多个关键词
           const keywords = searchTerm.split(/[\s,，、]+/).filter((word: string) => word.length > 0);
@@ -651,12 +707,27 @@ const runtime = new CopilotRuntime({
           ]);
           
           // 综合搜索：名称、描述、标签
-          const plans = await prisma.plan.findMany({
+          let plans = await prisma.plan.findMany({
             where: {
               OR: searchConditions
             },
-            include: { tags: true }
+            include: { 
+              tags: true,
+              progressRecords: true 
+            }
           });
+
+          // 默认过滤掉已完成的任务，除非明确要求包含已完成
+          if (!includeCompleted) {
+            plans = plans.filter((plan: any) => {
+              // 周期性任务：检查当前周期是否已完成
+              if (plan.is_recurring) {
+                return !isRecurringTaskCompleted(plan);
+              }
+              // 普通任务：检查进度是否小于100%
+              return plan.progress < 1;
+            });
+          }
 
           // 按匹配度排序：匹配更多关键词的计划排在前面
           const plansWithScore = plans.map(plan => {
