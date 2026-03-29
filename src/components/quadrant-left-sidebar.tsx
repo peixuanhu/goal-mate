@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -275,21 +276,27 @@ interface QuadrantColumnProps {
 }
 
 function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask }: QuadrantColumnProps & { onTaskDrop: (planId: string, quadrantId: string) => void }) {
-  const [isOver, setIsOver] = useState(false);
-
+  const { isOver, setNodeRef } = useDroppable({
+    id: quadrant.id,
+    data: { quadrant },
+  });
+  
+  // 支持 HTML5 原生拖放（从任务列表拖拽）
+  const [isHtmlOver, setIsHtmlOver] = useState(false);
+  
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setIsOver(true);
+    setIsHtmlOver(true);
   };
 
   const handleDragLeave = () => {
-    setIsOver(false);
+    setIsHtmlOver(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsOver(false);
+    setIsHtmlOver(false);
     
     try {
       const data = e.dataTransfer.getData('application/json');
@@ -304,6 +311,7 @@ function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask
 
   return (
     <div
+      ref={setNodeRef}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -311,7 +319,7 @@ function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask
         ${quadrant.color} ${quadrant.borderColor} border rounded-lg
         flex flex-col h-full overflow-hidden
         transition-colors duration-200
-        ${isOver ? "ring-2 ring-blue-400 ring-offset-1 bg-opacity-80" : ""}
+        ${isOver || isHtmlOver ? "ring-2 ring-blue-400 ring-offset-1 bg-opacity-80" : ""}
       `}
     >
       {/* Header */}
@@ -515,7 +523,7 @@ export function QuadrantLeftSidebar() {
       <div className="flex-1 overflow-hidden p-3">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={rectIntersection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >

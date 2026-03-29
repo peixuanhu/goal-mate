@@ -3,7 +3,6 @@
 <cite>
 **Referenced Files in This Document**
 - [task-pool.tsx](file://src/components/task-pool.tsx)
-- [quadrant-sidebar.tsx](file://src/components/quadrant-sidebar.tsx)
 - [quadrant-left-sidebar.tsx](file://src/components/quadrant-left-sidebar.tsx)
 - [plans/page.tsx](file://src/app/plans/page.tsx)
 - [route.ts](file://src/app/api/plan/priority/route.ts)
@@ -11,6 +10,14 @@
 - [main-layout.tsx](file://src/components/main-layout.tsx)
 - [package.json](file://package.json)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated architecture overview to reflect the consolidation of quadrant management into a single component
+- Removed references to the non-existent standalone quadrant-sidebar.tsx component
+- Updated component analysis to focus on the unified quadrant-left-sidebar.tsx implementation
+- Revised diagrams to show the current single-component quadrant management approach
+- Added documentation for the legacy HTML5 drag-and-drop implementation in plans page
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -27,17 +34,18 @@
 
 Goal Mate implements a sophisticated drag-and-drop system for managing tasks across four priority quadrants using modern React hooks and the @dnd-kit library. The system provides intuitive task manipulation through both mouse and keyboard interactions, enabling users to efficiently organize their work priorities.
 
-The drag-and-drop functionality centers around two primary components: the Task Pool for unassigned tasks and the Priority Quadrant Sidebar for organizing scheduled tasks. Users can drag tasks from the pool into specific quadrants or rearrange tasks within quadrants using familiar drag-and-drop gestures.
+**Updated**: The drag-and-drop functionality has been consolidated into a single, unified component that manages both task scheduling from the pool and quadrant organization within the sidebar.
+
+The drag-and-drop system centers around two primary components: the Task Pool for unassigned tasks and the Priority Quadrant Sidebar for organizing scheduled tasks. Users can drag tasks from the pool into specific quadrants or rearrange tasks within quadrants using familiar drag-and-drop gestures.
 
 ## Project Structure
 
-The drag-and-drop implementation spans multiple components and follows a modular architecture:
+The drag-and-drop implementation has been streamlined to a single cohesive architecture:
 
 ```mermaid
 graph TB
-subgraph "Drag-and-Drop Components"
+subgraph "Consolidated Drag-and-Drop Components"
 TP[TaskPool Component]
-QS[QuadrantSidebar Component]
 QLS[QuadrantLeftSidebar Component]
 DTR[DraggableTableRow Component]
 end
@@ -49,24 +57,20 @@ subgraph "Layout Integration"
 ML[MainLayout Component]
 end
 TP --> PPR
-QS --> PPR
 QLS --> PPR
 DTR --> PPR
 PPR --> PR
 ML --> TP
-ML --> QS
 ML --> QLS
 ```
 
 **Diagram sources**
 - [task-pool.tsx:114-264](file://src/components/task-pool.tsx#L114-L264)
-- [quadrant-sidebar.tsx:183-326](file://src/components/quadrant-sidebar.tsx#L183-L326)
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
 
 **Section sources**
 - [task-pool.tsx:1-264](file://src/components/task-pool.tsx#L1-L264)
-- [quadrant-sidebar.tsx:1-326](file://src/components/quadrant-sidebar.tsx#L1-L326)
-- [quadrant-left-sidebar.tsx:1-395](file://src/components/quadrant-left-sidebar.tsx#L1-L395)
+- [quadrant-left-sidebar.tsx:1-519](file://src/components/quadrant-left-sidebar.tsx#L1-L519)
 
 ## Core Components
 
@@ -107,26 +111,21 @@ TaskCard --> DndContext : "participates in"
 - [task-pool.tsx:114-264](file://src/components/task-pool.tsx#L114-L264)
 - [task-pool.tsx:43-112](file://src/components/task-pool.tsx#L43-L112)
 
-### Quadrant Sidebar Components
+### Consolidated Quadrant Sidebar Component
 
-Two complementary quadrant implementations provide different interaction patterns:
+**Updated**: The quadrant management functionality has been consolidated into a single, comprehensive component that handles both task scheduling and quadrant organization:
 
 ```mermaid
 classDiagram
-class QuadrantSidebar {
-+QuadrantData quadrantData
-+Plan|null activePlan
-+boolean isLoading
-+QUADRANTS[] QUADRANTS
-+updatePlanQuadrant()
-+removeFromQuadrant()
-}
 class QuadrantLeftSidebar {
 +QuadrantData quadrantData
 +Plan|null activePlan
 +boolean isLoading
 +QUADRANTS[] QUADRANTS
 +updatePlanQuadrant()
++removeFromQuadrant()
++handleDragStart()
++handleDragEnd()
 +handleTaskClick()
 }
 class QuadrantColumn {
@@ -142,46 +141,44 @@ class TaskCard {
 +useSortable() attributes
 +useSortable() listeners
 }
-QuadrantSidebar --> QuadrantColumn : "renders"
 QuadrantLeftSidebar --> QuadrantColumn : "renders"
 QuadrantColumn --> TaskCard : "contains"
+QuadrantLeftSidebar --> DndContext : "uses"
 ```
 
 **Diagram sources**
-- [quadrant-sidebar.tsx:183-326](file://src/components/quadrant-sidebar.tsx#L183-L326)
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
 
 **Section sources**
 - [task-pool.tsx:114-264](file://src/components/task-pool.tsx#L114-L264)
-- [quadrant-sidebar.tsx:183-326](file://src/components/quadrant-sidebar.tsx#L183-L326)
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
 
 ## Architecture Overview
 
-The drag-and-drop system integrates seamlessly with the application's data flow:
+**Updated**: The drag-and-drop system now integrates seamlessly with a unified quadrant management component:
 
 ```mermaid
 sequenceDiagram
 participant User as "User"
 participant TP as "TaskPool"
-participant QS as "QuadrantSidebar"
+participant QLS as "QuadrantLeftSidebar"
 participant API as "Priority API"
 participant DB as "Prisma DB"
 User->>TP : Drag task from pool
 TP->>TP : handleDragStart()
-TP->>QS : handleDragEnd(event)
-QS->>API : PUT /api/plan/priority
+TP->>QLS : handleDragEnd(event)
+QLS->>API : PUT /api/plan/priority
 API->>DB : Update plan quadrant
 DB-->>API : Success
-API-->>QS : Updated plan data
-QS->>QS : Fetch quadrant data
-QS-->>User : Visual feedback
+API-->>QLS : Updated plan data
+QLS->>QLS : Fetch quadrant data
+QLS-->>User : Visual feedback
 Note over TP,DB : Task removed from pool<br/>and moved to quadrant
 ```
 
 **Diagram sources**
 - [task-pool.tsx:149-192](file://src/components/task-pool.tsx#L149-L192)
-- [quadrant-sidebar.tsx:230-265](file://src/components/quadrant-sidebar.tsx#L230-L265)
+- [quadrant-left-sidebar.tsx:402-415](file://src/components/quadrant-left-sidebar.tsx#L402-L415)
 - [route.ts:50-93](file://src/app/api/plan/priority/route.ts#L50-L93)
 
 The system supports multiple interaction modes:
@@ -193,8 +190,7 @@ The system supports multiple interaction modes:
 
 **Section sources**
 - [task-pool.tsx:120-129](file://src/components/task-pool.tsx#L120-L129)
-- [quadrant-sidebar.tsx:193-202](file://src/components/quadrant-sidebar.tsx#L193-L202)
-- [quadrant-left-sidebar.tsx:241-248](file://src/components/quadrant-left-sidebar.tsx#L241-L248)
+- [quadrant-left-sidebar.tsx:342-349](file://src/components/quadrant-left-sidebar.tsx#L342-L349)
 
 ## Detailed Component Analysis
 
@@ -238,35 +234,46 @@ Each task card utilizes @dnd-kit's useSortable hook for smooth animations and pr
 - [task-pool.tsx:43-112](file://src/components/task-pool.tsx#L43-L112)
 - [task-pool.tsx:149-192](file://src/components/task-pool.tsx#L149-L192)
 
-### Quadrant Sidebar Components
+### Consolidated Quadrant Sidebar Component
 
-Both quadrant implementations share common patterns while offering distinct interaction experiences:
+**Updated**: The quadrant management functionality has been consolidated into a single, comprehensive component:
 
-#### QuadrantSidebar (Right Panel)
+#### Unified Quadrant Management
 
-The right-side quadrant sidebar focuses on task organization with advanced features:
+The QuadrantLeftSidebar component now handles both task scheduling and quadrant organization:
 
 - **Real-time Updates**: Automatic refresh every 30 seconds
 - **Visual Indicators**: Color-coded quadrants with task counts
 - **Removal Capability**: Individual task removal from quadrants
-- **Responsive Design**: Mobile-friendly layout
-
-#### QuadrantLeftSidebar (Left Panel)
-
-The left-side quadrant sidebar emphasizes quick access and navigation:
-
 - **Collapsible Design**: Minimizable sidebar for screen space
 - **Direct Navigation**: Click-to-progress routing
-- **Visual Hierarchy**: Clear quadrant identification
 - **Loading States**: Optimistic UI updates
 
+#### Drag-and-Drop Event Flow
+
+```mermaid
+flowchart TD
+DragStart["Drag Start Event"] --> SetActive["Set Active Plan"]
+SetActive --> DragEnd["Drag End Event"]
+DragEnd --> CheckTarget{"Is Quadrant Target?"}
+CheckTarget --> |Yes| UpdateQuadrant["Call updatePlanQuadrant()"]
+CheckTarget --> |No| ResetState["Reset Active Plan"]
+UpdateQuadrant --> APIUpdate["Call PUT /api/plan/priority"]
+APIUpdate --> RefreshData["Fetch quadrant data"]
+RefreshData --> ResetState
+ResetState --> End["Complete"]
+```
+
+**Diagram sources**
+- [quadrant-left-sidebar.tsx:396-415](file://src/components/quadrant-left-sidebar.tsx#L396-L415)
+
 **Section sources**
-- [quadrant-sidebar.tsx:183-326](file://src/components/quadrant-sidebar.tsx#L183-L326)
 - [quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
+- [quadrant-left-sidebar.tsx:396-415](file://src/components/quadrant-left-sidebar.tsx#L396-L415)
 
 ### Legacy HTML5 Drag-and-Drop Implementation
 
-The plans page includes a legacy HTML5 drag-and-drop implementation for backward compatibility:
+**Updated**: The plans page includes a legacy HTML5 drag-and-drop implementation for backward compatibility, operating independently from the main quadrant sidebar:
 
 ```mermaid
 flowchart TD
@@ -344,6 +351,7 @@ UTILITIES --> REACTHOOKS
 2. **Collision Detection**: Optimized using `closestCorners` for better performance
 3. **Lazy Loading**: API data fetched only when components mount
 4. **Debounced Updates**: Real-time updates with controlled refresh intervals
+5. **Single Source of Truth**: Consolidated quadrant management reduces complexity
 
 ### Memory Management
 
@@ -402,19 +410,19 @@ UTILITIES --> REACTHOOKS
 
 **Section sources**
 - [task-pool.tsx:172-192](file://src/components/task-pool.tsx#L172-L192)
-- [quadrant-sidebar.tsx:247-265](file://src/components/quadrant-sidebar.tsx#L247-L265)
-- [quadrant-left-sidebar.tsx:273-293](file://src/components/quadrant-left-sidebar.tsx#L273-L293)
+- [quadrant-left-sidebar.tsx:421-441](file://src/components/quadrant-left-sidebar.tsx#L421-L441)
 
 ## Conclusion
 
 The Goal Mate drag-and-drop system demonstrates a comprehensive implementation of modern React state management combined with sophisticated UI interactions. The system successfully balances functionality with performance, providing users with intuitive task management capabilities.
 
-Key strengths of the implementation include:
+**Updated**: Key strengths of the consolidated implementation include:
 
-- **Modular Architecture**: Clean separation of concerns across components
+- **Unified Architecture**: Single component handles both task scheduling and quadrant management
 - **Multiple Interaction Modes**: Support for mouse, keyboard, and touch interactions
 - **Real-time Updates**: Seamless synchronization between UI and backend data
 - **Accessibility Compliance**: Comprehensive support for assistive technologies
 - **Performance Optimization**: Efficient rendering and minimal re-renders
+- **Legacy Compatibility**: Maintains backward compatibility with existing implementations
 
 The system's extensibility allows for future enhancements such as multi-quadrant drag operations, batch task management, and enhanced visual feedback systems. The robust error handling and state management provide a solid foundation for continued development and feature expansion.
