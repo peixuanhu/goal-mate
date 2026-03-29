@@ -87,9 +87,10 @@ interface TaskCardProps {
   plan: Plan;
   isOverlay?: boolean;
   onTaskClick?: (planId: string) => void;
+  onRemove?: (planId: string) => void;
 }
 
-function TaskCard({ plan, isOverlay, onTaskClick }: TaskCardProps) {
+function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -98,6 +99,7 @@ function TaskCard({ plan, isOverlay, onTaskClick }: TaskCardProps) {
     transition,
     isDragging,
   } = useSortable({ id: plan.plan_id, data: { plan } });
+  const [isHovered, setIsHovered] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -118,14 +120,29 @@ function TaskCard({ plan, isOverlay, onTaskClick }: TaskCardProps) {
       {...attributes}
       {...listeners}
       onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`
-        group cursor-pointer
+        group cursor-pointer relative
         bg-white rounded-lg border border-gray-200 p-2.5 mb-2
         shadow-sm hover:shadow-md hover:border-blue-300 hover:bg-blue-50/30
         transition-all duration-200
         ${isOverlay ? "shadow-lg rotate-2 scale-105 z-50" : ""}
       `}
     >
+      {onRemove && isHovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(plan.plan_id);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 z-10 cursor-pointer text-sm leading-none shadow-sm"
+          title="从四象限中移除"
+        >
+          ×
+        </button>
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-800 leading-tight break-words">
           {plan.name}
@@ -151,9 +168,10 @@ interface QuadrantColumnProps {
   quadrant: typeof QUADRANTS[number];
   plans: Plan[];
   onTaskClick?: (planId: string) => void;
+  onRemoveTask?: (planId: string) => void;
 }
 
-function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick }: QuadrantColumnProps & { onTaskDrop: (planId: string, quadrantId: string) => void }) {
+function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask }: QuadrantColumnProps & { onTaskDrop: (planId: string, quadrantId: string) => void }) {
   const [isOver, setIsOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -218,7 +236,7 @@ function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick }: QuadrantCo
               暂无任务
             </div>
           ) : (
-            plans.map((plan) => <TaskCard key={plan.plan_id} plan={plan} onTaskClick={onTaskClick} />)
+            plans.map((plan) => <TaskCard key={plan.plan_id} plan={plan} onTaskClick={onTaskClick} onRemove={onRemoveTask} />)
           )}
         </SortableContext>
       </div>
@@ -317,6 +335,28 @@ export function QuadrantLeftSidebar() {
     router.push(`/progress?plan_id=${planId}`);
   };
 
+  const removeFromQuadrant = async (planId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/plan/priority", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: planId,
+          priority_quadrant: null,
+          is_scheduled: false,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchQuadrantData();
+      }
+    } catch (error) {
+      console.error("Error removing plan from quadrant:", error);
+    }
+    setIsLoading(false);
+  };
+
   if (!isExpanded) {
     return (
       <div className="w-10 bg-white border-r border-gray-200 flex flex-col items-center py-4 shadow-sm">
@@ -373,6 +413,7 @@ export function QuadrantLeftSidebar() {
                 plans={quadrantData[quadrant.id as keyof QuadrantData]}
                 onTaskDrop={updatePlanQuadrant}
                 onTaskClick={handleTaskClick}
+                onRemoveTask={removeFromQuadrant}
               />
             ))}
           </div>

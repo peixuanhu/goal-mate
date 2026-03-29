@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useState as useHoverState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -48,9 +48,10 @@ const QUADRANTS = [
 interface TaskCardProps {
   plan: Plan;
   isOverlay?: boolean;
+  onRemove?: (planId: string) => void;
 }
 
-function TaskCard({ plan, isOverlay }: TaskCardProps) {
+function TaskCard({ plan, isOverlay, onRemove }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -59,6 +60,7 @@ function TaskCard({ plan, isOverlay }: TaskCardProps) {
     transition,
     isDragging,
   } = useSortable({ id: plan.plan_id, data: { plan } });
+  const [isHovered, setIsHovered] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -72,13 +74,28 @@ function TaskCard({ plan, isOverlay }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`
         p-3 rounded-lg bg-white shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing
-        hover:shadow-md transition-shadow
+        hover:shadow-md transition-shadow relative
         ${isOverlay ? "shadow-lg rotate-2 scale-105" : ""}
       `}
     >
-      <div className="font-medium text-sm text-gray-900 line-clamp-2">
+      {onRemove && isHovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(plan.plan_id);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 z-10 cursor-pointer text-sm leading-none"
+          title="从四象限中移除"
+        >
+          ×
+        </button>
+      )}
+      <div className="font-medium text-sm text-gray-900 line-clamp-2 pr-4">
         {plan.name}
       </div>
       {plan.description && (
@@ -124,9 +141,10 @@ function TaskCard({ plan, isOverlay }: TaskCardProps) {
 interface QuadrantColumnProps {
   quadrant: typeof QUADRANTS[number];
   plans: Plan[];
+  onRemoveTask?: (planId: string) => void;
 }
 
-function QuadrantColumn({ quadrant, plans }: QuadrantColumnProps) {
+function QuadrantColumn({ quadrant, plans, onRemoveTask }: QuadrantColumnProps) {
   const { setNodeRef, isOver } = useSortable({
     id: quadrant.id,
     data: { type: "quadrant", id: quadrant.id },
@@ -152,7 +170,7 @@ function QuadrantColumn({ quadrant, plans }: QuadrantColumnProps) {
           strategy={verticalListSortingStrategy}
         >
           {plans.map((plan) => (
-            <TaskCard key={plan.plan_id} plan={plan} />
+            <TaskCard key={plan.plan_id} plan={plan} onRemove={onRemoveTask} />
           ))}
         </SortableContext>
         {plans.length === 0 && (
@@ -249,6 +267,26 @@ export function QuadrantSidebar() {
     }
   };
 
+  const removeFromQuadrant = async (planId: string) => {
+    try {
+      const response = await fetch("/api/plan/priority", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: planId,
+          priority_quadrant: null,
+          is_scheduled: false,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchQuadrantData();
+      }
+    } catch (error) {
+      console.error("Error removing plan from quadrant:", error);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -276,7 +314,7 @@ export function QuadrantSidebar() {
               key={quadrant.id}
               quadrant={quadrant}
               plans={quadrantData[quadrant.id as keyof QuadrantData]}
-
+              onRemoveTask={removeFromQuadrant}
             />
           ))}
         </div>
