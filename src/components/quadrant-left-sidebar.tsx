@@ -406,9 +406,8 @@ export function QuadrantLeftSidebar() {
   };
 
   useEffect(() => {
+    // Initial load only - no polling to save resources
     fetchQuadrantData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchQuadrantData, 30000);
     
     // Listen for refresh events from other components
     const handleRefresh = () => {
@@ -418,7 +417,6 @@ export function QuadrantLeftSidebar() {
     window.addEventListener('quadrant-refresh', handleRefresh);
     
     return () => {
-      clearInterval(interval);
       window.removeEventListener('quadrant-refresh', handleRefresh);
     };
   }, []);

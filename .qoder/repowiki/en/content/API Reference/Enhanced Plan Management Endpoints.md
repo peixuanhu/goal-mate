@@ -15,6 +15,13 @@
 - [prisma/schema.prisma](file://prisma/schema.prisma)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced Priority API endpoint documentation to reflect improved data inclusion across all quadrants
+- Updated priority endpoint section to highlight progressRecords inclusion for complete task information
+- Added comprehensive coverage of progress tracking integration with quadrant management
+- Updated frontend implementation details to show real-time progress synchronization
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [System Architecture](#system-architecture)
@@ -32,7 +39,7 @@
 
 The Enhanced Plan Management System is a comprehensive task and goal management solution built with Next.js and Prisma ORM. This system provides sophisticated plan management capabilities with advanced filtering, scheduling, tagging, and progress tracking features. The system supports both individual tasks and recurring activities, integrates with Eisenhower Matrix (four-quadrant) prioritization, and offers real-time collaboration features.
 
-The platform enables users to manage their daily activities, long-term goals, and progress tracking through an intuitive interface while maintaining robust backend functionality for data persistence and retrieval.
+The platform enables users to manage their daily activities, long-term goals, and progress tracking through an intuitive interface while maintaining robust backend functionality for data persistence and retrieval. Recent enhancements have expanded the priority API endpoint to provide complete task information across all four quadrants with integrated progress tracking.
 
 ## System Architecture
 
@@ -83,7 +90,7 @@ UI --> Auth
 
 **Diagram sources**
 - [src/app/api/plan/route.ts:1-114](file://src/app/api/plan/route.ts#L1-L114)
-- [src/app/api/plan/priority/route.ts:1-94](file://src/app/api/plan/priority/route.ts#L1-L94)
+- [src/app/api/plan/priority/route.ts:1-110](file://src/app/api/plan/priority/route.ts#L1-L110)
 - [src/app/api/goal/route.ts:1-51](file://src/app/api/goal/route.ts#L1-L51)
 - [src/app/api/tag/route.ts:1-20](file://src/app/api/tag/route.ts#L1-L20)
 
@@ -104,6 +111,7 @@ The plan listing endpoint supports extensive filtering options:
 | `goal_id` | String | Filter by associated goal | `?goal_id=goal_abc123` |
 | `is_scheduled` | Boolean | Filter scheduled/unscheduled tasks | `?is_scheduled=true` |
 | `unscheduled` | Boolean | Get only unscheduled tasks | `?unscheduled=true` |
+| `priority_quadrant` | String | Filter by quadrant (q1-q4) | `?priority_quadrant=q1` |
 | `pageNum` | Number | Page number for pagination | `?pageNum=2` |
 | `pageSize` | Number | Results per page | `?pageSize=20` |
 
@@ -146,28 +154,61 @@ Deletes a plan by ID with proper validation:
 
 ### Priority Management Endpoints
 
-#### GET /api/plan/priority - Get Prioritized Plans
+#### GET /api/plan/priority - Get Prioritized Plans with Progress Tracking
 
-Retrieves all scheduled plans organized by Eisenhower Matrix quadrants:
+**Updated** Enhanced to include progressRecords for all four quadrants (q1, q2, q3, q4) for complete task information regardless of quadrant assignment.
+
+Retrieves all scheduled plans organized by Eisenhower Matrix quadrants with comprehensive progress tracking:
 
 ```mermaid
 flowchart TD
 Request[GET /api/plan/priority] --> Query[Query Database]
 Query --> Filter[Filter Scheduled Plans]
-Filter --> Group[Group by Quadrant]
+Filter --> Include[Include Progress Records]
+Include --> Group[Group by Quadrant]
 Group --> Transform[Transform Tags to Strings]
-Transform --> Response[Return Q1-Q4 Data]
+Transform --> Progress[Include Progress Records]
+Progress --> Response[Return Q1-Q4 Data with Progress]
 ```
 
 **Diagram sources**
-- [src/app/api/plan/priority/route.ts:6-48](file://src/app/api/plan/priority/route.ts#L6-L48)
+- [src/app/api/plan/priority/route.ts:6-64](file://src/app/api/plan/priority/route.ts#L6-L64)
+
+The endpoint now returns complete task information including progress records for each quadrant:
+
+```json
+{
+  "q1": [
+    {
+      "plan_id": "plan_abc123",
+      "name": "Important Urgent Task",
+      "tags": ["work", "urgent"],
+      "progress": 75,
+      "progressRecords": [
+        {
+          "gmt_create": "2024-01-15T10:30:00Z"
+        },
+        {
+          "gmt_create": "2024-01-14T14:20:00Z"
+        }
+      ]
+    }
+  ],
+  "q2": [...],
+  "q3": [...],
+  "q4": [...]
+}
+```
+
+**Section sources**
+- [src/app/api/plan/priority/route.ts:6-64](file://src/app/api/plan/priority/route.ts#L6-L64)
 
 #### PUT /api/plan/priority - Update Plan Priority
 
 Updates plan position in the priority matrix:
 
 **Section sources**
-- [src/app/api/plan/priority/route.ts:50-93](file://src/app/api/plan/priority/route.ts#L50-L93)
+- [src/app/api/plan/priority/route.ts:66-110](file://src/app/api/plan/priority/route.ts#L66-L110)
 
 ### Supporting Endpoints
 
@@ -252,10 +293,10 @@ PLAN ||--o{ PROGRESS_RECORD : "records"
 ```
 
 **Diagram sources**
-- [prisma/schema.prisma:16-61](file://prisma/schema.prisma#L16-L61)
+- [prisma/schema.prisma:16-72](file://prisma/schema.prisma#L16-L72)
 
 **Section sources**
-- [prisma/schema.prisma:16-61](file://prisma/schema.prisma#L16-L61)
+- [prisma/schema.prisma:16-72](file://prisma/schema.prisma#L16-L72)
 
 ## Frontend Implementation
 
@@ -313,7 +354,7 @@ PlansPage --> Plan : "manages"
 
 ### Four-Quadrant Sidebar
 
-The quadrant sidebar provides drag-and-drop functionality for task prioritization:
+The quadrant sidebar provides drag-and-drop functionality for task prioritization with real-time progress updates:
 
 ```mermaid
 sequenceDiagram
@@ -325,19 +366,19 @@ User->>Sidebar : Drag Task to Quadrant
 Sidebar->>Sidebar : Handle Drag End Event
 Sidebar->>API : PUT /api/plan/priority
 API->>DB : Update Plan Priority
-DB-->>API : Updated Plan
-API-->>Sidebar : Success Response
+DB-->>API : Updated Plan with Progress
+API-->>Sidebar : Success Response with Progress Data
 Sidebar->>Sidebar : Refresh Quadrant Data
 Sidebar-->>User : Visual Feedback
 ```
 
 **Diagram sources**
-- [src/components/quadrant-left-sidebar.tsx:295-314](file://src/components/quadrant-left-sidebar.tsx#L295-L314)
-- [src/app/api/plan/priority/route.ts:50-93](file://src/app/api/plan/priority/route.ts#L50-L93)
+- [src/components/quadrant-left-sidebar.tsx:426-493](file://src/components/quadrant-left-sidebar.tsx#L426-L493)
+- [src/app/api/plan/priority/route.ts:66-110](file://src/app/api/plan/priority/route.ts#L66-L110)
 
 **Section sources**
 - [src/app/plans/page.tsx:99-869](file://src/app/plans/page.tsx#L99-L869)
-- [src/components/quadrant-left-sidebar.tsx:229-395](file://src/components/quadrant-left-sidebar.tsx#L229-L395)
+- [src/components/quadrant-left-sidebar.tsx:392-493](file://src/components/quadrant-left-sidebar.tsx#L392-L493)
 
 ## Advanced Features
 
@@ -375,10 +416,10 @@ Dynamic tag association system supporting both existing and new tags:
 
 ### Progress Tracking
 
-Comprehensive progress recording with custom timestamp support:
+Comprehensive progress recording with custom timestamp support and real-time quadrant updates:
 
 **Section sources**
-- [src/app/api/progress_record/route.ts:25-70](file://src/app/api/progress_record/route.ts#L25-L70)
+- [src/app/api/progress_record/route.ts:25-154](file://src/app/api/progress_record/route.ts#L25-L154)
 
 ## Integration Patterns
 
@@ -411,10 +452,10 @@ AuthAPI-->>Client : Protected Resource
 
 ### Real-time Updates
 
-The system supports real-time updates through periodic polling and event-driven refreshes:
+The system supports real-time updates through periodic polling and event-driven refreshes with progress synchronization:
 
 **Section sources**
-- [src/components/quadrant-left-sidebar.tsx:266-271](file://src/components/quadrant-left-sidebar.tsx#L266-L271)
+- [src/components/quadrant-left-sidebar.tsx:408-424](file://src/components/quadrant-left-sidebar.tsx#L408-L424)
 
 ## Performance Considerations
 
@@ -426,6 +467,7 @@ The system implements several performance optimization strategies:
 2. **Selective Field Loading**: API responses include only necessary fields
 3. **Indexing Strategy**: Proper indexing on frequently queried fields
 4. **Connection Pooling**: Efficient database connection management
+5. **Progress Record Optimization**: Selective loading of progress records for quadrant display
 
 ### Frontend Performance
 
@@ -433,6 +475,7 @@ The system implements several performance optimization strategies:
 2. **Virtual Scrolling**: Large datasets are handled efficiently
 3. **Debounced Search**: Input debouncing for search operations
 4. **Lazy Loading**: Components load only when needed
+5. **Real-time Updates**: Optimized refresh intervals for quadrant data
 
 ## Security Implementation
 
@@ -478,7 +521,7 @@ The system implements comprehensive security measures:
 **Issue**: Plans not loading in quadrant sidebar
 **Solution**: Verify API connectivity and response format
 - Check network tab for failed requests
-- Verify `/api/plan/priority` endpoint response
+- Verify `/api/plan/priority` endpoint response includes progress records
 - Ensure proper error handling in sidebar component
 
 **Issue**: Drag and drop not working
@@ -497,18 +540,20 @@ The system implements comprehensive security measures:
 
 **Section sources**
 - [src/app/api/plan/route.ts:107-114](file://src/app/api/plan/route.ts#L107-L114)
-- [src/app/api/plan/priority/route.ts:41-47](file://src/app/api/plan/priority/route.ts#L41-L47)
+- [src/app/api/plan/priority/route.ts:72-77](file://src/app/api/plan/priority/route.ts#L72-L77)
 
 ## Conclusion
 
 The Enhanced Plan Management System provides a comprehensive solution for task and goal management with advanced features including:
 
-- **Flexible Filtering**: Multi-dimensional filtering with tags, difficulty, and scheduling status
-- **Priority Management**: Four-quadrant prioritization with drag-and-drop interface
+- **Flexible Filtering**: Multi-dimensional filtering with tags, difficulty, scheduling status, and quadrant assignment
+- **Priority Management**: Four-quadrant prioritization with drag-and-drop interface and complete progress tracking
 - **Recurring Tasks**: Intelligent cycle detection and progress tracking
-- **Real-time Collaboration**: Live updates and synchronized data
-- **Advanced Reporting**: Comprehensive progress tracking and analytics
+- **Real-time Collaboration**: Live updates and synchronized data with progress synchronization
+- **Advanced Reporting**: Comprehensive progress tracking and analytics with quadrant-based insights
 - **Secure Architecture**: Robust authentication and authorization system
+
+The recent enhancement to the priority API endpoint significantly improves the system's capability to provide complete task information across all quadrants. By including progress records for all four quadrants (q1, q2, q3, q4), users can now access comprehensive task history and progress data regardless of quadrant assignment, enabling better decision-making and progress monitoring.
 
 The system's modular design allows for easy extension and customization while maintaining high performance and reliability. The combination of modern frontend technologies with a robust backend ensures a smooth user experience across all devices and use cases.
 

@@ -10,7 +10,16 @@
 - [package.json](file://package.json)
 - [ENV_TEMPLATE.md](file://ENV_TEMPLATE.md)
 - [README.md](file://README.md)
+- [recurring-utils.ts](file://src/lib/recurring-utils.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Enhanced task recommendation filtering with comprehensive guidelines for AI assistant behavior
+- Added strict rules for recommending incomplete tasks only
+- Implemented special handling for user queries about completed tasks
+- Updated system prompt with detailed filtering instructions
+- Improved cycle task completion detection logic
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -25,6 +34,8 @@
 
 ## Introduction
 This document explains how the CopilotKit runtime is configured and operated in the project. It covers initialization of the runtime, adapter setup, and a custom OpenAI client implementation. It documents runtime configuration options, service adapter selection (OpenAI vs Aliyun Bailian), model parameter settings, and the message cleaning mechanisms for developer role replacement and tool call sequence repair. Practical examples show how to initialize the runtime, configure adapters, and set up a custom client. Environment variable requirements are listed, along with error handling strategies, model switching between OpenAI and Qwen models, debugging tips, and performance optimization guidance.
+
+**Updated** Enhanced with comprehensive task recommendation filtering rules that enforce AI assistant behavior guidelines for intelligent task management.
 
 ## Project Structure
 The CopilotKit integration is centered around a Next.js API route that initializes the runtime, defines actions, and exposes an endpoint for CopilotKit clients. Supporting routes provide health checks and environment diagnostics. The frontend wraps the application with the CopilotKit provider and renders a sidebar for interactions.
@@ -43,9 +54,15 @@ end
 subgraph "External Services"
 OAI["OpenAI / Aliyun Bailian"]
 end
+subgraph "Task Management"
+TR["Task Recommendation<br/>Filtering Rules"]
+RT["Recurring Task Utils<br/>Completion Detection"]
+end
 L --> P
 P --> R
 R --> OAI
+R --> TR
+TR --> RT
 H --> R
 E --> R
 ```
@@ -56,6 +73,7 @@ E --> R
 - [route.ts:1608-1612](file://src/app/api/copilotkit/route.ts#L1608-L1612)
 - [health/route.ts:3-25](file://src/app/api/copilotkit/health/route.ts#L3-L25)
 - [env/route.ts:3-9](file://src/app/api/debug/env/route.ts#L3-L9)
+- [recurring-utils.ts:138-147](file://src/lib/recurring-utils.ts#L138-L147)
 
 **Section sources**
 - [layout.tsx:10-19](file://src/app/copilotkit/layout.tsx#L10-L19)
@@ -67,7 +85,10 @@ E --> R
 - OpenAIAdapter configured to use a specific model and a custom OpenAI client.
 - Custom OpenAI client that intercepts chat completions to clean messages, inject system prompts, repair tool call sequences, and enable search for Qwen models.
 - Message filtering pipeline that normalizes unsupported roles and cleans developer roles.
+- **Enhanced task recommendation filtering** with strict rules for incomplete task recommendations and special handling for completed task queries.
 - Health and environment diagnostic endpoints.
+
+**Updated** Added comprehensive task recommendation filtering with AI assistant behavior guidelines.
 
 **Section sources**
 - [route.ts:287-284](file://src/app/api/copilotkit/route.ts#L287-L284)
@@ -94,6 +115,7 @@ Page->>Endpoint : POST /api/copilotkit
 Endpoint->>Endpoint : Parse and filter messages
 Endpoint->>Endpoint : Clean developer roles
 Endpoint->>Endpoint : Repair tool call sequences
+Endpoint->>Endpoint : Apply task recommendation filters
 Endpoint->>Runtime : Handle request
 Runtime->>Adapter : Forward to service adapter
 Adapter->>Service : Call chat.completions
@@ -165,6 +187,53 @@ Call --> End(["Return response"])
 - [route.ts:19-67](file://src/app/api/copilotkit/route.ts#L19-L67)
 - [route.ts:260-266](file://src/app/api/copilotkit/route.ts#L260-L266)
 
+### Enhanced Task Recommendation Filtering
+**Updated** The system now enforces strict AI assistant behavior guidelines for task recommendations:
+
+#### Core Filtering Rules
+1. **Only Recommend Incomplete Tasks**: When using 'recommendTasks', 'queryPlans', or 'findPlan', the system automatically filters out completed tasks
+2. **Completed Task Special Handling**: Only show completed tasks when users explicitly ask about them
+3. **Automatic Filtering Logic**: System automatically applies filters based on task completion status
+
+#### Implementation Details
+- **Incomplete Task Definition**: 
+  - Normal tasks: progress < 100% (progress < 1)
+  - Recurring tasks: current cycle completion count < target count
+- **Cycle Task Completion Detection**: Uses `isRecurringTaskCompleted()` from recurring-utils.ts
+- **Filter Application**: Applied in recommendTasks, queryPlans, and findPlan handlers
+
+Practical example references:
+- [task recommendation filtering:238-254](file://src/app/api/copilotkit/route.ts#L238-L254)
+- [incomplete task filtering:340-348](file://src/app/api/copilotkit/route.ts#L340-L348)
+- [cycle task completion:463-472](file://src/app/api/copilotkit/route.ts#L463-L472)
+
+```mermaid
+flowchart TD
+A["Task Recommendation Request"] --> B["Check Task Type"]
+B --> C{"Normal Task?"}
+C --> |Yes| D["Check progress < 1?"]
+D --> |Yes| E["Include in Results"]
+D --> |No| F["Exclude from Results"]
+C --> |No| G["Check Cycle Completion"]
+G --> H{"isRecurringTaskCompleted?"}
+H --> |No| E
+H --> |Yes| F
+I["User Query for Completed Tasks"] --> J{"Explicitly Asked?"}
+J --> |Yes| K["Show Completed Tasks"]
+J --> |No| L["Hide Completed Tasks"]
+```
+
+**Diagram sources**
+- [route.ts:238-254](file://src/app/api/copilotkit/route.ts#L238-L254)
+- [route.ts:340-348](file://src/app/api/copilotkit/route.ts#L340-L348)
+- [recurring-utils.ts:138-147](file://src/lib/recurring-utils.ts#L138-L147)
+
+**Section sources**
+- [route.ts:238-254](file://src/app/api/copilotkit/route.ts#L238-L254)
+- [route.ts:340-348](file://src/app/api/copilotkit/route.ts#L340-L348)
+- [route.ts:463-472](file://src/app/api/copilotkit/route.ts#L463-L472)
+- [recurring-utils.ts:138-147](file://src/lib/recurring-utils.ts#L138-L147)
+
 ### Message Cleaning Mechanisms
 Two complementary cleaning mechanisms ensure message compatibility:
 - Developer role replacement: Applied globally via a fetch interceptor to normalize any "developer" roles found in outbound requests.
@@ -220,6 +289,7 @@ Practical example references:
 - The runtime depends on @copilotkit/runtime for runtime orchestration and adapter integration.
 - The custom OpenAI client depends on the official openai package.
 - Actions rely on Prisma for database operations.
+- **Task filtering** depends on recurring-utils.ts for cycle task completion detection.
 
 ```mermaid
 graph LR
@@ -227,23 +297,25 @@ Runtime["@copilotkit/runtime"] --> Adapter["OpenAIAdapter"]
 Adapter --> CustomClient["Custom OpenAI Client"]
 CustomClient --> OpenAISDK["openai package"]
 Actions["Actions"] --> Prisma["@prisma/client"]
+Actions --> RecurringUtils["recurring-utils.ts"]
 ```
 
 **Diagram sources**
 - [package.json:16-39](file://package.json#L16-L39)
 - [route.ts:1-9](file://src/app/api/copilotkit/route.ts#L1-L9)
+- [recurring-utils.ts:138-147](file://src/lib/recurring-utils.ts#L138-L147)
 
 **Section sources**
 - [package.json:16-39](file://package.json#L16-L39)
 - [route.ts:1-9](file://src/app/api/copilotkit/route.ts#L1-L9)
+- [recurring-utils.ts:138-147](file://src/lib/recurring-utils.ts#L138-L147)
 
 ## Performance Considerations
 - Message filtering and cleaning occur per request; keep message arrays minimal and avoid unnecessary nesting to reduce traversal overhead.
 - Tool call sequence repair inserts placeholder messages; ensure tool_call_id continuity is preserved to prevent repeated repairs.
 - Enabling search for Qwen adds extra_body parameters; monitor latency and adjust model parameters accordingly.
 - Consider caching frequently accessed system options (e.g., tags) to reduce database queries during action execution.
-
-[No sources needed since this section provides general guidance]
+- **Task filtering performance**: The system performs additional database queries for cycle task completion detection; consider caching results for frequently accessed tasks.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -270,6 +342,14 @@ Common issues and resolutions:
   - References:
     - [tool call repair:19-67](file://src/app/api/copilotkit/route.ts#L19-L67)
 
+- **Task recommendation filtering issues**:
+  - Symptoms: Tasks not appearing in recommendations or completed tasks showing unexpectedly.
+  - Resolution: Verify that the task recommendation filtering rules are properly applied; check cycle task completion detection logic.
+  - References:
+    - [task filtering rules:238-254](file://src/app/api/copilotkit/route.ts#L238-L254)
+    - [incomplete task filtering:340-348](file://src/app/api/copilotkit/route.ts#L340-L348)
+    - [cycle task completion:463-472](file://src/app/api/copilotkit/route.ts#L463-L472)
+
 - Model switching (OpenAI vs Aliyun Bailian):
   - Steps:
     - Set OPENAI_API_KEY to your provider's API key.
@@ -295,6 +375,9 @@ Common issues and resolutions:
 - [route.ts:19-67](file://src/app/api/copilotkit/route.ts#L19-L67)
 - [route.ts:280](file://src/app/api/copilotkit/route.ts#L280)
 - [route.ts:1621-1634](file://src/app/api/copilotkit/route.ts#L1621-L1634)
+- [route.ts:238-254](file://src/app/api/copilotkit/route.ts#L238-L254)
+- [route.ts:340-348](file://src/app/api/copilotkit/route.ts#L340-L348)
+- [route.ts:463-472](file://src/app/api/copilotkit/route.ts#L463-L472)
 
 ## Conclusion
-The CopilotKit runtime is configured to work seamlessly with both OpenAI and Aliyun Bailian-compatible APIs. The setup includes robust message cleaning, tool call sequence repair, and a custom OpenAI client tailored for the application’s domain. Environment variables are validated early, and diagnostic endpoints help troubleshoot configuration issues. By following the provided examples and guidelines, you can reliably initialize the runtime, switch models, and optimize performance.
+The CopilotKit runtime is configured to work seamlessly with both OpenAI and Aliyun Bailian-compatible APIs. The setup includes robust message cleaning, tool call sequence repair, and a custom OpenAI client tailored for the application's domain. Environment variables are validated early, and diagnostic endpoints help troubleshoot configuration issues. **The enhanced task recommendation filtering system ensures AI assistant behavior compliance by strictly recommending only incomplete tasks and providing special handling for completed task queries.** By following the provided examples and guidelines, you can reliably initialize the runtime, switch models, and optimize performance.
