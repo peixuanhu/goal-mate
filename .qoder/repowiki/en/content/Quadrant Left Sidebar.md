@@ -14,6 +14,13 @@
 - [auth.ts](file://src/lib/auth.ts)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated performance considerations to reflect removal of automatic 30-second polling mechanism
+- Modified architecture overview to show event-driven refresh instead of continuous polling
+- Updated troubleshooting guide to reflect new manual refresh approach
+- Revised component lifecycle to emphasize resource-saving initial load only approach
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -29,7 +36,7 @@
 
 The Quadrant Left Sidebar is a core component of the Goal Mate application that implements the Eisenhower Matrix (Important vs. Urgent) productivity framework. This component displays tasks organized into four quadrants based on their importance and urgency, providing an intuitive drag-and-drop interface for task prioritization and management.
 
-The sidebar serves as the primary interface for users to visualize their task workload and strategically organize their daily activities according to productivity principles. It integrates seamlessly with the application's authentication system and provides real-time updates through WebSocket-like event mechanisms.
+The sidebar serves as the primary interface for users to visualize their task workload and strategically organize their daily activities according to productivity principles. It integrates seamlessly with the application's authentication system and provides real-time updates through a custom event-driven refresh mechanism instead of continuous background polling.
 
 ## Project Structure
 
@@ -56,11 +63,11 @@ end
 ```
 
 **Diagram sources**
-- [quadrant-left-sidebar.tsx:1-571](file://src/components/quadrant-left-sidebar.tsx#L1-L571)
+- [quadrant-left-sidebar.tsx:1-569](file://src/components/quadrant-left-sidebar.tsx#L1-L569)
 - [main-layout.tsx:1-69](file://src/components/main-layout.tsx#L1-L69)
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:1-571](file://src/components/quadrant-left-sidebar.tsx#L1-L571)
+- [quadrant-left-sidebar.tsx:1-569](file://src/components/quadrant-left-sidebar.tsx#L1-L569)
 - [main-layout.tsx:1-69](file://src/components/main-layout.tsx#L1-L69)
 
 ## Core Components
@@ -121,7 +128,7 @@ Plan --> RecurrenceType : "uses"
 
 ## Architecture Overview
 
-The Quadrant Left Sidebar follows a reactive architecture pattern with real-time synchronization:
+The Quadrant Left Sidebar follows a resource-efficient architecture pattern with event-driven synchronization:
 
 ```mermaid
 sequenceDiagram
@@ -136,50 +143,49 @@ Sidebar->>API : PUT /api/plan/priority
 API->>DB : Update Task Priority
 DB-->>API : Success Response
 API-->>Sidebar : Updated Task Data
-Sidebar->>Utils : refreshQuadrantSidebar()
-Utils-->>Sidebar : Event Dispatched
 Sidebar->>Sidebar : Fetch Fresh Data
-Sidebar-->>User : Updated UI State
-Note over Sidebar,Utils : Real-time Updates via Custom Events
+Sidebar->>Utils : refreshQuadrantSidebar()
+Utils-->>Sidebar : Custom Event Dispatched
+Sidebar->>Sidebar : Manual Refresh Triggered
+Note over Sidebar,Utils : Event-driven Updates via Custom Events
 ```
 
 **Diagram sources**
-- [quadrant-left-sidebar.tsx:448-493](file://src/components/quadrant-left-sidebar.tsx#L448-L493)
+- [quadrant-left-sidebar.tsx:424-444](file://src/components/quadrant-left-sidebar.tsx#L424-L444)
 - [route.ts:66-109](file://src/app/api/plan/priority/route.ts#L66-L109)
 - [utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 
 The architecture implements several key patterns:
 
-1. **Real-time Synchronization**: Uses custom events to notify other components of data changes
-2. **Declarative State Management**: React hooks manage component state efficiently
-3. **API Abstraction**: Clean separation between UI logic and data operations
-4. **Authentication Integration**: Seamless integration with the application's auth system
+1. **Event-driven Synchronization**: Uses custom events to trigger manual refreshes instead of continuous polling
+2. **Resource-efficient Loading**: Initial load only approach to minimize network requests
+3. **Declarative State Management**: React hooks manage component state efficiently
+4. **API Abstraction**: Clean separation between UI logic and data operations
+5. **Authentication Integration**: Seamless integration with the application's auth system
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:371-571](file://src/components/quadrant-left-sidebar.tsx#L371-L571)
+- [quadrant-left-sidebar.tsx:408-422](file://src/components/quadrant-left-sidebar.tsx#L408-L422)
 - [route.ts:6-64](file://src/app/api/plan/priority/route.ts#L6-L64)
 
 ## Detailed Component Analysis
 
 ### QuadrantLeftSidebar Component
 
-The main component orchestrates the entire quadrant system:
+The main component orchestrates the entire quadrant system with an event-driven approach:
 
 ```mermaid
 flowchart TD
 Start([Component Mount]) --> InitState["Initialize State<br/>- quadrantData<br/>- activePlan<br/>- isLoading"]
 InitState --> SetupSensors["Setup Drag Sensors<br/>- PointerSensor<br/>- KeyboardSensor"]
 SetupSensors --> FetchData["Fetch Initial Data<br/>GET /api/plan/priority"]
-FetchData --> SetupTimer["Setup Auto Refresh<br/>30 Second Interval"]
-SetupTimer --> SetupListener["Setup Event Listener<br/>quadrant-refresh"]
+FetchData --> SetupListener["Setup Event Listener<br/>quadrant-refresh"]
 UserAction{"User Action?"} --> |Drag Start| SetActivePlan["Set Active Plan"]
 UserAction --> |Drag End| CheckDrop["Check Drop Target"]
 CheckDrop --> IsQuadrant{"Is Quadrant?"}
 IsQuadrant --> |Yes| UpdatePriority["Update Priority<br/>PUT /api/plan/priority"]
 IsQuadrant --> |No| CancelDrag["Cancel Operation"]
-UpdatePriority --> RefreshData["Refresh Data"]
+UpdatePriority --> RefreshData["Manual Refresh Triggered"]
 RefreshData --> FetchData
-TimerEvent["30 Second Timer"] --> FetchData
 CustomEvent["quadrant-refresh Event"] --> FetchData
 style Start fill:#e1f5fe
 style UserAction fill:#f3e5f5
@@ -187,18 +193,18 @@ style FetchData fill:#e8f5e8
 ```
 
 **Diagram sources**
-- [quadrant-left-sidebar.tsx:392-424](file://src/components/quadrant-left-sidebar.tsx#L392-L424)
-- [quadrant-left-sidebar.tsx:448-467](file://src/components/quadrant-left-sidebar.tsx#L448-L467)
+- [quadrant-left-sidebar.tsx:408-422](file://src/components/quadrant-left-sidebar.tsx#L408-L422)
+- [quadrant-left-sidebar.tsx:413-417](file://src/components/quadrant-left-sidebar.tsx#L413-L417)
 
 #### Key Features
 
 1. **Responsive Design**: Adapts between expanded and collapsed states
-2. **Real-time Updates**: Automatic refresh every 30 seconds plus manual triggers
+2. **Event-driven Updates**: Manual refresh triggered by custom events instead of automatic polling
 3. **Drag-and-Drop**: Full @dnd-kit integration for intuitive task management
 4. **Visual Feedback**: Comprehensive loading states and hover effects
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:371-571](file://src/components/quadrant-left-sidebar.tsx#L371-L571)
+- [quadrant-left-sidebar.tsx:371-569](file://src/components/quadrant-left-sidebar.tsx#L371-L569)
 
 ### QuadrantColumn Implementation
 
@@ -349,33 +355,35 @@ M --> N
 
 1. **@dnd-kit**: Provides smooth drag-and-drop interactions but requires careful optimization
 2. **React Hooks**: Efficient state management with proper dependency arrays
-3. **API Calls**: Debounced and cached to prevent excessive network requests
-4. **Event System**: Custom events for inter-component communication
+3. **Event System**: Custom events for inter-component communication (no polling overhead)
+4. **API Calls**: Single initial fetch with manual refresh triggers
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:1-571](file://src/components/quadrant-left-sidebar.tsx#L1-L571)
+- [quadrant-left-sidebar.tsx:1-569](file://src/components/quadrant-left-sidebar.tsx#L1-L569)
 
 ## Performance Considerations
 
-The Quadrant Left Sidebar implements several performance optimization strategies:
+The Quadrant Left Sidebar implements several performance optimization strategies focused on resource efficiency:
 
 ### Memory Management
-- **Component Cleanup**: Proper cleanup of intervals and event listeners
+- **Component Cleanup**: Proper cleanup of event listeners on component unmount
 - **State Optimization**: Minimal state updates to reduce re-renders
 - **Lazy Loading**: Conditional rendering of expanded/collapsed states
 
 ### Network Optimization
-- **Auto-refresh Intervals**: 30-second polling reduces immediate load
-- **Event-driven Updates**: Custom events minimize unnecessary API calls
+- **Initial Load Only**: Single fetch on component mount eliminates continuous polling
+- **Event-driven Updates**: Custom events trigger manual refreshes when needed
 - **Efficient Sorting**: Optimized sorting algorithms for task lists
 
-### UI Performance
-- **Virtual Scrolling**: Handles large task lists efficiently
-- **CSS Transitions**: Hardware-accelerated animations
-- **Debounced Operations**: Prevents rapid successive API calls
+### Resource Efficiency
+- **No Background Polling**: Eliminates 30-second interval overhead
+- **Manual Refresh Control**: Components decide when to refresh via custom events
+- **Reduced API Calls**: Network requests only when user actions or external events occur
+
+**Updated** Removed automatic 30-second polling mechanism in favor of resource-efficient initial load only approach
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:408-424](file://src/components/quadrant-left-sidebar.tsx#L408-L424)
+- [quadrant-left-sidebar.tsx:408-422](file://src/components/quadrant-left-sidebar.tsx#L408-L422)
 - [utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 
 ## Troubleshooting Guide
@@ -388,9 +396,10 @@ The Quadrant Left Sidebar implements several performance optimization strategies
 3. **Inspect Collision Detection**: Validate rectIntersection collision detection setup
 
 #### Tasks Not Updating
-1. **Event Listener Check**: Verify 'quadrant-refresh' event listener is attached
+1. **Event Listener Check**: Verify 'quadrant-refresh' event listener is attached during component mount
 2. **API Response Validation**: Ensure PUT requests to /api/plan/priority return success
-3. **State Synchronization**: Check that fetchQuadrantData is called after updates
+3. **Manual Refresh Trigger**: Confirm refreshQuadrantSidebar() is called after successful updates
+4. **Component Lifecycle**: Check that useEffect cleanup properly removes event listeners
 
 #### Authentication Problems
 1. **Cookie Validation**: Verify auth-token cookie exists and is valid
@@ -398,12 +407,14 @@ The Quadrant Left Sidebar implements several performance optimization strategies
 3. **Token Expiration**: Check JWT token expiration and renewal
 
 #### Performance Issues
-1. **Interval Cleanup**: Ensure setInterval is cleared on component unmount
-2. **Event Listener Cleanup**: Remove event listeners to prevent memory leaks
-3. **Optimize Sorting**: Consider implementing more efficient sorting algorithms
+1. **Event Listener Cleanup**: Ensure event listeners are removed on component unmount
+2. **Memory Leaks**: Verify proper cleanup prevents memory accumulation
+3. **Network Requests**: Monitor that only initial fetch occurs without background polling
+
+**Updated** Removed troubleshooting entries related to 30-second polling as it's no longer implemented
 
 **Section sources**
-- [quadrant-left-sidebar.tsx:418-423](file://src/components/quadrant-left-sidebar.tsx#L418-L423)
+- [quadrant-left-sidebar.tsx:413-417](file://src/components/quadrant-left-sidebar.tsx#L413-L417)
 - [middleware.ts:19-35](file://middleware.ts#L19-L35)
 
 ## Conclusion
@@ -411,9 +422,9 @@ The Quadrant Left Sidebar implements several performance optimization strategies
 The Quadrant Left Sidebar represents a sophisticated implementation of the Eisenhower Matrix within a modern React/Next.js application. Its architecture demonstrates several key principles:
 
 1. **Modular Design**: Clear separation of concerns between components
-2. **Real-time Synchronization**: Seamless integration with backend systems
-3. **User Experience**: Intuitive drag-and-drop interface with comprehensive feedback
-4. **Performance Optimization**: Careful consideration of memory usage and network efficiency
+2. **Event-driven Synchronization**: Efficient manual refresh system via custom events
+3. **Resource Optimization**: Initial load only approach minimizes network overhead
+4. **User Experience**: Intuitive drag-and-drop interface with comprehensive feedback
 5. **Security Integration**: Seamless authentication and authorization handling
 
-The component successfully balances functionality with performance, providing users with an intuitive interface for task prioritization while maintaining robust backend integration and real-time synchronization capabilities. Its modular architecture ensures maintainability and extensibility for future enhancements.
+The component successfully balances functionality with performance, providing users with an intuitive interface for task prioritization while maintaining robust backend integration and efficient synchronization capabilities. The shift from continuous polling to event-driven updates demonstrates a commitment to resource efficiency without sacrificing user experience. Its modular architecture ensures maintainability and extensibility for future enhancements.

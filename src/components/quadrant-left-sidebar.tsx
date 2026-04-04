@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -379,6 +379,7 @@ export function QuadrantLeftSidebar() {
   });
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const hasInitialFetch = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -390,6 +391,9 @@ export function QuadrantLeftSidebar() {
   );
 
   const fetchQuadrantData = async () => {
+    // Prevent concurrent requests
+    if (isLoading) return;
+    setIsLoading(true);
     try {
       const res = await fetch("/api/plan/priority");
       if (!res.ok) throw new Error("Failed to fetch");
@@ -402,12 +406,18 @@ export function QuadrantLeftSidebar() {
       });
     } catch (error) {
       console.error("Error fetching quadrant data:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     // Initial load only - no polling to save resources
-    fetchQuadrantData();
+    // Use ref to prevent double fetch in React Strict Mode
+    if (!hasInitialFetch.current) {
+      hasInitialFetch.current = true;
+      fetchQuadrantData();
+    }
     
     // Listen for refresh events from other components
     const handleRefresh = () => {
