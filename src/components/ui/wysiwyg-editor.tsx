@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Edit3, Eye, Maximize2, Minimize2 } from "lucide-react"
 
+// Import MDEditor CSS
+import "@uiw/react-md-editor/markdown-editor.css"
+import "@uiw/react-markdown-preview/markdown.css"
+
 // Dynamically import MDEditor to avoid SSR issues
 const MDEditor = dynamic(
   () => import("@uiw/react-md-editor").then((mod) => mod.default),
@@ -105,6 +109,24 @@ export function WysiwygEditor({
 
         {/* Editor */}
         <div className="flex-1 overflow-auto" data-color-mode="light">
+          <style jsx global>{`
+            .wmde-markdown ul {
+              list-style-type: disc !important;
+              padding-left: 1.5em !important;
+            }
+            .wmde-markdown ol {
+              list-style-type: decimal !important;
+              padding-left: 1.5em !important;
+            }
+            .wmde-markdown ul li {
+              list-style-type: disc !important;
+              display: list-item !important;
+            }
+            .wmde-markdown ol li {
+              list-style-type: decimal !important;
+              display: list-item !important;
+            }
+          `}</style>
           <MDEditor
             value={value}
             onChange={handleChange}
