@@ -4,7 +4,7 @@ import { ReactNode, useState } from "react";
 import { ChatWrapper } from "./chat-wrapper";
 import UserMenu from "./UserMenu";
 import { QuadrantLeftSidebar } from "./quadrant-left-sidebar";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, X, PanelLeft, Bot } from "lucide-react";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -12,21 +12,45 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background md:flex-row md:h-screen md:max-h-dvh md:overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background lg:flex-row lg:h-screen lg:max-h-dvh lg:overflow-hidden">
       {/* 左侧四象限侧边栏 - 桌面端显示 */}
-      <div className="hidden md:flex shrink-0">
-        <QuadrantLeftSidebar />
+      <div className="hidden lg:flex shrink-0">
+        <QuadrantLeftSidebar 
+          isOpen={isLeftSidebarOpen} 
+          onToggle={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} 
+        />
       </div>
 
       {/* 主要内容区域 */}
-      <main className="w-full min-w-0 shrink-0 overflow-y-auto md:min-h-0 md:shrink md:flex-1">
+      <main className="w-full min-w-0 shrink-0 overflow-y-auto lg:min-h-0 lg:shrink lg:flex-1 relative">
+        {/* 桌面端折叠按钮栏 */}
+        <div className="hidden lg:flex absolute top-4 left-4 z-20 gap-2">
+          <button
+            onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+            className={`p-2 rounded-lg bg-white/90 backdrop-blur shadow-sm border border-gray-200 hover:bg-gray-50 transition-all ${isLeftSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            title="展开四象限"
+          >
+            <PanelLeft className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+        <div className="hidden lg:flex absolute top-4 right-4 z-20">
+          <button
+            onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
+            className={`p-2 rounded-lg bg-white/90 backdrop-blur shadow-sm border border-gray-200 hover:bg-gray-50 transition-all ${isRightPanelOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            title="展开 AI 助手"
+          >
+            <Bot className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
         {children}
       </main>
 
       {/* AI 助手 - 桌面端：右侧栏 */}
-      <div className="hidden md:flex z-10 w-full flex-col border-t border-border bg-background md:h-screen md:max-h-none md:min-h-0 md:w-[min(100%,480px)] md:shrink-0 md:border-l md:border-t-0 md:sticky md:top-0">
+      <div className={`hidden lg:flex z-10 flex-col border-t border-border bg-background lg:h-screen lg:max-h-none lg:min-h-0 lg:border-l lg:border-t-0 lg:sticky lg:top-0 transition-all duration-300 ${isRightPanelOpen ? 'lg:w-[400px] xl:w-[450px]' : 'lg:w-0 lg:opacity-0 lg:overflow-hidden'}`}>
         {/* 头部 */}
         <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950 md:p-6">
           <div className="flex items-center justify-between gap-2">
@@ -68,25 +92,25 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
       </div>
 
-      {/* 移动端 AI 助手悬浮按钮 */}
+      {/* 移动端/平板 AI 助手悬浮按钮 */}
       <button
         onClick={() => setIsMobileChatOpen(true)}
-        className="md:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
+        className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
         aria-label="打开 AI 助手"
       >
         <MessageCircle className="w-6 h-6" />
       </button>
 
-      {/* 移动端 AI 助手抽屉 */}
+      {/* 移动端/平板 AI 助手抽屉 */}
       {isMobileChatOpen && (
         <>
           {/* 遮罩层 */}
           <div 
-            className="md:hidden fixed inset-0 bg-black/50 z-50"
+            className="lg:hidden fixed inset-0 bg-black/50 z-50"
             onClick={() => setIsMobileChatOpen(false)}
           />
           {/* 抽屉 */}
-          <div className="md:hidden fixed inset-y-0 right-0 w-[85%] max-w-[400px] bg-background z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+          <div className="lg:hidden fixed inset-y-0 right-0 w-[85%] max-w-[400px] bg-background z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             {/* 头部 */}
             <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950">
               <div className="flex items-center justify-between gap-2">

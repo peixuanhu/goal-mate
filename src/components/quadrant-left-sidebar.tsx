@@ -368,9 +368,15 @@ function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask
   );
 }
 
-export function QuadrantLeftSidebar() {
+interface QuadrantLeftSidebarProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+export function QuadrantLeftSidebar({ isOpen, onToggle }: QuadrantLeftSidebarProps = {}) {
   const router = useRouter();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(true);
+  const isExpanded = isOpen !== undefined ? isOpen : internalExpanded;
   const [quadrantData, setQuadrantData] = useState<QuadrantData>({
     q1: [],
     q2: [],
@@ -504,7 +510,7 @@ export function QuadrantLeftSidebar() {
     return (
       <div className="w-10 bg-white border-r border-gray-200 flex flex-col items-center py-4 shadow-sm">
         <button
-          onClick={() => setIsExpanded(true)}
+          onClick={() => onToggle ? onToggle() : setInternalExpanded(true)}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
           title="展开四象限"
         >
@@ -524,7 +530,7 @@ export function QuadrantLeftSidebar() {
   }
 
   return (
-    <div className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col shadow-sm relative">
+    <div className={`bg-white border-r border-gray-200 flex flex-col shadow-sm relative transition-all duration-300 ${isOpen !== undefined ? (isExpanded ? 'w-[320px] xl:w-[360px]' : 'w-0 opacity-0 overflow-hidden') : 'w-full lg:w-[320px] xl:w-[360px]'}`}>
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50/50">
         <div className="flex items-center gap-2">
@@ -532,7 +538,7 @@ export function QuadrantLeftSidebar() {
           <h2 className="font-semibold text-gray-800">我的任务</h2>
         </div>
         <button
-          onClick={() => setIsExpanded(false)}
+          onClick={() => onToggle ? onToggle() : setInternalExpanded(false)}
           className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors"
           title="收起"
         >

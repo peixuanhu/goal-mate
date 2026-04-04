@@ -2,15 +2,9 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MainLayout } from "@/components/main-layout";
+import { MobileQuadrantWrapper } from "@/components/mobile-quadrant-wrapper";
 import { redirect } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import dynamic from 'next/dynamic';
-
-// 动态导入四象限侧边栏组件，禁用 SSR 以避免 hydration 错误
-const QuadrantLeftSidebar = dynamic(
-  () => import('@/components/quadrant-left-sidebar').then(mod => ({ default: mod.QuadrantLeftSidebar })),
-  { ssr: false }
-);
 
 export default async function Home() {
   // 服务器端身份验证检查
@@ -27,10 +21,8 @@ export default async function Home() {
           Goal Mate - AI智能目标管理
         </h1>
         
-        {/* 移动端四象限 - 仅在移动端显示，使用动态导入避免 hydration 错误 */}
-        <div className="w-full md:hidden">
-          <QuadrantLeftSidebar />
-        </div>
+        {/* 移动端四象限 - 仅在移动端显示 */}
+        <MobileQuadrantWrapper />
         
         <div className="flex w-full max-w-5xl flex-col items-stretch gap-6 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-8">
           <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
