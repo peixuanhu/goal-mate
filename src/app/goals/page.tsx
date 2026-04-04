@@ -12,7 +12,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
-import { MarkdownEditor } from "@/components/ui/markdown-editor"
+import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 interface Goal {
@@ -150,12 +150,12 @@ export default function GoalsPage() {
                 </div>
 
                 {/* 描述字段 - 独立行，更大空间 */}
-                <MarkdownEditor
+                <WysiwygEditor
                   id="desc"
                   label="描述"
                   value={form.description || ''}
-                  onChange={(value) => setForm(f => ({ ...f, description: value }))}
-                  placeholder="请输入目标的详细描述，可以包含链接、备注等信息...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                  onChange={(value: string) => setForm(f => ({ ...f, description: value }))}
+                  placeholder="请输入目标的详细描述，可以包含链接、备注等信息..."
                   minHeight="150px"
                 />
               </form>

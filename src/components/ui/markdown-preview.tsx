@@ -61,7 +61,7 @@ export function MarkdownPreview({
             "prose-strong:text-gray-900 dark:prose-strong:text-gray-100",
             "prose-code:text-pink-600 dark:prose-code:text-pink-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-[10px]",
             "prose-pre:bg-gray-900 dark:prose-pre:bg-gray-950 prose-pre:text-gray-100 prose-pre:p-2 prose-pre:rounded prose-pre:text-xs prose-pre:my-1",
-            "prose-blockquote:border-l-2 prose-blockquote:border-blue-500 prose-blockquote:pl-2 prose-blockquote:italic prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-blockquote:my-1",
+            "prose-blockquote:border-l-4 prose-blockquote:border-gray-300 dark:prose-blockquote:border-gray-600 prose-blockquote:pl-4 prose-blockquote:py-1 prose-blockquote:italic prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-blockquote:my-2 prose-blockquote:bg-gray-50 dark:prose-blockquote:bg-gray-800/50 prose-blockquote:rounded-r",
             "prose-ul:list-disc prose-ul:pl-4 prose-ol:list-decimal prose-ol:pl-4 prose-li:my-0",
             "prose-li:marker:text-gray-400",
             "prose-table:border-collapse prose-table:w-full prose-table:text-xs",

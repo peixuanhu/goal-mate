@@ -15,20 +15,31 @@
 - [schema.prisma](file://prisma/schema.prisma)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Added comprehensive operation confirmation protocols for critical AI actions
+- Implemented strict confirmation workflows for create, update, and delete operations
+- Enhanced safety measures for data-altering operations while maintaining immediate response behavior for recommendations and queries
+- Updated action system architecture to include confirmation logic
+- Added detailed confirmation flow documentation and examples
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Operation Confirmation Protocols](#operation-confirmation-protocols)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document explains the AI assistant integration built with CopilotKit and a custom OpenAI adapter. It covers the runtime configuration, message cleaning pipeline, action system architecture, and AI behavior injection via system prompts. It also documents the health check endpoint, AI service integration, model configuration for OpenAI-compatible providers (including Aliyun Bailian), and practical examples of AI interactions and action invocation patterns. Guidance is included for extending the AI functionality with custom actions and debugging AI responses, designed for both beginners and advanced developers.
+This document explains the AI assistant integration built with CopilotKit and a custom OpenAI adapter. It covers the runtime configuration, message cleaning pipeline, action system architecture, operation confirmation protocols, and AI behavior injection via system prompts. It also documents the health check endpoint, AI service integration, model configuration for OpenAI-compatible providers (including Aliyun Bailian), and practical examples of AI interactions and action invocation patterns. Guidance is included for extending the AI functionality with custom actions and debugging AI responses, designed for both beginners and advanced developers.
+
+**Updated** Enhanced with strict operation confirmation protocols for critical AI actions to ensure safe and controlled data manipulation while maintaining immediate response behavior for non-destructive operations.
 
 ## Project Structure
 The AI assistant integration spans backend API routes, frontend integration, and shared data models:
@@ -99,9 +110,12 @@ AUTH --> MW
 - CopilotKit runtime endpoint: Initializes the runtime, registers actions, and exposes the endpoint for chat interactions.
 - Custom OpenAI adapter: Wraps the OpenAI client to inject system prompts, clean message roles, repair tool-call sequences, and enable search for compatible models.
 - Action system: Provides AI actions for intelligent task recommendation, plan querying, goal creation, plan creation, plan finding, progress updates, adding progress records, and intelligent progress analysis.
+- **Operation confirmation protocols**: Strict confirmation workflows for critical operations (create, update, delete) with user verification before execution.
 - Health check endpoint: Reports configuration status and available actions.
 - Frontend integration: Embeds the CopilotKit runtime URL and renders the chat UI and optional MCP server management.
 - Authentication and middleware: Protects routes and ensures session validity.
+
+**Updated** Added operation confirmation protocols to ensure safe handling of critical AI actions.
 
 **Section sources**
 - [route.ts:287-1452](file://src/app/api/copilotkit/route.ts#L287-L1452)
@@ -117,6 +131,7 @@ The AI assistant integrates a CopilotKit runtime that:
 - Injects a system prompt tailored for goal and plan management
 - Cleans developer roles and repairs tool-call sequences for compatibility
 - Executes registered AI actions against the Prisma data layer
+- Implements strict confirmation protocols for critical operations
 - Returns structured results to the frontend chat UI
 
 ```mermaid
@@ -236,8 +251,8 @@ Action --> PrismaClient : "executes handlers"
 
 ### AI Behavior Injection and Natural Language Processing
 - System prompt injection ensures the AI understands the domain-specific workflow for goals, plans, and progress tracking.
-- Natural language time parsing supports flexible time expressions (e.g., “yesterday at 9pm”, “today 8:30”, “2 hours ago”).
-- Intelligent progress analysis splits user reports into “activity” and “thinking” components and attempts to resolve the target plan from keywords.
+- Natural language time parsing supports flexible time expressions (e.g., "yesterday at 9pm", "today 8:30", "2 hours ago").
+- Intelligent progress analysis splits user reports into "activity" and "thinking" components and attempts to resolve the target plan from keywords.
 
 ```mermaid
 flowchart TD
@@ -338,6 +353,62 @@ Recommended steps:
 - [health/route.ts:3-31](file://src/app/api/copilotkit/health/route.ts#L3-L31)
 - [route.ts:1456-1635](file://src/app/api/copilotkit/route.ts#L1456-L1635)
 
+## Operation Confirmation Protocols
+
+### Overview
+The AI assistant now implements strict operation confirmation protocols for all critical data-altering operations. These protocols ensure user consent before executing potentially destructive actions while maintaining immediate response behavior for non-destructive operations.
+
+### Critical Operations Requiring Confirmation
+All **create, update, and delete** operations must go through the confirmation workflow:
+
+1. **createGoal** (创建目标): "创建目标：xxx，标签：xxx；是否确认？"
+2. **createPlan** (创建计划): "创建计划：xxx，难度：xxx，标签：xxx；是否确认？"
+3. **updateProgress** (更新进度): "更新计划"xxx"的进度至xx%；是否确认？"
+4. **addProgressRecord** (添加进展记录): "为计划"xxx"添加进展记录：xxx；是否确认？"
+5. **analyzeAndRecordProgress** (智能分析记录): "分析并记录到计划"xxx"：进展内容xxx；是否确认？"
+
+### Confirmation Workflow Process
+The confirmation process follows a three-step verification:
+
+1. **First Step**: Display operation details clearly (operation type + specific content)
+2. **Second Step**: Ask "是否确认？" or "请确认是否执行此操作"
+3. **Third Step**: Wait for user confirmation ("确认"、"是的"、"执行") before executing
+
+### Content Modification Handling
+If users modify content during confirmation:
+- **Must re-display complete operation details** (including modified content)
+- **Must ask for confirmation again** before execution
+- **Example flow**: AI shows initial record, user modifies thinking content, AI re-confirms with updated details
+
+### Non-Critical Operations (Immediate Response)
+Operations that don't require confirmation:
+- **recommendTasks** (任务推荐): Directly output recommendations
+- **queryPlans** (查询计划): Directly output query results
+- **findPlan** (查找计划): Directly output search results
+- **getSystemOptions** (获取系统选项): Directly output option lists
+- Normal chat and search: Direct responses
+
+```mermaid
+flowchart TD
+User["User Request"] --> CheckOp{"Is operation critical?<br/>(create/update/delete)"}
+CheckOp --> |Yes| ShowDetails["Show operation details<br/>to user"]
+ShowDetails --> AskConfirm["Ask for confirmation<br/>('是否确认？')"]
+AskConfirm --> UserConfirm{"User confirms?"}
+UserConfirm --> |Yes| Execute["Execute action"]
+UserConfirm --> |No| Cancel["Cancel operation"]
+CheckOp --> |No| Immediate["Immediate response<br/>(no confirmation)"]
+Execute --> Success["Return success result"]
+Cancel --> End["End"]
+Immediate --> End
+Success --> End
+```
+
+**Diagram sources**
+- [route.ts:256-288](file://src/app/api/copilotkit/route.ts#L256-L288)
+
+**Section sources**
+- [route.ts:256-288](file://src/app/api/copilotkit/route.ts#L256-L288)
+
 ## Dependency Analysis
 - Frontend depends on CopilotKit runtime URL and UI components.
 - Backend runtime depends on the custom OpenAI adapter and Prisma models.
@@ -381,6 +452,7 @@ DEBUG["Debug Env (/api/debug/env/route.ts)"] --> RT
 - Tool-call sequence repair adds splice operations; avoid excessively long histories.
 - Natural language time parsing and keyword extraction are O(n) over message length and keyword sets.
 - Database queries are executed synchronously in handlers; consider pagination and indexing for large datasets.
+- **Confirmation workflows add minimal overhead** as they only apply to critical operations and don't affect immediate response operations.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -388,6 +460,7 @@ Common issues and resolutions:
 - Authentication errors: Ensure a valid auth token is present; middleware redirects unauthenticated API requests.
 - Provider compatibility: Tool-call sequences may require explicit tool results; the repair function inserts placeholders when needed.
 - Action failures: Use the health endpoint to verify action registration and the test action endpoint to validate logic.
+- **Confirmation issues**: If users don't receive confirmation prompts, verify that the operation is in the critical operations list and that the confirmation workflow is properly implemented.
 
 **Section sources**
 - [route.ts:3-9](file://src/app/api/debug/env/route.ts#L3-L9)
@@ -396,7 +469,7 @@ Common issues and resolutions:
 - [route.ts:1617-1634](file://src/app/api/copilotkit/route.ts#L1617-L1634)
 
 ## Conclusion
-The AI assistant integration leverages CopilotKit with a custom OpenAI adapter to deliver a robust, extensible system for goal and plan management. The runtime enforces domain-specific behavior via system prompts, cleans messages, repairs tool-call sequences, and exposes a comprehensive action set backed by Prisma. With health checks, debugging endpoints, and clear extension points, teams can confidently build upon this foundation to add new actions and refine AI behavior.
+The AI assistant integration leverages CopilotKit with a custom OpenAI adapter to deliver a robust, extensible system for goal and plan management. The runtime enforces domain-specific behavior via system prompts, cleans messages, repairs tool-call sequences, and exposes a comprehensive action set backed by Prisma. **The addition of strict operation confirmation protocols ensures safe handling of critical data-altering operations while maintaining immediate response behavior for non-destructive actions.** With health checks, debugging endpoints, and clear extension points, teams can confidently build upon this foundation to add new actions and refine AI behavior.
 
 ## Appendices
 
@@ -456,3 +529,34 @@ PLAN ||--o{ PLAN_TAG_ASSOCIATION : "has tags"
 
 **Diagram sources**
 - [schema.prisma:16-69](file://prisma/schema.prisma#L16-L69)
+
+### Operation Confirmation Flow Examples
+
+#### Example 1: Creating a New Plan
+```
+User: "我想创建一个学习Python的计划"
+AI: "为您创建计划：学习Python，难度：medium，标签：programming,learning；是否确认？"
+User: "确认"
+AI: [Executes createPlan action] "计划已成功创建。ID: plan_xxx，标签: programming,learning"
+```
+
+#### Example 2: Updating Progress with Content Modification
+```
+User: "今天做了肩颈拉伸"
+AI: "为您添加进展记录：事项：今天做了肩颈拉伸；思考：（暂无）；是否确认？"
+User: "心得体会是最近身体不错"
+AI: "更新进展记录：事项：今天做了肩颈拉伸；思考：最近身体不错；是否确认添加？"
+User: "确认"
+AI: [Executes addProgressRecord action] "已成功记录进展"
+```
+
+#### Example 3: Immediate Response (Non-Critical Operation)
+```
+User: "推荐一些学习任务给我"
+AI: [Direct response without confirmation] "基于您的状态，我推荐以下任务..."
+```
+
+**Section sources**
+- [route.ts:256-288](file://src/app/api/copilotkit/route.ts#L256-L288)
+- [route.ts:277-281](file://src/app/api/copilotkit/route.ts#L277-L281)
+- [route.ts:284-288](file://src/app/api/copilotkit/route.ts#L284-L288)

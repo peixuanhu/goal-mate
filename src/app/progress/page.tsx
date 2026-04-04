@@ -13,7 +13,7 @@ import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
-import { MarkdownEditor } from "@/components/ui/markdown-editor"
+import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 interface Plan {
@@ -345,12 +345,12 @@ export default function ProgressPage() {
                       )}
 
                       {/* 进展内容 */}
-                      <MarkdownEditor
+                      <WysiwygEditor
                         id="content"
                         label="进展内容"
                         value={form.content || ''}
-                        onChange={(value) => setForm(f => ({ ...f, content: value }))}
-                        placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                        onChange={(value: string) => setForm(f => ({ ...f, content: value }))}
+                        placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等..."
                         required
                         minHeight="180px"
                       />
@@ -415,12 +415,12 @@ export default function ProgressPage() {
                       </div>
 
                       {/* 思考总结 */}
-                      <MarkdownEditor
+                      <WysiwygEditor
                         id="thinking"
                         label="思考总结"
                         value={form.thinking || ''}
-                        onChange={(value) => setForm(f => ({ ...f, thinking: value }))}
-                        placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                        onChange={(value: string) => setForm(f => ({ ...f, thinking: value }))}
+                        placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等..."
                         minHeight="180px"
                       />
 

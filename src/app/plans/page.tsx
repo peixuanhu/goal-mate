@@ -14,7 +14,7 @@ import { getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurri
 import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
-import { MarkdownEditor } from "@/components/ui/markdown-editor"
+import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 
@@ -509,12 +509,12 @@ export default function PlansPage() {
               )}
 
               {/* 描述字段 - 独立行，更大空间 */}
-              <MarkdownEditor
+              <WysiwygEditor
                 id="desc"
                 label="描述"
                 value={form.description || ''}
-                onChange={(value) => setForm(f => ({ ...f, description: value }))}
-                placeholder="请输入详细描述，可以包含链接、备注等信息...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                onChange={(value: string) => setForm(f => ({ ...f, description: value }))}
+                placeholder="请输入详细描述，可以包含链接、备注等信息..."
                 minHeight="150px"
               />
 
