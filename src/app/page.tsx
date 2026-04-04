@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button"
 import { MainLayout } from "@/components/main-layout";
 import { redirect } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
+import dynamic from 'next/dynamic';
+
+// 动态导入四象限侧边栏组件，禁用 SSR 以避免 hydration 错误
+const QuadrantLeftSidebar = dynamic(
+  () => import('@/components/quadrant-left-sidebar').then(mod => ({ default: mod.QuadrantLeftSidebar })),
+  { ssr: false }
+);
 
 export default async function Home() {
   // 服务器端身份验证检查
@@ -15,10 +22,16 @@ export default async function Home() {
 
   return (
     <MainLayout>
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted p-4 sm:gap-8 sm:p-8">
+      <div className="flex min-h-screen flex-col items-center gap-6 bg-muted p-4 sm:gap-8 sm:p-8">
         <h1 className="mb-4 text-center text-2xl font-bold tracking-tight sm:mb-8 sm:text-3xl">
           Goal Mate - AI智能目标管理
         </h1>
+        
+        {/* 移动端四象限 - 仅在移动端显示，使用动态导入避免 hydration 错误 */}
+        <div className="w-full md:hidden">
+          <QuadrantLeftSidebar />
+        </div>
+        
         <div className="flex w-full max-w-5xl flex-col items-stretch gap-6 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-8">
           <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
             <CardHeader>

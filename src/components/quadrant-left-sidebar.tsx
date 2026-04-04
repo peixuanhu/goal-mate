@@ -524,7 +524,7 @@ export function QuadrantLeftSidebar() {
   }
 
   return (
-    <div className="w-96 bg-white border-r border-gray-200 flex flex-col shadow-sm relative">
+    <div className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col shadow-sm relative">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50/50">
         <div className="flex items-center gap-2">
@@ -541,7 +541,7 @@ export function QuadrantLeftSidebar() {
       </div>
 
       {/* Quadrant Grid */}
-      <div className="flex-1 overflow-hidden p-3">
+      <div className="flex-1 overflow-hidden p-3 md:h-auto h-[400px]">
         <DndContext
           sensors={sensors}
           collisionDetection={rectIntersection}
