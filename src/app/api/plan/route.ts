@@ -87,8 +87,14 @@ export async function PUT(req: NextRequest) {
   const data = await req.json()
   const { plan_id, tags, progressRecords, id, gmt_create, gmt_modified, ...rest } = data
   
-  // 过滤掉不应该更新的字段
-  const updateData = { ...rest }
+  // 过滤掉不应该更新的字段和 undefined 值
+  const updateData: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(rest)) {
+    // 只包含非 undefined 的值，避免覆盖数据库中的现有值
+    if (value !== undefined) {
+      updateData[key] = value
+    }
+  }
   
   const plan = await prisma.plan.update({
     where: { plan_id },

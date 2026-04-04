@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from "./button"
 import { Card, CardContent } from "./card"
+import { Copy, X, Check } from "lucide-react"
 
 interface TextPreviewProps {
   text: string
@@ -197,7 +198,7 @@ export function TextPreview({
       {showTooltip && (
         <div
           ref={tooltipRef}
-          className="fixed z-50 max-w-md min-w-80"
+          className="fixed z-50 max-w-sm min-w-72"
           style={{
             top: tooltipPosition.top,
             left: tooltipPosition.left,
@@ -206,34 +207,72 @@ export function TextPreview({
           onMouseEnter={handleTooltipMouseEnter}
           onMouseLeave={handleTooltipMouseLeave}
         >
-          <Card className="shadow-xl border-2 bg-white dark:bg-gray-900">
-            <CardContent className="p-4">
-              <div className="max-h-48 overflow-y-auto text-sm break-words whitespace-pre-wrap">
-                {renderTextWithLinks(text)}
+          <Card className="shadow-2xl border-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl overflow-hidden">
+            {/* 顶部装饰条 */}
+            <div className="h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+            <CardContent className="p-0">
+              {/* 内容区域 */}
+              <div className="px-4 py-3">
+                <div className="max-h-40 overflow-y-auto text-sm text-gray-700 dark:text-gray-200 break-words whitespace-pre-wrap leading-relaxed scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                  {renderTextWithLinks(text)}
+                </div>
               </div>
-              <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopy}
-                  className="text-xs h-7 flex-shrink-0"
-                >
-                  {copied ? '✓ 已复制!' : '📋 复制'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowTooltip(false)}
-                  className="text-xs h-7 flex-shrink-0"
-                >
-                  ✕ 关闭
-                </Button>
-                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center ml-auto">
+              
+              {/* 底部操作栏 */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleCopy}
+                    className={`h-7 px-2.5 text-xs font-medium transition-all duration-200 rounded-lg ${
+                      copied 
+                        ? 'text-green-600 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/20' 
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 mr-1.5" />
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 mr-1.5" />
+                        复制
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowTooltip(false)}
+                    className="h-7 px-2.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-all duration-200 rounded-lg"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1.5" />
+                    关闭
+                  </Button>
+                </div>
+                <div className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tabular-nums">
                   {text.length} 字符
                 </div>
               </div>
             </CardContent>
           </Card>
+          
+          {/* 箭头指示器 */}
+          <div 
+            className={`absolute left-6 w-3 h-3 bg-white dark:bg-gray-900 transform rotate-45 ${
+              tooltipPosition.showAbove 
+                ? 'bottom-0 translate-y-1/2 border-r border-b border-gray-200 dark:border-gray-700' 
+                : '-top-1.5 -translate-y-1/2 border-l border-t border-gray-200 dark:border-gray-700'
+            }`}
+            style={{
+              boxShadow: tooltipPosition.showAbove 
+                ? '2px 2px 4px rgba(0,0,0,0.05)' 
+                : '-2px -2px 4px rgba(0,0,0,0.05)'
+            }}
+          />
         </div>
       )}
     </>

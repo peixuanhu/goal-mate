@@ -30,6 +30,8 @@ interface Plan {
   recurrence_value?: string
   tags: string[]
   progressRecords: Array<{ gmt_create: Date }>
+  priority_quadrant?: string | null
+  is_scheduled?: boolean
 }
 const DIFFICULTY = ['easy', 'medium', 'hard']
 
@@ -44,6 +46,8 @@ type PlanForm = {
   recurrence_type?: string;
   recurrence_value?: string;
   tags: string[];
+  priority_quadrant?: string | null;
+  is_scheduled?: boolean;
 };
 
 type SortConfig = {
@@ -315,14 +319,21 @@ export default function PlansPage() {
     setLoading(true)
     const submitData = {
       ...form,
-      progress: form.progress === '' ? 0 : Number(form.progress)
+      progress: form.progress === '' ? 0 : Number(form.progress),
+      // 确保 priority_quadrant 和 is_scheduled 被正确传递
+      priority_quadrant: form.priority_quadrant,
+      is_scheduled: form.is_scheduled
     }
+    console.log('[DEBUG] Submitting plan data:', submitData)
+    console.log('[DEBUG] Form state:', form)
     if (editingId) {
-      await fetch('/api/plan', {
+      const response = await fetch('/api/plan', {
         method: 'PUT',
         body: JSON.stringify({ ...submitData, plan_id: editingId }),
         headers: { 'Content-Type': 'application/json' }
       })
+      const result = await response.json()
+      console.log('[DEBUG] API response:', result)
     } else {
       await fetch('/api/plan', {
         method: 'POST',
@@ -339,13 +350,16 @@ export default function PlansPage() {
   }
 
   const handleEdit = (plan: Plan) => {
+    console.log('[DEBUG] Editing plan:', plan)
     setForm({
       ...plan,
       progress: plan.progress !== undefined && plan.progress !== null ? plan.progress.toString() : '',
       tags: plan.tags || [],
       is_recurring: plan.is_recurring || false,
       recurrence_type: plan.recurrence_type,
-      recurrence_value: plan.recurrence_value
+      recurrence_value: plan.recurrence_value,
+      priority_quadrant: plan.priority_quadrant,
+      is_scheduled: plan.is_scheduled
     })
     setEditingId(plan.plan_id)
   }

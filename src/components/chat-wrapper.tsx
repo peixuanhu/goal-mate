@@ -461,19 +461,37 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage ol {
           margin: 0.2rem 0 !important;
           padding-left: 1.5rem !important;
+          display: block !important;
         }
         
         .copilotKitAssistantMessage li {
           margin: 0.15rem 0 !important;
           line-height: 1.5 !important;
+          display: list-item !important;
         }
         
-        .copilotKitAssistantMessage ul li {
+        .copilotKitAssistantMessage ul li,
+        .copilotKitAssistantMessage ul > li {
           list-style-type: disc !important;
+          list-style-position: outside !important;
         }
         
-        .copilotKitAssistantMessage ol li {
+        .copilotKitAssistantMessage ol li,
+        .copilotKitAssistantMessage ol > li {
           list-style-type: decimal !important;
+          list-style-position: outside !important;
+        }
+        
+        /* 确保嵌套在p标签中的列表也能正确显示 */
+        .copilotKitAssistantMessage p + ul,
+        .copilotKitAssistantMessage p + ol {
+          margin-top: 0.2rem !important;
+        }
+        
+        /* 强制列表项显示标记 */
+        .copilotKitAssistantMessage ul li::marker,
+        .copilotKitAssistantMessage ol li::marker {
+          display: inline !important;
         }
         
         /* Markdown 段落样式 - 恢复普通行间距 */

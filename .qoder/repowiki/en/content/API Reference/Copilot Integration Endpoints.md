@@ -12,6 +12,15 @@
 - [debug/env/route.ts](file://src/app/api/debug/env/route.ts)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced AI action system with expanded instruction sets for recommendation systems
+- Added detailed reasoning requirements for task recommendations, book recommendations, and study plan/method recommendations
+- Improved system prompt with comprehensive guidelines for AI behavior and response formatting
+- Enhanced recommendation logic with mandatory justification requirements
+- Expanded book recommendation system with specialized markdown formatting
+- Advanced progress analysis with intelligent content parsing
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -30,6 +39,8 @@
 ## Introduction
 
 The Copilot Integration Endpoints provide AI-powered assistance for goal management, task planning, and progress tracking within the Goal Mate application. This system integrates with CopilotKit to offer intelligent AI interactions through a RESTful API interface, enabling users to interact with AI assistants for managing their goals, creating plans, tracking progress, and receiving intelligent recommendations.
+
+**Enhanced** The system now features expanded instruction sets requiring detailed reasoning for all recommendations, including task recommendations, book recommendations, and study plan/method recommendations. The AI assistant follows comprehensive guidelines for providing justified recommendations and intelligent content analysis.
 
 The system consists of two primary endpoints:
 - **POST /api/copilotkit**: Main AI interaction endpoint for processing user requests and executing AI actions
@@ -61,6 +72,8 @@ end
 subgraph "External Services"
 L[OpenAI API]
 M[Custom OpenAI Adapter]
+N[Enhanced System Prompt]
+O[Detailed Reasoning Engine]
 end
 A --> C
 A --> D
@@ -79,6 +92,8 @@ I --> J
 J --> K
 A --> L
 A --> M
+A --> N
+A --> O
 ```
 
 **Diagram sources**
@@ -86,21 +101,21 @@ A --> M
 - [health/route.ts:1-32](file://src/app/api/copilotkit/health/route.ts#L1-L32)
 
 **Section sources**
-- [route.ts:1-1636](file://src/app/api/copilotkit/route.ts#L1-L1636)
+- [route.ts:1-1759](file://src/app/api/copilotkit/route.ts#L1-L1759)
 - [health/route.ts:1-32](file://src/app/api/copilotkit/health/route.ts#L1-L32)
 
 ## Core Components
 
 The CopilotKit integration system is built around several core components that work together to provide comprehensive AI assistance:
 
-### 1. Copilot Runtime Engine
-The central orchestrator that manages AI interactions and executes predefined actions. It handles message processing, action execution, and response formatting.
+### 1. Enhanced Copilot Runtime Engine
+The central orchestrator that manages AI interactions and executes predefined actions. It handles message processing, action execution, and response formatting with comprehensive instruction sets.
 
-### 2. AI Action System
-A comprehensive set of predefined actions that enable the AI to perform specific tasks such as recommending tasks, querying plans, creating goals, and tracking progress.
+### 2. AI Action System with Detailed Reasoning
+A comprehensive set of predefined actions that enable the AI to perform specific tasks such as recommending tasks, querying plans, creating goals, and tracking progress. Each recommendation now requires detailed justification.
 
-### 3. Message Processing Pipeline
-Advanced message filtering and sanitization system that ensures compatibility with various AI providers while maintaining security and data integrity.
+### 3. Advanced Message Processing Pipeline
+Sophisticated message filtering and sanitization system that ensures compatibility with various AI providers while maintaining security and data integrity. Includes enhanced developer role replacement and content sanitization.
 
 ### 4. Database Integration
 Seamless integration with PostgreSQL through Prisma ORM for persistent storage of goals, plans, and progress records.
@@ -108,7 +123,11 @@ Seamless integration with PostgreSQL through Prisma ORM for persistent storage o
 ### 5. Authentication Middleware
 Built-in authentication system that protects API endpoints and ensures secure access to AI services.
 
+### 6. Enhanced System Prompt Engine
+Comprehensive system prompt with detailed instructions for AI behavior, response formatting, and reasoning requirements across all recommendation types.
+
 **Section sources**
+- [route.ts:132-319](file://src/app/api/copilotkit/route.ts#L132-L319)
 - [route.ts:287-1452](file://src/app/api/copilotkit/route.ts#L287-L1452)
 - [middleware.ts:1-40](file://middleware.ts#L1-L40)
 
@@ -122,33 +141,35 @@ participant Client as "Client Application"
 participant API as "CopilotKit API"
 participant Runtime as "Copilot Runtime"
 participant Actions as "AI Actions"
+participant Reasoning as "Reasoning Engine"
 participant DB as "Database"
 participant OpenAI as "OpenAI Adapter"
 Client->>API : POST /api/copilotkit
 API->>Runtime : Initialize Copilot Runtime
 Runtime->>Runtime : Filter & Sanitize Messages
-Runtime->>Actions : Execute Action Handler
+Runtime->>Reasoning : Apply Enhanced Instructions
+Reasoning->>Actions : Execute Action Handler
 Actions->>DB : Query/Update Data
 DB-->>Actions : Return Results
 Actions->>OpenAI : Call AI Model
-OpenAI-->>Actions : AI Response
-Actions-->>Runtime : Processed Results
+OpenAI-->>Actions : AI Response with Justification
+Actions-->>Runtime : Processed Results with Detailed Reasoning
 Runtime-->>API : Formatted Response
-API-->>Client : JSON Response
-Note over Client,DB : All operations are logged for debugging
+API-->>Client : JSON Response with Justified Recommendations
+Note over Client,DB : All operations include detailed reasoning for recommendations
 ```
 
 **Diagram sources**
-- [route.ts:1456-1635](file://src/app/api/copilotkit/route.ts#L1456-L1635)
+- [route.ts:1456-1759](file://src/app/api/copilotkit/route.ts#L1456-L1759)
 - [route.ts:287-1452](file://src/app/api/copilotkit/route.ts#L287-L1452)
 
 ## Detailed Component Analysis
 
 ### Main CopilotKit Endpoint
 
-The primary endpoint (`/api/copilotkit`) serves as the gateway for all AI interactions. It implements sophisticated message processing and action execution capabilities.
+The primary endpoint (`/api/copilotkit`) serves as the gateway for all AI interactions. It implements sophisticated message processing and action execution capabilities with enhanced instruction sets.
 
-#### Message Processing and Filtering
+#### Enhanced Message Processing and Filtering
 
 The system includes advanced message filtering to handle various input formats and ensure compatibility with different AI providers:
 
@@ -161,31 +182,35 @@ C --> E[Filter Unsupported Roles]
 D --> E
 E --> F[Replace Developer Role]
 F --> G[Enable Search for Qwen]
-G --> H[Send to AI Provider]
-H --> I[Process Response]
-I --> J[Return to Client]
-E --> K[Supported Roles Check]
-K --> |Invalid Role| L[Convert to User]
-K --> |Valid Role| M[Keep Original]
-L --> N[Continue Processing]
-M --> N
+G --> H[Inject Enhanced System Prompt]
+H --> I[Apply Detailed Reasoning Requirements]
+I --> J[Send to AI Provider]
+J --> K[Process Response with Justification]
+K --> L[Return to Client]
+E --> M[Supported Roles Check]
+M --> |Invalid Role| N[Convert to User]
+M --> |Valid Role| O[Keep Original]
+N --> P[Continue Processing]
+O --> P
 ```
 
 **Diagram sources**
-- [route.ts:1483-1534](file://src/app/api/copilotkit/route.ts#L1483-L1534)
-- [route.ts:1545-1605](file://src/app/api/copilotkit/route.ts#L1545-L1605)
+- [route.ts:1580-1759](file://src/app/api/copilotkit/route.ts#L1580-L1759)
+- [route.ts:1604-1657](file://src/app/api/copilotkit/route.ts#L1604-L1657)
 
-#### AI Model Configuration
+#### Enhanced AI Model Configuration
 
-The system supports multiple AI providers through a flexible adapter pattern:
+The system supports multiple AI providers through a flexible adapter pattern with comprehensive instruction sets:
 
-- **Primary Provider**: OpenAI-compatible APIs
-- **Alternative Provider**: Alibaba Cloud DashScope (Qwen models)
+- **Primary Provider**: OpenAI-compatible APIs with enhanced system prompts
+- **Alternative Provider**: Alibaba Cloud DashScope (Qwen models) with specialized instructions
 - **Model Selection**: Configurable model selection with automatic fallback
+- **Enhanced Instructions**: Mandatory reasoning requirements for all recommendations
 
 **Section sources**
 - [route.ts:87-276](file://src/app/api/copilotkit/route.ts#L87-L276)
 - [route.ts:278-282](file://src/app/api/copilotkit/route.ts#L278-L282)
+- [route.ts:132-319](file://src/app/api/copilotkit/route.ts#L132-L319)
 
 ### Health Monitoring Endpoint
 
@@ -219,7 +244,7 @@ HealthResponse --> EnvironmentInfo : contains
 
 ### POST /api/copilotkit
 
-The main AI interaction endpoint that processes user requests and executes AI actions.
+The main AI interaction endpoint that processes user requests and executes AI actions with enhanced instruction sets.
 
 #### Request Format
 
@@ -253,14 +278,15 @@ The endpoint accepts both GraphQL-style and direct message formats:
 
 #### Response Format
 
-Standardized response format with success/error indicators:
+Standardized response format with success/error indicators and enhanced reasoning:
 
 ```json
 {
   "success": true,
   "data": {
-    "content": "AI response content",
-    "actionResults": []
+    "content": "AI response content with detailed reasoning",
+    "actionResults": [],
+    "recommendationJustification": "Detailed explanation of why this recommendation is valuable"
   }
 }
 ```
@@ -274,7 +300,7 @@ The endpoint implements comprehensive error handling with detailed error message
 - **401 Unauthorized**: Authentication failures for protected routes
 
 **Section sources**
-- [route.ts:1456-1635](file://src/app/api/copilotkit/route.ts#L1456-L1635)
+- [route.ts:1456-1759](file://src/app/api/copilotkit/route.ts#L1456-L1759)
 
 ### GET /api/copilotkit/health
 
@@ -308,12 +334,12 @@ Health monitoring endpoint that provides system status information.
 
 ## AI Action System
 
-The AI action system provides intelligent capabilities for goal management and task tracking through a comprehensive set of predefined actions.
+The AI action system provides intelligent capabilities for goal management and task tracking through a comprehensive set of predefined actions with enhanced instruction sets.
 
-### Action Categories
+### Enhanced Action Categories
 
-#### Task Recommendation System
-Intelligent task recommendation based on user state and preferences:
+#### Task Recommendation System with Detailed Reasoning
+Intelligent task recommendation based on user state and preferences with mandatory justification:
 
 ```mermaid
 flowchart TD
@@ -322,38 +348,39 @@ B --> C[Query All Plans]
 C --> D[Apply Filters]
 D --> E[Sort by Progress]
 E --> F[Select Top 5 Tasks]
-F --> G[Return Recommendations]
-D --> H{Filter Provided?}
-H --> |Yes| I[Apply Difficulty/Tag Filters]
-H --> |No| J[Use All Plans]
-I --> E
+F --> G[Generate Detailed Justification]
+G --> H[Return Recommendations with Reasons]
+D --> I{Filter Provided?}
+I --> |Yes| J[Apply Difficulty/Tag Filters]
+I --> |No| K[Use All Plans]
 J --> E
+K --> E
 ```
 
 **Diagram sources**
 - [route.ts:289-367](file://src/app/api/copilotkit/route.ts#L289-L367)
 
-#### Plan Management Actions
+#### Enhanced Plan Management Actions
 
-**Query Plans**: Comprehensive plan search with multiple filter criteria
-**Find Plan**: Intelligent plan discovery using keyword matching
-**Create Plan**: Structured plan creation with validation
-**Update Progress**: Flexible progress tracking with time parsing
-**Add Progress Record**: Simple progress recording with natural language support
-**Analyze & Record Progress**: Advanced AI-powered progress analysis
+**Query Plans**: Comprehensive plan search with multiple filter criteria and detailed reasoning
+**Find Plan**: Intelligent plan discovery using keyword matching with enhanced search logic
+**Create Plan**: Structured plan creation with validation and justification requirements
+**Update Progress**: Flexible progress tracking with time parsing and detailed analysis
+**Add Progress Record**: Simple progress recording with natural language support and justification
+**Analyze & Record Progress**: Advanced AI-powered progress analysis with intelligent content parsing
 
-#### Goal Management
-**Create Goal**: Target creation with tagging system
+#### Enhanced Goal Management
+**Create Goal**: Target creation with tagging system and justification requirements
 
-#### System Information
-**Get System Options**: Dynamic system configuration retrieval
+#### Enhanced System Information
+**Get System Options**: Dynamic system configuration retrieval with enhanced guidance
 
 **Section sources**
-- [route.ts:287-1452](file://src/app/api/copilotkit/route.ts#L287-L1452)
+- [route.ts:287-1573](file://src/app/api/copilotkit/route.ts#L287-L1573)
 
-### Action Parameter Validation
+### Enhanced Action Parameter Validation
 
-Each action includes comprehensive parameter validation and error handling:
+Each action includes comprehensive parameter validation and error handling with detailed reasoning requirements:
 
 ```mermaid
 classDiagram
@@ -371,13 +398,37 @@ class ActionResult {
 +boolean success
 +any data
 +string error
++string justification
 }
 ActionHandler --> ActionParameter : validates
 ActionHandler --> ActionResult : returns
 ```
 
 **Diagram sources**
-- [route.ts:289-1452](file://src/app/api/copilotkit/route.ts#L289-L1452)
+- [route.ts:289-1573](file://src/app/api/copilotkit/route.ts#L289-L1573)
+
+### Enhanced Recommendation System
+
+The recommendation system now requires detailed reasoning for all types of recommendations:
+
+#### Task Recommendation Enhancement
+- **Mandatory Justification**: Every recommended task must explain why it's valuable
+- **Contextual Analysis**: Recommendations consider current progress, difficulty, and priorities
+- **Personalized Rationale**: Justifications are tailored to individual user states
+
+#### Book Recommendation Enhancement
+- **Comprehensive Formatting**: Books are presented with detailed markdown structure
+- **Reading Guidance**: Includes difficulty levels, reading time estimates, and chapter outlines
+- **Learning Plan Suggestions**: Provides specific reading plans based on user's existing goals
+
+#### Study Plan/Method Recommendation Enhancement
+- **Personalized Justification**: Explains why specific methods suit the user's current situation
+- **Integration Analysis**: Connects recommendations to existing goals and progress
+- **Progress Alignment**: Ensures recommendations align with current learning objectives
+
+**Section sources**
+- [route.ts:290-306](file://src/app/api/copilotkit/route.ts#L290-L306)
+- [route.ts:143-175](file://src/app/api/copilotkit/route.ts#L143-L175)
 
 ## Data Models
 
@@ -449,17 +500,20 @@ The system implements efficient data flow patterns for optimal performance:
 sequenceDiagram
 participant User as User Input
 participant Action as Action Handler
+participant Reasoning as Reasoning Engine
 participant DB as Database
 participant Cache as Local Cache
 User->>Action : Request Data
-Action->>Cache : Check Cache
-Cache-->>Action : Cache Hit/Miss
+Action->>Reasoning : Apply Enhanced Instructions
+Reasoning->>Cache : Check Cache
+Cache-->>Reasoning : Cache Hit/Miss
 alt Cache Miss
-Action->>DB : Query Data
-DB-->>Action : Return Results
-Action->>Cache : Store Results
+Reasoning->>DB : Query Data
+DB-->>Reasoning : Return Results
+Reasoning->>Cache : Store Results
 end
-Action-->>User : Processed Data
+Reasoning-->>Action : Processed Data with Justification
+Action-->>User : Processed Data with Detailed Reasoning
 Note over User,DB : Automatic caching reduces database load
 ```
 
@@ -478,13 +532,14 @@ The system requires specific environment variables for proper operation:
 | `OPENAI_BASE_URL` | AI provider base URL | `https://api.openai.com/v1` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/dbname` |
 
-### AI Model Configuration
+### Enhanced AI Model Configuration
 
-The system supports multiple AI providers through configurable adapters:
+The system supports multiple AI providers through configurable adapters with comprehensive instruction sets:
 
-- **OpenAI Compatible**: Default configuration for OpenAI models
-- **Alibaba Cloud DashScope**: Alternative provider for Qwen models
+- **OpenAI Compatible**: Default configuration for OpenAI models with enhanced system prompts
+- **Alibaba Cloud DashScope**: Alternative provider for Qwen models with specialized instructions
 - **Model Selection**: Configurable model choice with automatic fallback
+- **Enhanced Instructions**: Mandatory reasoning requirements for all recommendations
 
 ### Authentication Setup
 
@@ -522,14 +577,15 @@ I --> J
 **Diagram sources**
 - [middleware.ts:19-34](file://middleware.ts#L19-L34)
 
-### Message Security
+### Enhanced Message Security
 
-Advanced message filtering and sanitization:
+Advanced message filtering and sanitization with comprehensive instruction sets:
 
 - **Role Validation**: Only supported roles are accepted
-- **Developer Role Replacement**: Automatic conversion of invalid roles
+- **Developer Role Replacement**: Automatic conversion of invalid roles with detailed logging
 - **Content Sanitization**: Malformed content detection and handling
-- **Fetch Interception**: Global fetch request monitoring
+- **Fetch Interception**: Global fetch request monitoring with enhanced developer role replacement
+- **System Prompt Injection**: Comprehensive system prompts with detailed reasoning requirements
 
 ### Rate Limiting and Throttling
 
@@ -540,18 +596,19 @@ The system includes built-in rate limiting mechanisms:
 - **Timeout Handling**: Graceful timeout management
 
 **Section sources**
-- [route.ts:1545-1605](file://src/app/api/copilotkit/route.ts#L1545-L1605)
+- [route.ts:1668-1728](file://src/app/api/copilotkit/route.ts#L1668-L1728)
 - [middleware.ts:1-40](file://middleware.ts#L1-L40)
 
 ## Performance Considerations
 
-### Caching Strategies
+### Enhanced Caching Strategies
 
-The system implements multiple caching layers:
+The system implements multiple caching layers with comprehensive instruction sets:
 
 - **Local Memory Caching**: Frequently accessed data caching
-- **Database Query Optimization**: Efficient query patterns
+- **Database Query Optimization**: Efficient query patterns with enhanced filtering
 - **Response Caching**: Static content caching
+- **Instruction Set Caching**: System prompt caching for improved performance
 
 ### Asynchronous Processing
 
@@ -560,17 +617,19 @@ Non-blocking operations for improved performance:
 - **Background Task Processing**: Long-running operations
 - **Connection Pooling**: Database connection reuse
 - **Stream Processing**: Large response handling
+- **Enhanced Parallel Processing**: Multiple recommendation processing
 
-### Monitoring and Logging
+### Enhanced Monitoring and Logging
 
-Comprehensive monitoring capabilities:
+Comprehensive monitoring capabilities with detailed reasoning tracking:
 
-- **Request Logging**: Complete request/response logging
-- **Performance Metrics**: Response time tracking
-- **Error Tracking**: Detailed error reporting
+- **Request Logging**: Complete request/response logging with instruction set compliance
+- **Performance Metrics**: Response time tracking with reasoning overhead
+- **Error Tracking**: Detailed error reporting with reasoning failures
+- **Reasoning Compliance**: Track adherence to detailed reasoning requirements
 
 **Section sources**
-- [route.ts:1-1636](file://src/app/api/copilotkit/route.ts#L1-L1636)
+- [route.ts:1-1759](file://src/app/api/copilotkit/route.ts#L1-L1759)
 
 ## Troubleshooting Guide
 
@@ -587,6 +646,10 @@ Comprehensive monitoring capabilities:
 #### AI Provider Configuration
 - **Issue**: AI model response errors
 - **Solution**: Verify API key and base URL configuration
+
+#### Enhanced Instruction Compliance
+- **Issue**: Missing detailed reasoning in recommendations
+- **Solution**: Ensure system prompts are properly injected and AI follows reasoning requirements
 
 ### Debugging Tools
 
@@ -621,13 +684,14 @@ DebugTools --> EnvResponse : returns
 - [test-action/route.ts:6-152](file://src/app/api/test-action/route.ts#L6-L152)
 - [debug/env/route.ts:1-10](file://src/app/api/debug/env/route.ts#L1-L10)
 
-### Error Handling Patterns
+### Enhanced Error Handling Patterns
 
-Robust error handling with detailed logging:
+Robust error handling with detailed logging and reasoning compliance:
 
-- **Structured Error Responses**: Consistent error format
-- **Stack Trace Capture**: Complete error context
-- **Graceful Degradation**: Fallback mechanisms
+- **Structured Error Responses**: Consistent error format with reasoning failure details
+- **Stack Trace Capture**: Complete error context with instruction set violations
+- **Graceful Degradation**: Fallback mechanisms for reasoning failures
+- **Instruction Compliance Tracking**: Monitor adherence to detailed reasoning requirements
 
 **Section sources**
 - [test-action/route.ts:1-153](file://src/app/api/test-action/route.ts#L1-L153)
@@ -635,12 +699,14 @@ Robust error handling with detailed logging:
 
 ## Conclusion
 
-The Copilot Integration Endpoints provide a comprehensive AI-powered solution for goal management and task tracking. The system offers:
+The Copilot Integration Endpoints provide a comprehensive AI-powered solution for goal management and task tracking with enhanced instruction sets. The system offers:
 
-- **Flexible AI Integration**: Support for multiple AI providers through adapter pattern
-- **Comprehensive Action System**: Rich set of predefined actions for various use cases
-- **Robust Security**: Multi-layered authentication and security measures
-- **Performance Optimization**: Caching, asynchronous processing, and monitoring
-- **Developer-Friendly**: Clear API design, comprehensive documentation, and debugging tools
+- **Enhanced AI Integration**: Support for multiple AI providers through adapter pattern with comprehensive instruction sets
+- **Rich Action System**: Expanded set of predefined actions for various use cases with detailed reasoning requirements
+- **Robust Security**: Multi-layered authentication and security measures with enhanced message filtering
+- **Performance Optimization**: Caching, asynchronous processing, and monitoring with instruction set compliance tracking
+- **Developer-Friendly**: Clear API design, comprehensive documentation, and debugging tools with reasoning validation
+- **Comprehensive Reasoning**: Mandatory detailed justification for all recommendations across tasks, books, and study plans
+- **Advanced Content Processing**: Intelligent parsing and analysis of user inputs with enhanced recommendation logic
 
-The modular architecture ensures scalability and maintainability while the comprehensive error handling and logging systems provide excellent operational visibility. The system is ready for production deployment with proper configuration and security hardening.
+The modular architecture ensures scalability and maintainability while the comprehensive error handling and logging systems provide excellent operational visibility. The system is ready for production deployment with proper configuration and security hardening, plus enhanced instruction compliance monitoring.

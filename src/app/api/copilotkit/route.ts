@@ -305,6 +305,37 @@ class CustomOpenAI extends OpenAI {
 
 **原则**：不要只列出推荐项，要让用户理解"为什么"这个推荐对他有价值。
 
+**重要指令 - 时间段查询规则（必须遵守）：**
+
+当用户的问题涉及到时间段（如今天、本周、下周、本月、本季度、今年等）时，**必须限制时间范围**进行数据查询：
+
+1. **时间关键词识别**：
+   - **今天**：当前日期 00:00 至 23:59
+   - **昨天**：昨天日期 00:00 至 23:59
+   - **本周/这周**：本周一 00:00 至本周日 23:59
+   - **下周**：下周一 00:00 至下周日 23:59
+   - **本月/这个月**：本月1日 00:00 至本月最后一日 23:59
+   - **下月**：下月1日 00:00 至下月最后一日 23:59
+   - **本季度/这季度**：本季度首月1日 00:00 至本季度末月最后一日 23:59
+   - **今年/本年度**：本年1月1日 00:00 至本年12月31日 23:59
+
+2. **查询数据时的处理**：
+   - 当用户询问"我今天完成了什么"、"本周有哪些进展"、"本月完成了哪些任务"等问题时
+   - **必须**根据对应的时间段限制查询范围
+   - 使用 'queryPlans' 或 'findPlan' 查询后，**必须进一步过滤**结果中符合时间条件的进展记录(progressRecords)
+   - 只返回在指定时间范围内的进展记录
+
+3. **时间范围过滤示例**：
+   - 用户问："我今天有什么进展？"
+   - 正确做法：
+     1. 调用 'queryPlans' 获取所有计划
+     2. 筛选出今天（当前日期 00:00-23:59）有进展记录的计划
+     3. 只展示今天产生的进展记录，而不是所有历史记录
+
+4. **默认时间范围**：
+   - 如果用户没有明确指定时间范围，默认查询所有时间的数据
+   - 一旦用户提到任何时间词，**必须**应用时间过滤
+
 请始终以友好、专业的态度协助用户，并充分利用联网搜索功能提供准确、最新的信息。`;
         
         // 如果没有系统消息，或者第一条消息不是系统消息，则添加系统提示
@@ -450,7 +481,7 @@ const runtime = new CopilotRuntime({
     // 查询计划
     {
       name: "queryPlans",
-      description: "查询计划列表，支持多种筛选条件。默认只返回未完成的任务，除非用户明确询问已完成的任务",
+      description: "查询计划列表，支持多种筛选条件。默认只返回未完成的任务，除非用户明确询问已完成的任务。支持时间范围筛选",
       parameters: [
         {
           name: "difficulty",
@@ -475,12 +506,18 @@ const runtime = new CopilotRuntime({
           type: "boolean",
           description: "是否包含已完成的任务。默认为false，只在用户明确询问已完成任务时设为true",
           required: false,
+        },
+        {
+          name: "timeRange",
+          type: "string",
+          description: "时间范围筛选，支持：today(今天)、yesterday(昨天)、this_week(本周)、next_week(下周)、this_month(本月)、next_month(下月)、this_quarter(本季度)、this_year(今年)。当用户问题涉及时间段时必须使用",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 queryPlans called:", args);
         try {
-          const { difficulty, tag, keyword, includeCompleted } = args;
+          const { difficulty, tag, keyword, includeCompleted, timeRange } = args;
           
           let where: any = {};
           
@@ -522,13 +559,84 @@ const runtime = new CopilotRuntime({
               return plan.progress < 1;
             });
           }
-          
+
+          // 时间范围过滤处理
+          let startDate: Date | null = null;
+          let endDate: Date | null = null;
+          const now = new Date();
+
+          if (timeRange) {
+            switch (timeRange.toLowerCase()) {
+              case 'today':
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+                break;
+              case 'yesterday':
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
+                endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+                break;
+              case 'this_week':
+                const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - diffToMonday);
+                startDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0);
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                endDate = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59);
+                break;
+              case 'next_week':
+                const nextMonday = new Date(now);
+                nextMonday.setDate(now.getDate() + (7 - now.getDay() + 1));
+                startDate = new Date(nextMonday.getFullYear(), nextMonday.getMonth(), nextMonday.getDate(), 0, 0, 0);
+                const nextSunday = new Date(nextMonday);
+                nextSunday.setDate(nextMonday.getDate() + 6);
+                endDate = new Date(nextSunday.getFullYear(), nextSunday.getMonth(), nextSunday.getDate(), 23, 59, 59);
+                break;
+              case 'this_month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                break;
+              case 'next_month':
+                startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                break;
+              case 'this_quarter':
+                const quarter = Math.floor(now.getMonth() / 3);
+                startDate = new Date(now.getFullYear(), quarter * 3, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59);
+                break;
+              case 'this_year':
+                startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                break;
+            }
+          }
+
+          // 如果指定了时间范围，过滤进展记录
+          if (startDate && endDate) {
+            plans = plans.map((plan: any) => ({
+              ...plan,
+              progressRecords: plan.progressRecords.filter((record: any) => {
+                const recordDate = new Date(record.gmt_create);
+                return recordDate >= startDate! && recordDate <= endDate!;
+              })
+            })).filter((plan: any) => {
+              // 如果只查询有进展的计划，可以过滤掉没有进展记录的计划
+              // 但如果用户查询"今天有什么进展"，应该返回有进展的计划
+              // 这里保留所有计划，但进展记录已按时间过滤
+              return true;
+            });
+          }
+
           const result = plans.map((plan: any) => ({
             ...plan,
             tags: plan.tags.map((t: any) => t.tag)
           }));
 
-          console.log("✅ Found", result.length, "plans");
+          console.log("✅ Found", result.length, "plans", timeRange ? `(filtered by timeRange: ${timeRange})` : '');
           return { success: true, data: result };
         } catch (error: any) {
           console.error("❌ Error:", error);
@@ -718,7 +826,7 @@ const runtime = new CopilotRuntime({
     // 查找计划 - 简化版本
     {
       name: "findPlan",
-      description: "根据名称、关键词或标签查找计划，支持模糊搜索。默认只返回未完成的任务，除非用户明确询问已完成的任务",
+      description: "根据名称、关键词或标签查找计划，支持模糊搜索。默认只返回未完成的任务，除非用户明确询问已完成的任务。支持时间范围筛选",
       parameters: [
         {
           name: "searchTerm",
@@ -731,12 +839,18 @@ const runtime = new CopilotRuntime({
           type: "boolean",
           description: "是否包含已完成的任务。默认为false，只在用户明确询问已完成任务时设为true",
           required: false,
+        },
+        {
+          name: "timeRange",
+          type: "string",
+          description: "时间范围筛选，支持：today(今天)、yesterday(昨天)、this_week(本周)、next_week(下周)、this_month(本月)、next_month(下月)、this_quarter(本季度)、this_year(今年)。当用户问题涉及时间段时必须使用",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("🔍 findPlan called:", args);
         try {
-          const { searchTerm, includeCompleted } = args;
+          const { searchTerm, includeCompleted, timeRange } = args;
           
           // 将搜索词分割成多个关键词
           const keywords = searchTerm.split(/[\s,，、]+/).filter((word: string) => word.length > 0);
@@ -779,6 +893,72 @@ const runtime = new CopilotRuntime({
               // 普通任务：检查进度是否小于100%
               return plan.progress < 1;
             });
+          }
+
+          // 时间范围过滤处理
+          let startDate: Date | null = null;
+          let endDate: Date | null = null;
+          const now = new Date();
+
+          if (timeRange) {
+            switch (timeRange.toLowerCase()) {
+              case 'today':
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+                break;
+              case 'yesterday':
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
+                endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+                break;
+              case 'this_week':
+                const dayOfWeek = now.getDay();
+                const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - diffToMonday);
+                startDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0);
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                endDate = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59);
+                break;
+              case 'next_week':
+                const nextMonday = new Date(now);
+                nextMonday.setDate(now.getDate() + (7 - now.getDay() + 1));
+                startDate = new Date(nextMonday.getFullYear(), nextMonday.getMonth(), nextMonday.getDate(), 0, 0, 0);
+                const nextSunday = new Date(nextMonday);
+                nextSunday.setDate(nextMonday.getDate() + 6);
+                endDate = new Date(nextSunday.getFullYear(), nextSunday.getMonth(), nextSunday.getDate(), 23, 59, 59);
+                break;
+              case 'this_month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                break;
+              case 'next_month':
+                startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                break;
+              case 'this_quarter':
+                const quarter = Math.floor(now.getMonth() / 3);
+                startDate = new Date(now.getFullYear(), quarter * 3, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59);
+                break;
+              case 'this_year':
+                startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+                endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                break;
+            }
+          }
+
+          // 如果指定了时间范围，过滤进展记录
+          if (startDate && endDate) {
+            plans = plans.map((plan: any) => ({
+              ...plan,
+              progressRecords: plan.progressRecords.filter((record: any) => {
+                const recordDate = new Date(record.gmt_create);
+                return recordDate >= startDate! && recordDate <= endDate!;
+              })
+            }));
           }
 
           // 按匹配度排序：匹配更多关键词的计划排在前面
