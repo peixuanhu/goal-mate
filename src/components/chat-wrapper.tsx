@@ -377,7 +377,7 @@ export function ChatWrapper() {
         .copilotKitMarkdown p,
         .copilotKitMarkdownElement p {
           display: block !important;
-          margin: 0.35rem 0 !important;
+          margin: 0.25rem 0 !important;
         }
         
         .copilotKit-markdown p:first-child,
@@ -476,10 +476,10 @@ export function ChatWrapper() {
           list-style-type: decimal !important;
         }
         
-        /* Markdown 段落样式 */
+        /* Markdown 段落样式 - 恢复普通行间距 */
         .copilotKitAssistantMessage p {
-          margin: 0.1rem 0 !important;
-          line-height: 1.5 !important;
+          margin: 0.25rem 0 !important;
+          line-height: 1.6 !important;
         }
         
         /* 移除第一个段落的顶部间距 */
@@ -541,7 +541,7 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage hr {
           border: none !important;
           border-top: 1px solid #e5e7eb !important;
-          margin: 0.75rem 0 !important;
+          margin: 0.45rem 0 !important;
         }
         
         /* Markdown 引用块 */
@@ -689,7 +689,7 @@ export function ChatWrapper() {
         .copilotKitChat hr,
         .copilotKitChat div[class*="divider"],
         .copilotKitChat div[class*="separator"] {
-          margin: 3rem 3rem !important;
+          margin: 0.5rem auto !important;
           width: 60% !important;
           border-color: #e5e7eb !important;
         }
