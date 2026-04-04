@@ -12,7 +12,6 @@
 - [label.tsx](file://src/components/ui/label.tsx)
 - [textarea.tsx](file://src/components/ui/textarea.tsx)
 - [text-preview.tsx](file://src/components/ui/text-preview.tsx)
-- [markdown-editor.tsx](file://src/components/ui/markdown-editor.tsx)
 - [markdown-preview.tsx](file://src/components/ui/markdown-preview.tsx)
 - [tabs.tsx](file://src/components/ui/tabs.tsx)
 - [wysiwyg-editor.tsx](file://src/components/ui/wysiwyg-editor.tsx)
@@ -26,12 +25,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added new Markdown Editor component with comprehensive editing capabilities
-- Added new Markdown Preview component for displaying formatted content
-- Added new Tabs component as a foundational UI primitive
-- Enhanced the UI component library with full-featured markdown editing interface
-- Integrated React Markdown with GFM support for GitHub Flavored Markdown
-- Added toolbar buttons, undo/redo history, fullscreen mode, and split-view editing/preview modes
+- Replaced MarkdownEditor component with new WysiwygEditor component using @uiw/react-md-editor library
+- WysiwygEditor provides enhanced functionality with real-time preview, full-screen mode, and professional-grade markdown editing capabilities
+- Updated component documentation to reflect the new WysiwygEditor implementation
+- Removed references to the legacy MarkdownEditor component
+- Updated usage examples to demonstrate the new WysiwygEditor component
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -48,17 +46,17 @@
 ## Introduction
 This document describes the reusable React component library and form handling patterns used in the project. It focuses on:
 - Visual appearance, behavior, and user interaction patterns for core components
-- Props/attributes, events, and customization options for Button, Card, Input, Select, Table, Combobox, Slider, Label, Textarea, TextPreview, MarkdownEditor, MarkdownPreview, and Tabs
+- Props/attributes, events, and customization options for Button, Card, Input, Select, Table, Combobox, Slider, Label, Textarea, TextPreview, WysiwygEditor, MarkdownPreview, and Tabs
 - Usage examples via code snippet paths
 - Responsive design, accessibility, and cross-browser compatibility guidelines
 - Component states, animations, and integration patterns
 - Form validation, error handling, and user feedback mechanisms
 - Style customization, theming, and composition patterns
 - Chat interface components and AI interaction elements
-- **New**: Comprehensive markdown editing capabilities with real-time preview and advanced formatting options
+- **New**: Professional-grade WYSIWYG markdown editing capabilities with @uiw/react-md-editor library
 
 ## Project Structure
-The UI components are organized under a dedicated ui folder and integrated with shared utilities and application pages. The chat UI leverages CopilotKit and is customized with styles and behavior. The new markdown components provide full-featured editing capabilities with toolbar integration and split-view modes.
+The UI components are organized under a dedicated ui folder and integrated with shared utilities and application pages. The chat UI leverages CopilotKit and is customized with styles and behavior. The new WYSIWYG editor component provides professional-grade editing capabilities with real-time preview and full-screen mode using the @uiw/react-md-editor library.
 
 ```mermaid
 graph TB
@@ -73,7 +71,7 @@ SL["Slider"]
 LB["Label"]
 TA["Textarea"]
 TP["TextPreview"]
-ME["MarkdownEditor (Write/Preview Tabs, Toolbar, History)"]
+WE["WysiwygEditor (Real-time Preview, Full-screen Mode)"]
 MP["MarkdownPreview (Toggle, Truncate, Expand)"]
 TB["Tabs (Root, List, Trigger, Content)"]
 end
@@ -95,7 +93,7 @@ SL --> U
 LB --> U
 TA --> U
 TP --> U
-ME --> U
+WE --> U
 MP --> U
 TB --> U
 CW --> CI
@@ -115,9 +113,9 @@ TCP --> CW
 - [label.tsx:1-25](file://src/components/ui/label.tsx#L1-L25)
 - [textarea.tsx:1-19](file://src/components/ui/textarea.tsx#L1-L19)
 - [text-preview.tsx:1-241](file://src/components/ui/text-preview.tsx#L1-L241)
-- [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
 - [tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [chat-wrapper.tsx:1-709](file://src/components/chat-wrapper.tsx#L1-L709)
 - [copilot-clearing-input.tsx:1-175](file://src/components/copilot-clearing-input.tsx#L1-L175)
 - [default-tool-render.tsx:1-104](file://src/components/default-tool-render.tsx#L1-L104)
@@ -136,9 +134,9 @@ TCP --> CW
 - [label.tsx:1-25](file://src/components/ui/label.tsx#L1-L25)
 - [textarea.tsx:1-19](file://src/components/ui/textarea.tsx#L1-L19)
 - [text-preview.tsx:1-241](file://src/components/ui/text-preview.tsx#L1-L241)
-- [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
 - [tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [chat-wrapper.tsx:1-709](file://src/components/chat-wrapper.tsx#L1-L709)
 - [copilot-clearing-input.tsx:1-175](file://src/components/copilot-clearing-input.tsx#L1-L175)
 - [default-tool-render.tsx:1-104](file://src/components/default-tool-render.tsx#L1-L104)
@@ -147,7 +145,7 @@ TCP --> CW
 - [utils.ts:1-7](file://src/lib/utils.ts#L1-L7)
 
 ## Core Components
-This section documents the primary UI primitives and composite components used across the application, including the new markdown editing capabilities.
+This section documents the primary UI primitives and composite components used across the application, including the new WYSIWYG editing capabilities.
 
 - Button
   - Purpose: Standard action control with variants and sizes.
@@ -195,12 +193,12 @@ This section documents the primary UI primitives and composite components used a
   - Props: text, maxLength, className, truncateLines.
   - Behavior: Tooltip positioning, click-outside dismissal, copy feedback.
 
-- **MarkdownEditor** *(New)*
-  - Purpose: Full-featured markdown editor with write/preview tabs, toolbar, undo/redo history, and fullscreen mode.
-  - Features: Real-time preview, toolbar with formatting buttons, character/word counters, GFM (GitHub Flavored Markdown) support, split-view editing/preview modes.
-  - Props: value, onChange, placeholder, className, minHeight, maxHeight, label, id, required, disabled.
-  - Behavior: Tabbed interface with write/preview modes, toolbar button insertion, undo/redo history management, fullscreen toggle.
-  - Integration: Built on top of Tabs component, uses ReactMarkdown with remark-gfm plugin.
+- **WysiwygEditor** *(New)*
+  - Purpose: Professional-grade WYSIWYG markdown editor with real-time preview, full-screen mode, and toolbar customization.
+  - Features: Real-time preview with live edit mode, professional markdown editing interface, full-screen editing mode, character/word counters, responsive design with dynamic heights.
+  - Props: value, onChange, placeholder, className, minHeight, label, id, required, disabled.
+  - Behavior: Live edit and preview modes with instant rendering, full-screen toggle with viewport adaptation, character/word counters, toolbar customization with edit/preview buttons.
+  - Integration: Built with @uiw/react-md-editor library; uses dynamic imports for SSR compatibility; integrates with Button component for toolbar actions.
 
 - **MarkdownPreview** *(New)*
   - Purpose: Formatted markdown preview with toggle and expand/collapse functionality.
@@ -214,7 +212,7 @@ This section documents the primary UI primitives and composite components used a
   - Features: Root container, list container, individual triggers, and content panels.
   - Props: All components accept className and pass through primitive props.
   - Accessibility: Radix UI primitives; keyboard navigation; focus management.
-  - Integration: Used by MarkdownEditor for write/preview modes and by other composite components.
+  - Integration: Used by WysiwygEditor for mode switching and by other composite components.
 
 **Section sources**
 - [button.tsx:7-36](file://src/components/ui/button.tsx#L7-L36)
@@ -227,12 +225,11 @@ This section documents the primary UI primitives and composite components used a
 - [label.tsx:8-24](file://src/components/ui/label.tsx#L8-L24)
 - [textarea.tsx:5-18](file://src/components/ui/textarea.tsx#L5-L18)
 - [text-preview.tsx:7-241](file://src/components/ui/text-preview.tsx#L7-L241)
-- [markdown-editor.tsx:33-44](file://src/components/ui/markdown-editor.tsx#L33-L44)
 - [markdown-preview.tsx:11-16](file://src/components/ui/markdown-preview.tsx#L11-L16)
 - [tabs.tsx:8-66](file://src/components/ui/tabs.tsx#L8-L66)
 
 ## Architecture Overview
-The UI library composes Tailwind utility classes with class variance authority for variants and sizes. Components use a shared cn utility for merging classes. The new markdown components leverage ReactMarkdown with remark-gfm for comprehensive markdown parsing and rendering. The chat UI integrates CopilotKit with custom input and styling, and renders tool call outputs with a default renderer.
+The UI library composes Tailwind utility classes with class variance authority for variants and sizes. Components use a shared cn utility for merging classes. The new WYSIWYG editor component leverages @uiw/react-md-editor library for professional-grade markdown editing with real-time preview capabilities. The chat UI integrates CopilotKit with custom input and styling, and renders tool call outputs with a default renderer.
 
 ```mermaid
 graph TB
@@ -241,9 +238,9 @@ BTN["Button"]
 SEL["Select"]
 TAB["Table"]
 TXT["TextPreview"]
-MED["MarkdownEditor"]
+WED["WysiwygEditor"]
 MPV["MarkdownPreview"]
-TBS["Tabs"]
+TB["Tabs"]
 CHAT["ChatWrapper"]
 INPUT["CopilotClearingInput"]
 TOOL["DefaultToolRender"]
@@ -251,8 +248,8 @@ BTN --> CN
 SEL --> CN
 TAB --> CN
 TXT --> CN
-MED --> CN
-MED --> TBS
+WED --> CN
+WED --> TB
 MPV --> CN
 CHAT --> INPUT
 CHAT --> TOOL
@@ -264,7 +261,7 @@ CHAT --> TOOL
 - [select.tsx:7-185](file://src/components/ui/select.tsx#L7-L185)
 - [table.tsx:5-116](file://src/components/ui/table.tsx#L5-L116)
 - [text-preview.tsx:1-241](file://src/components/ui/text-preview.tsx#L1-L241)
-- [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
 - [tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
 - [chat-wrapper.tsx:1-709](file://src/components/chat-wrapper.tsx#L1-L709)
@@ -596,41 +593,35 @@ TT->>TP : Dismiss tooltip
 **Section sources**
 - [text-preview.tsx:7-241](file://src/components/ui/text-preview.tsx#L7-L241)
 
-### **MarkdownEditor** *(New)*
-- Visual appearance: Split-pane interface with write/preview tabs, toolbar with formatting buttons, character/word counters, and footer with GFM support indicator.
-- Behavior: Tabbed interface switching between raw text editing and rendered preview; toolbar button insertion with cursor preservation; undo/redo history with 50-step limit; fullscreen mode with viewport adaptation.
-- Interaction: Click toolbar buttons to insert markdown syntax; switch between write/preview modes; use fullscreen toggle; character/word counters update in real-time.
-- Props/events: value, onChange, placeholder, className, minHeight, maxHeight, label, id, required, disabled; forwards textarea props; manages internal state for tabs, fullscreen, history.
-- Features: 25+ toolbar buttons including headings, bold, italic, lists, quotes, code blocks, inline code, strikethrough, links, images, tables, undo/redo; GFM (GitHub Flavored Markdown) support via remark-gfm; responsive design with adaptive heights.
-- Integration: Built on Tabs component; uses ReactMarkdown with remark-gfm plugin; integrates with Button component for toolbar actions.
+### **WysiwygEditor** *(New)*
+- Visual appearance: Professional WYSIWYG interface with live edit and preview modes, full-screen editing capability, character/word counters, and clean toolbar with edit/preview buttons.
+- Behavior: Real-time preview with live edit mode switching, full-screen toggle with viewport adaptation, character/word counters, and responsive design with dynamic heights.
+- Interaction: Click edit/preview buttons to switch modes; use full-screen toggle; character/word counters update automatically; toolbar buttons provide markdown shortcuts.
+- Props/events: value, onChange, placeholder, className, minHeight, label, id, required, disabled; manages internal state for previewMode and isFullscreen.
+- Features: Professional-grade markdown editing with @uiw/react-md-editor library, live edit mode with instant rendering, preview-only mode, full-screen editing with viewport adaptation, character/word counters, responsive design with dynamic heights.
+- Integration: Built with @uiw/react-md-editor library; uses dynamic imports for SSR compatibility; integrates with Button component for toolbar actions; supports label and required props for form integration.
 
 ```mermaid
 flowchart TD
-Start(["MarkdownEditor Mount"]) --> Init["Initialize state:<br/>- Active tab: write<br/>- Fullscreen: false<br/>- History: [value]<br/>- History index: 0"]
-Init --> Render["Render UI:<br/>- Tabs (write/preview)<br/>- Toolbar buttons<br/>- Textarea<br/>- Preview panel<br/>- Footer stats"]
+Start(["WysiwygEditor Mount"]) --> Init["Initialize state:<br/>- previewMode: live<br/>- isFullscreen: false"]
+Init --> Render["Render UI:<br/>- Custom toolbar (edit/preview)<br/>- Full-screen toggle<br/>- MDEditor component<br/>- Footer stats"]
 Render --> UserInput{"User Interaction?"}
-UserInput --> |Type| HandleChange["handleChange()<br/>- Update value<br/>- Save to history<br/>- Call onChange"]
-UserInput --> |Toolbar| InsertText["insertText()<br/>- Get selection<br/>- Insert markdown<br/>- Update cursor<br/>- Save to history"]
-UserInput --> |Tab Switch| SwitchTab["setActiveTab()<br/>- Switch between write/preview"]
-UserInput --> |Fullscreen| ToggleFullscreen["setIsFullscreen()<br/>- Toggle fullscreen mode<br/>- Adapt heights"]
-UserInput --> |Undo| HandleUndo["handleUndo()<br/>- Move history index back<br/>- Update value"]
-UserInput --> |Redo| HandleRedo["handleRedo()<br/>- Move history index forward<br/>- Update value"]
-HandleChange --> Render
-InsertText --> Render
-SwitchTab --> Render
+UserInput --> |Switch Mode| SwitchMode["setPreviewMode()<br/>- Switch between live/edit<br/>- Update mode indicator"]
+UserInput --> |Fullscreen| ToggleFullscreen["setIsFullscreen()<br/>- Toggle fullscreen mode<br/>- Adapt heights<br/>- Update button icon"]
+UserInput --> |Edit Text| HandleChange["handleChange()<br/>- Update value<br/>- Call onChange"]
+SwitchMode --> Render
 ToggleFullscreen --> Render
-HandleUndo --> Render
-HandleRedo --> Render
+HandleChange --> Render
 ```
 
 **Diagram sources**
-- [markdown-editor.tsx:79-100](file://src/components/ui/markdown-editor.tsx#L79-L100)
-- [markdown-editor.tsx:102-120](file://src/components/ui/markdown-editor.tsx#L102-L120)
-- [markdown-editor.tsx:173-187](file://src/components/ui/markdown-editor.tsx#L173-L187)
+- [wysiwyg-editor.tsx:42-47](file://src/components/ui/wysiwyg-editor.tsx#L42-L47)
+- [wysiwyg-editor.tsx:67-108](file://src/components/ui/wysiwyg-editor.tsx#L67-L108)
+- [wysiwyg-editor.tsx:130-144](file://src/components/ui/wysiwyg-editor.tsx#L130-L144)
 
 **Section sources**
-- [markdown-editor.tsx:33-44](file://src/components/ui/markdown-editor.tsx#L33-L44)
-- [markdown-editor.tsx:67-353](file://src/components/ui/markdown-editor.tsx#L67-L353)
+- [wysiwyg-editor.tsx:19-41](file://src/components/ui/wysiwyg-editor.tsx#L19-L41)
+- [wysiwyg-editor.tsx:49-164](file://src/components/ui/wysiwyg-editor.tsx#L49-L164)
 
 ### **MarkdownPreview** *(New)*
 - Visual appearance: Toggle between raw text and rendered markdown preview; responsive typography with prose classes; expand/collapse functionality for long content.
@@ -672,7 +663,7 @@ ExpandBtn --> End
 - Interaction: Click triggers to switch active tab; keyboard navigation supported; focus management preserved.
 - Props/events: All components accept className and pass through primitive props; TabsRoot manages state, TabsList arranges triggers, TabsTrigger handles individual tabs, TabsContent displays tab content.
 - Accessibility: Uses Radix UI primitives; supports keyboard navigation; focus-visible rings; proper ARIA attributes.
-- Integration: Foundation component used by MarkdownEditor for write/preview modes and by other composite components.
+- Integration: Foundation component used by WysiwygEditor for mode switching and by other composite components.
 
 ```mermaid
 classDiagram
@@ -760,19 +751,19 @@ CI->>CI : Reset textarea height
 ## Dependency Analysis
 - Component coupling
   - UI components depend on shared cn utility for class merging.
-  - Select, Button, Input, Table, TextPreview, MarkdownEditor, and MarkdownPreview use cn for consistent styling.
-  - MarkdownEditor depends on Tabs component for its tabbed interface.
+  - Button, Input, Select, Table, TextPreview, WysiwygEditor, and MarkdownPreview use cn for consistent styling.
+  - WysiwygEditor depends on Tabs component for its mode switching interface.
 - External dependencies
   - Button uses class-variance-authority and radix slot.
   - Select uses @radix-ui/react-select; Slider uses @radix-ui/react-slider; Label uses @radix-ui/react-label.
   - Tabs uses @radix-ui/react-tabs.
-  - MarkdownEditor uses react-markdown, remark-gfm, lucide-react, and ReactMarkdown.
+  - WysiwygEditor uses @uiw/react-md-editor and @uiw/react-markdown-preview libraries.
   - MarkdownPreview uses react-markdown, remark-gfm, lucide-react.
   - Chat UI depends on @copilotkit/react-ui and @copilotkit/react-core.
 - Integration points
   - ChatWrapper integrates CopilotClearingInput and DefaultToolRender.
   - CopilotKit page demonstrates sidebar and tool rendering integration.
-  - MarkdownEditor integrates Tabs for its interface structure.
+  - WysiwygEditor integrates Tabs for its mode switching interface.
 
 ```mermaid
 graph LR
@@ -781,11 +772,11 @@ CN --> INP["Input"]
 CN --> SEL["Select"]
 CN --> TAB["Table"]
 CN --> TPV["TextPreview"]
-CN --> MED["MarkdownEditor"]
+CN --> WED["WysiwygEditor"]
 CN --> MPV["MarkdownPreview"]
 CI["CopilotClearingInput"] --> CW["ChatWrapper"]
 DTR["DefaultToolRender"] --> CW
-MED --> TBS["Tabs"]
+WED --> TB["Tabs"]
 ```
 
 **Diagram sources**
@@ -795,7 +786,7 @@ MED --> TBS["Tabs"]
 - [select.tsx:4-185](file://src/components/ui/select.tsx#L4-L185)
 - [table.tsx:5-116](file://src/components/ui/table.tsx#L5-L116)
 - [text-preview.tsx:1-241](file://src/components/ui/text-preview.tsx#L1-L241)
-- [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
 - [tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
 - [copilot-clearing-input.tsx:1-175](file://src/components/copilot-clearing-input.tsx#L1-L175)
@@ -809,7 +800,7 @@ MED --> TBS["Tabs"]
 - [select.tsx:4-185](file://src/components/ui/select.tsx#L4-L185)
 - [table.tsx:5-116](file://src/components/ui/table.tsx#L5-L116)
 - [text-preview.tsx:1-241](file://src/components/ui/text-preview.tsx#L1-L241)
-- [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
 - [tabs.tsx:1-67](file://src/components/ui/tabs.tsx#L1-L67)
 - [copilot-clearing-input.tsx:1-175](file://src/components/copilot-clearing-input.tsx#L1-L175)
@@ -822,9 +813,9 @@ MED --> TBS["Tabs"]
 - Use CSS containment and transforms for smooth animations; avoid layout thrashing.
 - Limit re-renders by keeping state minimal and using shallow comparisons where appropriate.
 - Optimize table rendering by virtualizing long lists when applicable.
-- **MarkdownEditor performance**: The component maintains a 50-step undo/redo history; consider limiting history size for very large documents to prevent memory issues.
+- **WysiwygEditor performance**: The component uses @uiw/react-md-editor library which is optimized for performance; consider adjusting minHeight for optimal rendering; dynamic imports prevent SSR issues.
 - **MarkdownPreview performance**: For very long documents, consider implementing virtualization or pagination to improve rendering performance.
-- **ReactMarkdown rendering**: Complex markdown documents may cause performance issues; consider lazy loading or chunking for large content.
+- **@uiw/react-md-editor**: This library is specifically designed for performance with large markdown documents; it uses efficient rendering techniques and lazy loading for images.
 
 ## Troubleshooting Guide
 - Hydration mismatches in chat
@@ -836,13 +827,15 @@ MED --> TBS["Tabs"]
 - Tool rendering
   - Symptoms: Tool call details not visible.
   - Resolution: Ensure useCopilotAction registers DefaultToolRender for catch-all actions; verify status and payload are passed correctly.
-- **MarkdownEditor issues**
-  - Symptoms: Toolbar buttons not working or cursor position incorrect.
-  - Resolution: Ensure textareaRef is properly initialized; verify selectionStart/selectionEnd properties; check that insertText function is called with proper before/after parameters.
-  - Symptoms: Undo/redo not functioning.
-  - Resolution: Verify history state management; ensure saveToHistory is called on every change; check history index bounds.
-  - Symptoms: Preview not updating.
-  - Resolution: Ensure onChange prop is passed correctly; verify ReactMarkdown component receives updated value.
+- **WysiwygEditor issues**
+  - Symptoms: Editor not rendering or showing SSR errors.
+  - Resolution: Ensure dynamic import is working correctly; verify @uiw/react-md-editor is installed; check that dynamic import has ssr: false configuration.
+  - Symptoms: Live edit mode not working.
+  - Resolution: Verify previewMode state is properly managed; ensure onChange prop is passed correctly to MDEditor.
+  - Symptoms: Full-screen mode not functioning.
+  - Resolution: Check isFullscreen state management; verify CSS classes are applied correctly; ensure proper z-index and positioning.
+  - Symptoms: Character/word counters not updating.
+  - Resolution: Verify value prop is properly passed to component; check that handleChange function updates state correctly.
 - **MarkdownPreview issues**
   - Symptoms: Toggle button not appearing.
   - Resolution: Check showToggle prop; ensure content length calculation is correct.
@@ -850,10 +843,10 @@ MED --> TBS["Tabs"]
   - Resolution: Verify line count calculation; ensure maxLines prop is properly set.
 - Accessibility
   - Ensure labels are associated with inputs; use Label component; verify focus-visible rings and aria-invalid states.
-  - **MarkdownEditor accessibility**: Ensure toolbar buttons have proper titles and aria-labels; verify keyboard navigation works in tabs.
+  - **WysiwygEditor accessibility**: Ensure toolbar buttons have proper titles and aria-labels; verify keyboard navigation works in tabs.
 - Cross-browser compatibility
   - Test CSS Grid and Flexbox fallbacks; verify @supports usage for advanced features; ensure polyfills for Clipboard API if needed.
-  - **MarkdownEditor compatibility**: Test textarea selection APIs across browsers; verify fullscreen API support.
+  - **WysiwygEditor compatibility**: Test @uiw/react-md-editor across different browsers; verify dynamic imports work in all environments.
 
 **Section sources**
 - [chat-wrapper.tsx:17-59](file://src/components/chat-wrapper.tsx#L17-L59)
@@ -861,12 +854,11 @@ MED --> TBS["Tabs"]
 - [default-tool-render.tsx:12-104](file://src/components/default-tool-render.tsx#L12-L104)
 - [label.tsx:8-24](file://src/components/ui/label.tsx#L8-L24)
 - [input.tsx:5-19](file://src/components/ui/input.tsx#L5-L19)
-- [markdown-editor.tsx:102-120](file://src/components/ui/markdown-editor.tsx#L102-L120)
-- [markdown-editor.tsx:173-187](file://src/components/ui/markdown-editor.tsx#L173-L187)
+- [wysiwyg-editor.tsx:130-144](file://src/components/ui/wysiwyg-editor.tsx#L130-L144)
 - [markdown-preview.tsx:83-93](file://src/components/ui/markdown-preview.tsx#L83-L93)
 
 ## Conclusion
-The UI library provides a consistent, accessible, and customizable foundation for building forms and interactive surfaces. The addition of comprehensive markdown editing capabilities significantly enhances the library's functionality, providing users with professional-grade editing tools. The new MarkdownEditor component offers a full-featured editing experience with real-time preview, while the MarkdownPreview component delivers flexible content display options. The chat UI extends this foundation with CopilotKit, offering rich AI interaction patterns, robust input handling, and polished visual feedback. By leveraging shared utilities, class variance authority, Radix UI primitives, and modern markdown processing libraries, components remain flexible and maintainable while supporting responsive and accessible experiences.
+The UI library provides a consistent, accessible, and customizable foundation for building forms and interactive surfaces. The addition of the professional-grade WYSIWYG editor component significantly enhances the library's functionality, providing users with industry-standard markdown editing capabilities. The new WysiwygEditor component offers real-time preview, full-screen editing mode, and professional-grade editing tools using the @uiw/react-md-editor library. The component maintains the library's design principles while providing enterprise-level functionality. The chat UI extends this foundation with CopilotKit, offering rich AI interaction patterns, robust input handling, and polished visual feedback. By leveraging shared utilities, class variance authority, Radix UI primitives, and modern markdown processing libraries, components remain flexible and maintainable while supporting responsive and accessible experiences.
 
 ## Appendices
 - Usage examples (paths only)
@@ -880,7 +872,7 @@ The UI library provides a consistent, accessible, and customizable foundation fo
   - Label: [label.tsx:8-24](file://src/components/ui/label.tsx#L8-L24)
   - Textarea: [textarea.tsx:5-18](file://src/components/ui/textarea.tsx#L5-L18)
   - TextPreview: [text-preview.tsx:14-241](file://src/components/ui/text-preview.tsx#L14-L241)
-  - **MarkdownEditor**: [markdown-editor.tsx:67-353](file://src/components/ui/markdown-editor.tsx#L67-L353)
+  - **WysiwygEditor**: [wysiwyg-editor.tsx:49-164](file://src/components/ui/wysiwyg-editor.tsx#L49-L164)
   - **MarkdownPreview**: [markdown-preview.tsx:18-96](file://src/components/ui/markdown-preview.tsx#L18-L96)
   - **Tabs**: [tabs.tsx:8-66](file://src/components/ui/tabs.tsx#L8-L66)
   - ChatWrapper: [chat-wrapper.tsx:7-709](file://src/components/chat-wrapper.tsx#L7-L709)

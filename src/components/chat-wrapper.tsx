@@ -4,14 +4,49 @@ import { CopilotChat } from "@copilotkit/react-ui";
 import { useEffect, useState } from "react";
 import { CopilotClearingInput } from "./copilot-clearing-input";
 
+// 预设问题列表
+const PRESET_QUESTIONS = [
+  "给我推荐3个适合现在开始做的任务",
+  "根据我的读书计划，给我推荐几本书",
+  "帮我分析本周的任务完成情况",
+  "为我制定一个下周的学习计划"
+];
+
 export function ChatWrapper() {
   const [mounted, setMounted] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [showPrompts, setShowPrompts] = useState(true);
+  const [hasSentMessage, setHasSentMessage] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     setIsClient(typeof window !== 'undefined');
   }, []);
+
+  // Monitor messages to detect when user has sent a message
+  useEffect(() => {
+    if (!mounted || !isClient) return;
+
+    const observer = new MutationObserver(() => {
+      const userMessages = document.querySelectorAll('.copilotKitUserMessage');
+      if (userMessages.length > 0 && !hasSentMessage) {
+        setHasSentMessage(true);
+        setShowPrompts(false);
+      }
+    });
+
+    const messagesContainer = document.querySelector(".copilotKitMessagesContainer");
+    if (messagesContainer) {
+      observer.observe(messagesContainer, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [mounted, isClient, hasSentMessage]);
 
   // 动态美化聊天消息的函数
   useEffect(() => {
@@ -77,6 +112,17 @@ export function ChatWrapper() {
       </div>
     );
   }
+
+  // 处理预设问题点击 - 通过 CopilotClearingInput 暴露的方法
+  const handlePresetQuestion = (question: string) => {
+    // 使用 CopilotClearingInput 暴露的全局方法
+    const copilotSend = (window as any).__copilotSend;
+    if (copilotSend) {
+      copilotSend(question);
+    } else {
+      console.error('Copilot send function not available');
+    }
+  };
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden" suppressHydrationWarning>
@@ -390,7 +436,7 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage h5,
         .copilotKitAssistantMessage h6 {
           font-weight: 600 !important;
-          margin: 0.5rem 0 0.35rem 0 !important;
+          margin: 0.2rem 0 0.15rem 0 !important;
           line-height: 1.4 !important;
           color: #1f2937 !important;
         }
@@ -413,12 +459,12 @@ export function ChatWrapper() {
         /* Markdown 列表样式 */
         .copilotKitAssistantMessage ul,
         .copilotKitAssistantMessage ol {
-          margin: 0.35rem 0 !important;
+          margin: 0.2rem 0 !important;
           padding-left: 1.5rem !important;
         }
         
         .copilotKitAssistantMessage li {
-          margin: 0.25rem 0 !important;
+          margin: 0.15rem 0 !important;
           line-height: 1.5 !important;
         }
         
@@ -432,7 +478,7 @@ export function ChatWrapper() {
         
         /* Markdown 段落样式 */
         .copilotKitAssistantMessage p {
-          margin: 0.35rem 0 !important;
+          margin: 0.1rem 0 !important;
           line-height: 1.5 !important;
         }
         
@@ -470,8 +516,8 @@ export function ChatWrapper() {
           background: #f9fafb !important;
           border: 1px solid #e5e7eb !important;
           border-radius: 0.5rem !important;
-          padding: 1rem !important;
-          margin: 0.75rem 0 !important;
+          padding: 0.75rem !important;
+          margin: 0.5rem 0 !important;
           overflow-x: auto !important;
         }
         
@@ -495,15 +541,15 @@ export function ChatWrapper() {
         .copilotKitAssistantMessage hr {
           border: none !important;
           border-top: 1px solid #e5e7eb !important;
-          margin: 1.5rem 0 !important;
+          margin: 0.75rem 0 !important;
         }
         
         /* Markdown 引用块 */
         .copilotKitAssistantMessage blockquote {
           border-left: 4px solid #3b82f6 !important;
           background: #f8fafc !important;
-          margin: 0.75rem 0 !important;
-          padding: 0.75rem 1rem !important;
+          margin: 0.5rem 0 !important;
+          padding: 0.5rem 0.75rem !important;
           font-style: italic !important;
         }
         
@@ -695,6 +741,52 @@ export function ChatWrapper() {
         }
       `}</style>
       
+      {/* 预设问题区域 - 可折叠 */}
+      {showPrompts && (
+        <div className="px-4 py-3 bg-gradient-to-b from-gray-50 to-white border-b border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm font-medium text-gray-700">快速提问</span>
+            </div>
+            <button
+              onClick={() => setShowPrompts(false)}
+              className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              收起
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {PRESET_QUESTIONS.map((question, index) => (
+              <button
+                key={index}
+                onClick={() => handlePresetQuestion(question)}
+                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-full hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition-all duration-200 shadow-sm hover:shadow text-gray-700 cursor-pointer"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 展开快速提问的按钮 */}
+      {!showPrompts && (
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <button
+            onClick={() => setShowPrompts(true)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            显示快速提问
+          </button>
+        </div>
+      )}
+
       <CopilotChat
         labels={{
           title: "Goal Mate AI助手",

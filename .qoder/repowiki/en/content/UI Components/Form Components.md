@@ -25,12 +25,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new MarkdownEditor component
-- Updated form components section to include MarkdownEditor alongside existing WYSIWYG editor
-- Enhanced form composition patterns to include markdown editing capabilities
-- Added usage examples for markdown editing in goals, plans, and progress pages
-- Updated architecture diagrams to reflect the integration of markdown editing components
-- Expanded accessibility guidelines to cover markdown editor components
+- Updated WysiwygEditor component documentation to reflect enhanced features including real-time preview mode, full-screen editing, and improved toolbar
+- Updated integration examples showing WysiwygEditor usage in goals, plans, and progress pages
+- Enhanced form composition patterns to include WysiwygEditor alongside existing MarkdownEditor
+- Updated architecture diagrams to reflect the integration of enhanced WYSIWYG editor components
+- Expanded accessibility guidelines to cover enhanced editor components
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -48,15 +47,17 @@
 This document provides comprehensive documentation for form-related components and patterns in the project, focusing on:
 - Combobox component: search functionality, selection handling, keyboard navigation, and accessibility.
 - LoginForm component: authentication flow, form validation, error handling, and user feedback.
+- **Enhanced**: WysiwygEditor component: real-time preview mode, full-screen editing, improved toolbar with formatting options, and enhanced markdown support.
 - **NEW**: MarkdownEditor component: rich markdown editing with live preview, tabbed interface, and advanced formatting capabilities.
-- **Enhanced**: Form composition patterns now include markdown editing for goals, plans, and progress tracking.
+- **NEW**: MarkdownPreview component: renders markdown content with expand/collapse functionality.
+- **Enhanced**: Form composition patterns now include both WYSIWYG and Markdown editors for goals, plans, and progress tracking.
 - Authentication system integration: server-side routes, middleware protection, and session management via cookies.
 - Best practices for form accessibility, validation error display, submission handling, and composition patterns.
 
 ## Project Structure
 The form-related components and authentication system are organized as follows:
 - UI primitives: input, label, select, combobox.
-- **NEW**: Markdown editing components: MarkdownEditor, MarkdownPreview, WysiwygEditor.
+- **Enhanced**: WYSIWYG editing components: WysiwygEditor, MarkdownEditor, MarkdownPreview.
 - Application pages: login page and protected routes with enhanced form capabilities.
 - Authentication utilities: token creation, validation, and user retrieval.
 - Middleware: global protection for non-public routes.
@@ -72,9 +73,9 @@ LB["Label<br/>src/components/ui/label.tsx"]
 SL["Select<br/>src/components/ui/select.tsx"]
 end
 subgraph "Form Editors"
+WE["WysiwygEditor<br/>src/components/ui/wysiwyg-editor.tsx"]
 ME["MarkdownEditor<br/>src/components/ui/markdown-editor.tsx"]
 MP["MarkdownPreview<br/>src/components/ui/markdown-preview.tsx"]
-WE["WysiwygEditor<br/>src/components/ui/wysiwyg-editor.tsx"]
 end
 subgraph "Forms"
 LF["LoginForm<br/>src/components/LoginForm.tsx"]
@@ -112,16 +113,16 @@ UM --> ME
 CB --> IN
 CB --> LB
 SL --> IN
-ME --> MP
 WE --> MP
+ME --> MP
 ```
 
 **Diagram sources**
 - [combobox.tsx:1-75](file://src/components/ui/combobox.tsx#L1-L75)
 - [LoginForm.tsx:1-98](file://src/components/LoginForm.tsx#L1-L98)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
-- [wysiwyg-editor.tsx:1-382](file://src/components/ui/wysiwyg-editor.tsx#L1-L382)
 - [login/page.tsx:1-12](file://src/app/login/page.tsx#L1-L12)
 - [goals/page.tsx:1-312](file://src/app/goals/page.tsx#L1-L312)
 - [plans/page.tsx:1-869](file://src/app/plans/page.tsx#L1-L869)
@@ -148,17 +149,17 @@ This section documents the primary form components and their roles.
   - Accessibility: button with explicit tabindex, input autoFocus when opened, keyboard navigation support.
   - Props: options array, value, onChange callback, placeholder, className.
 
+- **Enhanced**: WysiwygEditor
+  - Purpose: enhanced WYSIWYG editing with real-time preview mode, full-screen editing, and improved toolbar.
+  - Key behaviors: real-time preview overlay, live markdown parsing, enhanced toolbar with formatting options, full-screen mode toggle, character and word counting.
+  - Features: supports GitHub Flavored Markdown (GFM), real-time preview mode, full-screen editing, enhanced toolbar with formatting buttons.
+  - Props: value, onChange, placeholder, label, id, required, disabled, minHeight.
+
 - **NEW**: MarkdownEditor
   - Purpose: rich markdown editing with live preview, tabbed interface, and advanced formatting capabilities.
   - Key behaviors: dual-mode editing (write/preview), toolbar with formatting buttons, undo/redo functionality, fullscreen mode.
   - Features: supports GitHub Flavored Markdown (GFM), live preview rendering, character/word counting, tabbed interface.
   - Props: value, onChange, placeholder, label, id, required, disabled, minHeight, maxHeight.
-
-- **Enhanced**: WysiwygEditor
-  - Purpose: enhanced WYSIWYG editing with live preview and markdown support.
-  - Key behaviors: live preview overlay, toolbar with formatting buttons, undo/redo functionality.
-  - Features: real-time markdown parsing, focused state highlighting, character counting.
-  - Props: value, onChange, placeholder, label, id, required, disabled, minHeight.
 
 - **NEW**: MarkdownPreview
   - Purpose: renders markdown content with expand/collapse functionality.
@@ -188,8 +189,8 @@ This section documents the primary form components and their roles.
 
 **Section sources**
 - [combobox.tsx:6-12](file://src/components/ui/combobox.tsx#L6-L12)
+- [wysiwyg-editor.tsx:19-41](file://src/components/ui/wysiwyg-editor.tsx#L19-L41)
 - [markdown-editor.tsx:33-44](file://src/components/ui/markdown-editor.tsx#L33-L44)
-- [wysiwyg-editor.tsx:28-38](file://src/components/ui/wysiwyg-editor.tsx#L28-L38)
 - [markdown-preview.tsx:11-16](file://src/components/ui/markdown-preview.tsx#L11-L16)
 - [LoginForm.tsx:6-40](file://src/components/LoginForm.tsx#L6-L40)
 - [auth.ts:14-46](file://src/lib/auth.ts#L14-L46)
@@ -199,7 +200,7 @@ This section documents the primary form components and their roles.
 - [me/route.ts:4-18](file://src/app/api/auth/me/route.ts#L4-L18)
 
 ## Architecture Overview
-The authentication and form flow integrates UI components, pages, middleware, and API routes with enhanced markdown editing capabilities.
+The authentication and form flow integrates UI components, pages, middleware, and API routes with enhanced WYSIWYG editing capabilities.
 
 ```mermaid
 sequenceDiagram
@@ -288,6 +289,48 @@ Accessibility guidelines:
 **Section sources**
 - [combobox.tsx:14-74](file://src/components/ui/combobox.tsx#L14-L74)
 
+### **Enhanced**: WysiwygEditor Component
+The WysiwygEditor provides enhanced editing capabilities with real-time preview functionality and improved features.
+
+Key features:
+- Real-time preview mode that renders markdown instantly as you type.
+- Full-screen editing mode for distraction-free writing.
+- Enhanced toolbar with formatting options and mode switching.
+- Character and word counting in footer.
+- Dynamic CSS injection for consistent markdown rendering.
+- Support for GitHub Flavored Markdown (GFM) with enhanced styling.
+
+```mermaid
+flowchart TD
+Start(["WysiwygEditor Init"]) --> Preview{"Preview Mode"}
+Preview --> |live| LiveMode["Real-time Preview<br/>parseMarkdown()"]
+Preview --> |preview| PreviewMode["Static Preview<br/>ReactMarkdown"]
+LiveMode --> Toolbar["Enhanced Toolbar<br/>Formatting Options"]
+PreviewMode --> Toolbar
+Toolbar --> Fullscreen["Toggle Fullscreen<br/>Maximize/Minimize"]
+Fullscreen --> Stats["Character & Word Count<br/>Footer Stats"]
+LiveMode --> Stats
+```
+
+**Diagram sources**
+- [wysiwyg-editor.tsx:31-164](file://src/components/ui/wysiwyg-editor.tsx#L31-L164)
+
+Implementation highlights:
+- Props interface: [WysiwygEditorProps:19-29](file://src/components/ui/wysiwyg-editor.tsx#L19-L29).
+- State management: [useState hooks:42-43](file://src/components/ui/wysiwyg-editor.tsx#L42-L43).
+- Real-time preview: [MDEditor with preview='live':133-144](file://src/components/ui/wysiwyg-editor.tsx#L133-L144).
+- Full-screen mode: [isFullscreen state and toggle:42-107](file://src/components/ui/wysiwyg-editor.tsx#L42-L107).
+- Dynamic styling: [CSS injection for markdown lists:112-129](file://src/components/ui/wysiwyg-editor.tsx#L112-L129).
+
+Usage examples:
+- Description fields in goals management.
+- Content editing in progress tracking.
+- General-purpose rich text editing across the application.
+- Integration with form validation and submission workflows.
+
+**Section sources**
+- [wysiwyg-editor.tsx:31-164](file://src/components/ui/wysiwyg-editor.tsx#L31-L164)
+
 ### **NEW**: MarkdownEditor Component
 The MarkdownEditor provides a comprehensive rich text editing experience with markdown support.
 
@@ -326,53 +369,8 @@ Usage examples:
 - Comprehensive markdown editing in plans and progress records.
 - Integration with form validation and submission workflows.
 
-Accessibility guidelines:
-- Proper labeling with associated labels.
-- Keyboard navigation support for toolbar buttons.
-- Screen reader friendly preview rendering.
-- Focus management during mode switching.
-
 **Section sources**
 - [markdown-editor.tsx:67-353](file://src/components/ui/markdown-editor.tsx#L67-L353)
-
-### **Enhanced**: WysiwygEditor Component
-The WysiwygEditor provides enhanced editing capabilities with live preview functionality.
-
-Key features:
-- Live preview overlay that renders markdown in real-time.
-- Comprehensive toolbar with formatting options.
-- Undo/redo functionality with history tracking.
-- Toggle between edit and preview modes.
-- Character and word counting in footer.
-
-```mermaid
-flowchart TD
-Start(["WysiwygEditor Init"]) --> Preview{"Show Preview?"}
-Preview --> |Yes| Overlay["Live Preview Overlay<br/>parseMarkdown()"]
-Preview --> |No| Textarea["Editable Textarea<br/>Direct Input"]
-Overlay --> Toolbar["Toolbar Buttons<br/>Format Operations"]
-Textarea --> Toolbar
-Toolbar --> History["History Management<br/>Undo/Redo"]
-Overlay --> Stats["Footer Statistics<br/>Character/Word Count"]
-Textarea --> Stats
-```
-
-**Diagram sources**
-- [wysiwyg-editor.tsx:123-379](file://src/components/ui/wysiwyg-editor.tsx#L123-L379)
-
-Implementation highlights:
-- Markdown parsing: [parseMarkdown:66-121](file://src/components/ui/wysiwyg-editor.tsx#L66-L121).
-- State management: [useState hooks:134-140](file://src/components/ui/wysiwyg-editor.tsx#L134-L140).
-- History management: [saveToHistory:142-150](file://src/components/ui/wysiwyg-editor.tsx#L142-L150).
-- Live preview: [renderedContent:270](file://src/components/ui/wysiwyg-editor.tsx#L270).
-
-Usage examples:
-- Description fields in goals management.
-- Content editing in progress tracking.
-- General-purpose rich text editing across the application.
-
-**Section sources**
-- [wysiwyg-editor.tsx:123-379](file://src/components/ui/wysiwyg-editor.tsx#L123-L379)
 
 ### **NEW**: MarkdownPreview Component
 The MarkdownPreview component renders markdown content with expand/collapse functionality.
@@ -537,7 +535,7 @@ Behavior:
 - [logout/route.ts:4-14](file://src/app/api/auth/logout/route.ts#L4-L14)
 
 ## Dependency Analysis
-Form components and authentication dependencies with enhanced markdown editing:
+Form components and authentication dependencies with enhanced WYSIWYG editing:
 
 ```mermaid
 graph TB
@@ -550,13 +548,14 @@ UM --> LR
 CB["combobox.tsx"] --> IN["input.tsx"]
 CB --> LB["label.tsx"]
 SL["select.tsx"] --> IN
-ME["MarkdownEditor.tsx"] --> RM["react-markdown"]
+WE["WysiwygEditor.tsx"] --> RM["@uiw/react-md-editor"]
+WE --> MP["markdown-preview.tsx"]
+ME["MarkdownEditor.tsx"] --> RM
 ME --> RG["remark-gfm"]
 ME --> TAB["tabs.tsx"]
 ME --> BTN["button.tsx"]
 MP["MarkdownPreview.tsx"] --> RM
 MP --> RG
-WE["WysiwygEditor.tsx"] --> BTN
 GP["Goals Page.tsx"] --> WE
 GP --> MP
 PP["Plans Page.tsx"] --> WE
@@ -576,9 +575,9 @@ PRP --> MP
 - [input.tsx:1-22](file://src/components/ui/input.tsx#L1-L22)
 - [label.tsx:1-25](file://src/components/ui/label.tsx#L1-L25)
 - [select.tsx:1-186](file://src/components/ui/select.tsx#L1-L186)
+- [wysiwyg-editor.tsx:1-167](file://src/components/ui/wysiwyg-editor.tsx#L1-L167)
 - [markdown-editor.tsx:1-356](file://src/components/ui/markdown-editor.tsx#L1-L356)
 - [markdown-preview.tsx:1-99](file://src/components/ui/markdown-preview.tsx#L1-L99)
-- [wysiwyg-editor.tsx:1-382](file://src/components/ui/wysiwyg-editor.tsx#L1-L382)
 - [goals/page.tsx:1-312](file://src/app/goals/page.tsx#L1-L312)
 - [plans/page.tsx:1-869](file://src/app/plans/page.tsx#L1-L869)
 - [progress/page.tsx:1-567](file://src/app/progress/page.tsx#L1-L567)
@@ -594,9 +593,9 @@ PRP --> MP
 - [input.tsx:5-19](file://src/components/ui/input.tsx#L5-L19)
 - [label.tsx:8-21](file://src/components/ui/label.tsx#L8-L21)
 - [select.tsx:9-13](file://src/components/ui/select.tsx#L9-L13)
+- [wysiwyg-editor.tsx:19-41](file://src/components/ui/wysiwyg-editor.tsx#L19-L41)
 - [markdown-editor.tsx:8-31](file://src/components/ui/markdown-editor.tsx#L8-L31)
 - [markdown-preview.tsx:5-6](file://src/components/ui/markdown-preview.tsx#L5-L6)
-- [wysiwyg-editor.tsx:6-26](file://src/components/ui/wysiwyg-editor.tsx#L6-L26)
 
 ## Performance Considerations
 - Combobox
@@ -604,16 +603,22 @@ PRP --> MP
   - Consider debouncing input for very large option lists.
   - Limit visible items with virtualization for long lists.
 
+- **Enhanced**: WysiwygEditor
+  - Real-time preview parsing runs on every keystroke; consider debouncing for large documents.
+  - Enhanced toolbar with more buttons may impact performance; optimize rendering.
+  - Full-screen mode requires careful viewport management.
+  - Dynamic CSS injection for markdown styling should be optimized.
+
 - **NEW**: MarkdownEditor
   - ReactMarkdown rendering can be expensive for large documents; consider lazy loading for very long content.
   - History management limits stack to 50 entries to prevent memory issues.
   - Fullscreen mode requires careful viewport management.
   - Tab switching triggers re-rendering; consider memoization for complex content.
 
-- **Enhanced**: WysiwygEditor
-  - Live preview parsing runs on every keystroke; consider debouncing for large documents.
-  - parseMarkdown function uses multiple regex operations; optimize for performance.
-  - Preview overlay uses dangerouslySetInnerHTML; ensure content sanitization.
+- **NEW**: MarkdownPreview
+  - ReactMarkdown rendering with GFM plugin can be resource-intensive.
+  - Truncation logic should handle large content efficiently.
+  - Toggle functionality adds minimal overhead.
 
 - LoginForm
   - Avoid unnecessary re-renders by keeping state minimal.
@@ -638,15 +643,16 @@ Common issues and resolutions:
 - Dropdown not closing or keyboard navigation issues
   - Ensure the open state is toggled correctly and input is auto-focused when opened.
 
+- **Enhanced**: WysiwygEditor issues
+  - Real-time preview not updating: verify MDEditor is properly mounted and value changes are detected.
+  - Full-screen mode not working: check CSS classes and z-index values.
+  - Toolbar buttons not responding: check event handler bindings and disabled state.
+  - Dynamic CSS not applying: verify CSS injection is working correctly.
+
 - **NEW**: MarkdownEditor issues
   - If preview doesn't render, verify ReactMarkdown and remark-gfm are properly installed.
   - Check for console errors related to markdown parsing or component mounting.
   - Ensure proper cleanup of event listeners when component unmounts.
-
-- **Enhanced**: WysiwygEditor issues
-  - Live preview not updating: verify parseMarkdown function is running and textarea value is changing.
-  - Toolbar buttons not responding: check event handler bindings and disabled state.
-  - History not working: ensure saveToHistory function is called on value changes.
 
 - **NEW**: MarkdownPreview issues
   - Content not truncating: verify maxLines prop and line counting logic.
@@ -658,20 +664,20 @@ Common issues and resolutions:
 - [LoginForm.tsx:35-38](file://src/components/LoginForm.tsx#L35-L38)
 - [middleware.ts:22-30](file://middleware.ts#L22-L30)
 - [AUTHENTICATION.md:179-192](file://AUTHENTICATION.md#L179-L192)
+- [wysiwyg-editor.tsx:130-144](file://src/components/ui/wysiwyg-editor.tsx#L130-L144)
 - [markdown-editor.tsx:325-328](file://src/components/ui/markdown-editor.tsx#L325-L328)
-- [wysiwyg-editor.tsx:270](file://src/components/ui/wysiwyg-editor.tsx#L270)
 - [markdown-preview.tsx:31-35](file://src/components/ui/markdown-preview.tsx#L31-L35)
 
 ## Conclusion
-The form components and authentication system demonstrate a cohesive pattern with enhanced markdown editing capabilities:
+The form components and authentication system demonstrate a cohesive pattern with enhanced WYSIWYG editing capabilities:
 - Combobox provides accessible, searchable selection with robust keyboard and mouse interactions.
-- **NEW**: MarkdownEditor offers comprehensive rich text editing with live preview and advanced formatting.
-- **Enhanced**: WysiwygEditor provides real-time markdown preview with extensive formatting options.
+- **Enhanced**: WysiwygEditor offers real-time preview mode, full-screen editing, and improved toolbar functionality.
+- **NEW**: MarkdownEditor provides comprehensive rich text editing with live preview and advanced formatting.
 - **NEW**: MarkdownPreview enables flexible content display with expand/collapse functionality.
 - LoginForm encapsulates submission, validation, and feedback with clear separation of concerns.
 - Authentication utilities and middleware enforce security and session management.
 - API endpoints standardize authentication flows and user state retrieval.
-- Integration across goals, plans, and progress pages demonstrates practical markdown editing applications.
+- Integration across goals, plans, and progress pages demonstrates practical WYSIWYG editing applications.
 
 These patterns enable scalable form composition, reliable validation, seamless integration with application state management, and enhanced user experience through rich text editing capabilities.
 
@@ -683,16 +689,22 @@ These patterns enable scalable form composition, reliable validation, seamless i
   - Use semantic label components for consistent styling and behavior.
   - Example reference: [Label component:8-21](file://src/components/ui/label.tsx#L8-L21), [Input component:5-19](file://src/components/ui/input.tsx#L5-L19).
 
+- **Enhanced**: WysiwygEditor accessibility
+  - Real-time preview should announce content changes to screen readers.
+  - Toolbar buttons should have descriptive titles and keyboard shortcuts.
+  - Toggle button should indicate current state (live/preview).
+  - Full-screen mode should maintain focus management and escape key support.
+
 - **NEW**: MarkdownEditor accessibility
   - Ensure proper ARIA labels for toolbar buttons and mode switches.
   - Maintain keyboard navigation for all editor controls.
   - Provide screen reader announcements for content changes.
   - Support focus management between write and preview modes.
 
-- **Enhanced**: WysiwygEditor accessibility
-  - Live preview should announce content changes to screen readers.
-  - Toolbar buttons should have descriptive titles and keyboard shortcuts.
-  - Toggle button should indicate current state (preview/edit).
+- **NEW**: MarkdownPreview accessibility
+  - Toggle button should have proper ARIA labels for screen readers.
+  - Expand/collapse functionality should announce state changes.
+  - Rendered content should be properly structured for screen readers.
 
 - Error presentation
   - Display inline error messages near affected fields.
@@ -712,6 +724,11 @@ These patterns enable scalable form composition, reliable validation, seamless i
   - Use required attributes and controlled components to manage state.
   - Example reference: [LoginForm controlled fields:7-11](file://src/components/LoginForm.tsx#L7-L11).
 
+- **Enhanced**: WYSIWYG content validation
+  - Validate markdown syntax where appropriate.
+  - Check for balanced formatting (e.g., matching brackets, quotes).
+  - Ensure content length limits are enforced.
+
 - **NEW**: Markdown content validation
   - Validate markdown syntax where appropriate.
   - Check for balanced formatting (e.g., matching brackets, quotes).
@@ -724,6 +741,11 @@ These patterns enable scalable form composition, reliable validation, seamless i
 ### Submission Handling
 - Disable submit during loading to prevent duplicate submissions.
 - Example reference: [LoginForm submit disabled state:89-93](file://src/components/LoginForm.tsx#L89-L93).
+
+- **Enhanced**: WYSIWYG content submission
+  - Ensure markdown content is properly sanitized before storage.
+  - Handle encoding/decoding of special characters.
+  - Validate content against length and format constraints.
 
 - **NEW**: Markdown content submission
   - Ensure markdown content is properly sanitized before storage.
@@ -739,9 +761,14 @@ These patterns enable scalable form composition, reliable validation, seamless i
   - Use Combobox for dynamic filtering and selection.
   - Example reference: [Combobox component:14-74](file://src/components/ui/combobox.tsx#L14-L74).
 
+- **Enhanced**: WYSIWYG editing composition
+  - Use WysiwygEditor for real-time preview requirements.
+  - Use MarkdownEditor for comprehensive rich text editing needs.
+  - Use MarkdownPreview for displaying formatted content.
+
 - **NEW**: Markdown editing composition
   - Use MarkdownEditor for comprehensive rich text editing needs.
-  - Use WysiwygEditor for simpler live preview requirements.
+  - Use WysiwygEditor for simpler real-time preview requirements.
   - Use MarkdownPreview for displaying formatted content.
 
 - Multi-select patterns
@@ -752,7 +779,7 @@ These patterns enable scalable form composition, reliable validation, seamless i
   - Combine checkboxes with controlled state for tag management.
   - Example reference: [Plans page tag controls:472-494](file://src/app/plans/page.tsx#L472-L494).
 
-- **NEW**: Form integration examples
+- **Enhanced**: Form integration examples
   - Goals page uses WysiwygEditor for description fields.
   - Plans page uses WysiwygEditor for description and content fields.
   - Progress page uses WysiwygEditor for content and thinking fields.

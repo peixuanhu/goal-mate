@@ -102,6 +102,28 @@ export function CopilotClearingInput({
 
   const [text, setText] = useState("");
 
+  // 暴露 send 方法供外部调用
+  useEffect(() => {
+    (window as any).__copilotSend = (message: string) => {
+      if (!inProgress && message.trim()) {
+        flushSync(() => {
+          setText(message);
+        });
+        setTimeout(() => {
+          flushSync(() => {
+            setText("");
+          });
+          onSend(message);
+          textareaRef.current?.focus();
+        }, 50);
+      }
+    };
+    
+    return () => {
+      delete (window as any).__copilotSend;
+    };
+  }, [inProgress, onSend]);
+
   const send = () => {
     if (inProgress) return;
     const payload = text;
