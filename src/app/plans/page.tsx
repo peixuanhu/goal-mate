@@ -2,20 +2,20 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
-import { getRecurringTaskStatus, getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
+import { getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
 import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
+import { MarkdownEditor } from "@/components/ui/markdown-editor"
+import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 
 interface Plan {
@@ -509,16 +509,14 @@ export default function PlansPage() {
               )}
 
               {/* 描述字段 - 独立行，更大空间 */}
-              <div className="space-y-2">
-                <Label htmlFor="desc">描述</Label>
-                <Textarea 
-                  id="desc" 
-                  className="w-full min-h-[100px] resize-y" 
-                  placeholder="请输入详细描述，可以包含链接、备注等信息..." 
-                  value={form.description || ''} 
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))} 
-                />
-              </div>
+              <MarkdownEditor
+                id="desc"
+                label="描述"
+                value={form.description || ''}
+                onChange={(value) => setForm(f => ({ ...f, description: value }))}
+                placeholder="请输入详细描述，可以包含链接、备注等信息...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                minHeight="150px"
+              />
 
               {/* 标签字段 - 独立行 */}
               <div className="space-y-3">
@@ -812,11 +810,10 @@ export default function PlansPage() {
                           )}
                         </TableCell>
                         <TableCell className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px', overflow: 'hidden' }}>
-                          <TextPreview
-                            text={plan.description || ''}
-                            maxLength={60}
-                            className="text-sm text-gray-600 dark:text-gray-400"
-                            truncateLines={1}
+                          <MarkdownPreview
+                            content={plan.description || ''}
+                            maxLines={2}
+                            showToggle={true}
                           />
                         </TableCell>
                         <TableCell className="sticky right-0 z-[1] w-[170px] min-w-[170px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '170px', maxWidth: '170px' }}>

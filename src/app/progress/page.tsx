@@ -2,9 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
 import { useSearchParams } from 'next/navigation'
@@ -15,6 +13,8 @@ import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
+import { MarkdownEditor } from "@/components/ui/markdown-editor"
+import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 interface Plan {
   plan_id: string
@@ -345,17 +345,15 @@ export default function ProgressPage() {
                       )}
 
                       {/* 进展内容 */}
-                      <div className="space-y-2">
-                        <Label htmlFor="content">进展内容</Label>
-                        <Textarea 
-                          id="content" 
-                          className="w-full min-h-[120px] resize-y" 
-                          placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等..." 
-                          value={form.content || ''} 
-                          onChange={e => setForm(f => ({ ...f, content: e.target.value }))} 
-                          required 
-                        />
-                      </div>
+                      <MarkdownEditor
+                        id="content"
+                        label="进展内容"
+                        value={form.content || ''}
+                        onChange={(value) => setForm(f => ({ ...f, content: value }))}
+                        placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                        required
+                        minHeight="180px"
+                      />
 
                       {/* 计划进度调整（仅限非周期性任务） */}
                       {(() => {
@@ -417,16 +415,14 @@ export default function ProgressPage() {
                       </div>
 
                       {/* 思考总结 */}
-                      <div className="space-y-2">
-                        <Label htmlFor="thinking">思考总结</Label>
-                        <Textarea 
-                          id="thinking" 
-                          className="w-full min-h-[120px] resize-y" 
-                          placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等..." 
-                          value={form.thinking || ''} 
-                          onChange={e => setForm(f => ({ ...f, thinking: e.target.value }))} 
-                        />
-                      </div>
+                      <MarkdownEditor
+                        id="thinking"
+                        label="思考总结"
+                        value={form.thinking || ''}
+                        onChange={(value) => setForm(f => ({ ...f, thinking: value }))}
+                        placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等...\n\n支持 Markdown 格式：\n- **粗体**、*斜体*、~~删除线~~\n- 标题、列表、任务列表\n- 代码块、引用、表格\n- 链接、图片"
+                        minHeight="180px"
+                      />
 
                       {/* 操作按钮 */}
                       <div className="flex flex-col gap-3 pt-4 sm:flex-row">
@@ -510,19 +506,17 @@ export default function ProgressPage() {
                             </TableCell>
                           )}
                           <TableCell className="w-[320px] min-w-[320px]">
-                            <TextPreview
-                              text={r.content}
-                              maxLength={120}
-                              className="text-sm"
-                              truncateLines={3}
+                            <MarkdownPreview
+                              content={r.content}
+                              maxLines={3}
+                              showToggle={true}
                             />
                           </TableCell>
                           <TableCell className="w-[320px] min-w-[320px]">
-                            <TextPreview
-                              text={r.thinking || ''}
-                              maxLength={120}
-                              className="text-sm text-gray-600 dark:text-gray-400"
-                              truncateLines={3}
+                            <MarkdownPreview
+                              content={r.thinking || ''}
+                              maxLines={3}
+                              showToggle={true}
                             />
                           </TableCell>
                           <TableCell className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">

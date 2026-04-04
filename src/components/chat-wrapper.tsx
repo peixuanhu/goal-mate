@@ -698,7 +698,7 @@ export function ChatWrapper() {
       <CopilotChat
         labels={{
           title: "Goal Mate AI助手",
-          initial: "你好！我是你的AI助手，可以帮你管理目标、制定计划、跟踪进度。\n\n**🎯 智能工作流程**：\n• \"我想了解《深入理解计算机系统》这本书\"\n• \"我想提高编程能力\"（创建目标）\n• \"我想读完CSAPP这本书\"（创建计划）",
+          initial: "你好！我是你的AI助手，可以帮你管理目标、制定计划、跟踪进度。\n\n**🎯 智能工作流程**：\n\n• \"我想了解《深入理解计算机系统》这本书\"\n\n• \"我想提高编程能力\"（创建目标）\n\n• \"我想读完CSAPP这本书\"（创建计划）",
           placeholder: "输入你问题或指令...",
         }}
         className="h-full w-full"
