@@ -14,12 +14,11 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced AI action system with expanded instruction sets for recommendation systems
-- Added detailed reasoning requirements for task recommendations, book recommendations, and study plan/method recommendations
-- Improved system prompt with comprehensive guidelines for AI behavior and response formatting
-- Enhanced recommendation logic with mandatory justification requirements
+- Enhanced AI action system with expanded instruction sets requiring detailed reasoning for all recommendations
+- Improved system prompts with comprehensive behavior guidelines for AI assistant interactions
+- Advanced content parsing capabilities for intelligent progress tracking and analysis
 - Expanded book recommendation system with specialized markdown formatting
-- Advanced progress analysis with intelligent content parsing
+- Enhanced recommendation logic with mandatory justification requirements across all action categories
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -74,6 +73,7 @@ L[OpenAI API]
 M[Custom OpenAI Adapter]
 N[Enhanced System Prompt]
 O[Detailed Reasoning Engine]
+P[Intelligent Content Parser]
 end
 A --> C
 A --> D
@@ -94,6 +94,7 @@ A --> L
 A --> M
 A --> N
 A --> O
+A --> P
 ```
 
 **Diagram sources**
@@ -126,6 +127,9 @@ Built-in authentication system that protects API endpoints and ensures secure ac
 ### 6. Enhanced System Prompt Engine
 Comprehensive system prompt with detailed instructions for AI behavior, response formatting, and reasoning requirements across all recommendation types.
 
+### 7. Intelligent Content Parsing Engine
+Advanced content analysis system that intelligently parses user inputs to extract meaningful information for progress tracking and recommendation generation.
+
 **Section sources**
 - [route.ts:132-319](file://src/app/api/copilotkit/route.ts#L132-L319)
 - [route.ts:287-1452](file://src/app/api/copilotkit/route.ts#L287-L1452)
@@ -142,13 +146,15 @@ participant API as "CopilotKit API"
 participant Runtime as "Copilot Runtime"
 participant Actions as "AI Actions"
 participant Reasoning as "Reasoning Engine"
+participant Parser as "Content Parser"
 participant DB as "Database"
 participant OpenAI as "OpenAI Adapter"
 Client->>API : POST /api/copilotkit
 API->>Runtime : Initialize Copilot Runtime
 Runtime->>Runtime : Filter & Sanitize Messages
 Runtime->>Reasoning : Apply Enhanced Instructions
-Reasoning->>Actions : Execute Action Handler
+Reasoning->>Parser : Analyze Content for Details
+Parser->>Actions : Execute Action Handler
 Actions->>DB : Query/Update Data
 DB-->>Actions : Return Results
 Actions->>OpenAI : Call AI Model

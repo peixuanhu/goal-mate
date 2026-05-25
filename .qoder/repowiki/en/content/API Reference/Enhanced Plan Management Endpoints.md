@@ -12,15 +12,17 @@
 - [src/components/quadrant-left-sidebar.tsx](file://src/components/quadrant-left-sidebar.tsx)
 - [src/lib/recurring-utils.ts](file://src/lib/recurring-utils.ts)
 - [src/lib/auth.ts](file://src/lib/auth.ts)
+- [src/lib/utils.ts](file://src/lib/utils.ts)
 - [prisma/schema.prisma](file://prisma/schema.prisma)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Enhanced Priority API endpoint documentation to reflect improved data inclusion across all quadrants
-- Updated priority endpoint section to highlight progressRecords inclusion for complete task information
-- Added comprehensive coverage of progress tracking integration with quadrant management
-- Updated frontend implementation details to show real-time progress synchronization
+- Enhanced PlansPage component with new priority quadrant and scheduling fields support
+- Improved form handling with proper undefined value management during API updates
+- Updated backend API endpoints to handle undefined values properly for data integrity
+- Added real-time quadrant sidebar refresh integration
+- Enhanced progress tracking with comprehensive quadrant data synchronization
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -39,7 +41,7 @@
 
 The Enhanced Plan Management System is a comprehensive task and goal management solution built with Next.js and Prisma ORM. This system provides sophisticated plan management capabilities with advanced filtering, scheduling, tagging, and progress tracking features. The system supports both individual tasks and recurring activities, integrates with Eisenhower Matrix (four-quadrant) prioritization, and offers real-time collaboration features.
 
-The platform enables users to manage their daily activities, long-term goals, and progress tracking through an intuitive interface while maintaining robust backend functionality for data persistence and retrieval. Recent enhancements have expanded the priority API endpoint to provide complete task information across all four quadrants with integrated progress tracking.
+The platform enables users to manage their daily activities, long-term goals, and progress tracking through an intuitive interface while maintaining robust backend functionality for data persistence and retrieval. Recent enhancements have expanded the priority API endpoint to provide complete task information across all four quadrants with integrated progress tracking, and improved form handling with proper undefined value management for enhanced data integrity.
 
 ## System Architecture
 
@@ -51,6 +53,8 @@ subgraph "Frontend Layer"
 UI[React Components]
 Pages[Next.js Pages]
 Layouts[Layout Components]
+Sidebar[Quadrant Sidebar]
+Form[Enhanced Forms]
 end
 subgraph "API Layer"
 PlanAPI[Plan API Routes]
@@ -68,6 +72,7 @@ subgraph "External Services"
 Auth[Authentication Service]
 DnD[DnD Kit]
 Charts[Chart Libraries]
+Utils[Utility Functions]
 end
 UI --> Pages
 Pages --> PlanAPI
@@ -76,6 +81,8 @@ Pages --> GoalAPI
 Pages --> TagAPI
 Pages --> ProgressAPI
 Pages --> ReportAPI
+Sidebar --> PriorityAPI
+Form --> PlanAPI
 PlanAPI --> Prisma
 PriorityAPI --> Prisma
 GoalAPI --> Prisma
@@ -86,13 +93,16 @@ Prisma --> Database
 UI --> DnD
 UI --> Charts
 UI --> Auth
+Utils --> Sidebar
+Utils --> Form
 ```
 
 **Diagram sources**
-- [src/app/api/plan/route.ts:1-114](file://src/app/api/plan/route.ts#L1-L114)
+- [src/app/api/plan/route.ts:1-120](file://src/app/api/plan/route.ts#L1-L120)
 - [src/app/api/plan/priority/route.ts:1-110](file://src/app/api/plan/priority/route.ts#L1-L110)
 - [src/app/api/goal/route.ts:1-51](file://src/app/api/goal/route.ts#L1-L51)
 - [src/app/api/tag/route.ts:1-20](file://src/app/api/tag/route.ts#L1-L20)
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 
 ## Core API Endpoints
 
@@ -140,17 +150,33 @@ API-->>Client : Complete Plan Data
 
 #### PUT /api/plan - Update Existing Plan
 
-Updates plan information and manages tag associations:
+**Updated** Enhanced to properly handle undefined values during updates for improved data integrity:
 
-**Section sources**
-- [src/app/api/plan/route.ts:85-105](file://src/app/api/plan/route.ts#L85-L105)
+The PUT endpoint now filters out undefined values to prevent accidental data overwrites:
+
+```mermaid
+flowchart TD
+Start[PUT /api/plan Request] --> Parse[Parse JSON Data]
+Parse --> Extract[Extract plan_id and tags]
+Extract --> Filter[Filter Out Undefined Values]
+Filter --> Validate{Validate Non-Undefined Fields}
+Validate --> |Valid| UpdateDB[Update Database Record]
+Validate --> |Invalid| Error[Return Error Response]
+UpdateDB --> UpdateTags[Update Tag Associations]
+UpdateTags --> Success[Return Updated Plan]
+Error --> End[End Process]
+Success --> End
+```
+
+**Diagram sources**
+- [src/app/api/plan/route.ts:85-111](file://src/app/api/plan/route.ts#L85-L111)
 
 #### DELETE /api/plan - Remove Plan
 
 Deletes a plan by ID with proper validation:
 
 **Section sources**
-- [src/app/api/plan/route.ts:107-114](file://src/app/api/plan/route.ts#L107-L114)
+- [src/app/api/plan/route.ts:113-120](file://src/app/api/plan/route.ts#L113-L120)
 
 ### Priority Management Endpoints
 
@@ -205,7 +231,24 @@ The endpoint now returns complete task information including progress records fo
 
 #### PUT /api/plan/priority - Update Plan Priority
 
-Updates plan position in the priority matrix:
+**Updated** Enhanced to handle undefined values properly during quadrant updates:
+
+The PUT endpoint now accepts partial updates with proper undefined value filtering:
+
+```mermaid
+sequenceDiagram
+participant Client as "Client Application"
+participant API as "Priority API"
+participant DB as "Database"
+Client->>API : PUT /api/plan/priority (Partial Update)
+API->>API : Filter Undefined Values
+API->>DB : Update Priority Quadrant
+DB-->>API : Updated Plan Record
+API-->>Client : Return Updated Plan with Tags
+```
+
+**Diagram sources**
+- [src/app/api/plan/priority/route.ts:66-110](file://src/app/api/plan/priority/route.ts#L66-L110)
 
 **Section sources**
 - [src/app/api/plan/priority/route.ts:66-110](file://src/app/api/plan/priority/route.ts#L66-L110)
@@ -300,9 +343,9 @@ PLAN ||--o{ PROGRESS_RECORD : "records"
 
 ## Frontend Implementation
 
-### Plan Management Page
+### Enhanced Plan Management Page
 
-The main plan management interface provides comprehensive functionality:
+**Updated** The main plan management interface now includes comprehensive priority quadrant and scheduling field support:
 
 ```mermaid
 classDiagram
@@ -320,12 +363,14 @@ class PlansPage {
 +useState editingId
 +useState loading
 +useState sortConfig
++useState highlightPlanId
 +fetchPlans() void
 +handleSubmit() void
 +handleEdit(plan) void
 +handleDelete(plan_id) void
 +filterPlans(plans) Plan[]
 +sortPlans(plans, config) Plan[]
++refreshQuadrantSidebar() void
 }
 class DraggableTableRow {
 +useState isDragging
@@ -344,43 +389,74 @@ class Plan {
 +string recurrence_value
 +string[] tags
 +ProgressRecord[] progressRecords
++string priority_quadrant
++boolean is_scheduled
 }
 PlansPage --> DraggableTableRow : "renders"
 PlansPage --> Plan : "manages"
 ```
 
 **Diagram sources**
-- [src/app/plans/page.tsx:99-869](file://src/app/plans/page.tsx#L99-L869)
+- [src/app/plans/page.tsx:99-883](file://src/app/plans/page.tsx#L99-L883)
 
-### Four-Quadrant Sidebar
+### Real-time Quadrant Integration
 
-The quadrant sidebar provides drag-and-drop functionality for task prioritization with real-time progress updates:
+**Updated** The quadrant sidebar now provides seamless integration with the plan management system:
 
 ```mermaid
 sequenceDiagram
 participant User as "User"
 participant Sidebar as "Quadrant Sidebar"
 participant API as "Priority API"
+participant Utils as "Utility Functions"
 participant DB as "Database"
 User->>Sidebar : Drag Task to Quadrant
-Sidebar->>Sidebar : Handle Drag End Event
 Sidebar->>API : PUT /api/plan/priority
 API->>DB : Update Plan Priority
 DB-->>API : Updated Plan with Progress
 API-->>Sidebar : Success Response with Progress Data
+Sidebar->>Utils : refreshQuadrantSidebar()
+Utils->>Sidebar : Dispatch quadrant-refresh Event
 Sidebar->>Sidebar : Refresh Quadrant Data
 Sidebar-->>User : Visual Feedback
 ```
 
 **Diagram sources**
-- [src/components/quadrant-left-sidebar.tsx:426-493](file://src/components/quadrant-left-sidebar.tsx#L426-L493)
+- [src/components/quadrant-left-sidebar.tsx:440-507](file://src/components/quadrant-left-sidebar.tsx#L440-L507)
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 - [src/app/api/plan/priority/route.ts:66-110](file://src/app/api/plan/priority/route.ts#L66-L110)
 
 **Section sources**
-- [src/app/plans/page.tsx:99-869](file://src/app/plans/page.tsx#L99-L869)
-- [src/components/quadrant-left-sidebar.tsx:392-493](file://src/components/quadrant-left-sidebar.tsx#L392-L493)
+- [src/app/plans/page.tsx:99-883](file://src/app/plans/page.tsx#L99-L883)
+- [src/components/quadrant-left-sidebar.tsx:376-585](file://src/components/quadrant-left-sidebar.tsx#L376-L585)
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 
 ## Advanced Features
+
+### Enhanced Form Handling
+
+**Updated** The system now includes sophisticated form handling with proper undefined value management:
+
+```mermaid
+flowchart TD
+Start[Form Submission] --> Validate[Validate Form Data]
+Validate --> Prepare[Prepare Submit Data]
+Prepare --> PriorityQuadrant[Add Priority Quadrant]
+PriorityQuadrant --> ScheduledFlag[Add Scheduled Flag]
+ScheduledFlag --> UndefinedCheck{Check for Undefined Values}
+UndefinedCheck --> |Found| Filter[Filter Undefined Values]
+UndefinedCheck --> |None| SendAPI[Send to API]
+Filter --> SendAPI
+SendAPI --> Success[Handle Success Response]
+Success --> Refresh[Refresh Quadrant Sidebar]
+Refresh --> End[Complete]
+```
+
+**Diagram sources**
+- [src/app/plans/page.tsx:317-350](file://src/app/plans/page.tsx#L317-L350)
+
+**Section sources**
+- [src/app/plans/page.tsx:317-350](file://src/app/plans/page.tsx#L317-L350)
 
 ### Recurring Task Management
 
@@ -412,7 +488,7 @@ Dynamic tag association system supporting both existing and new tags:
 
 **Section sources**
 - [src/app/api/tag/route.ts:6-19](file://src/app/api/tag/route.ts#L6-L19)
-- [src/app/plans/page.tsx:520-568](file://src/app/plans/page.tsx#L520-L568)
+- [src/app/plans/page.tsx:520-584](file://src/app/plans/page.tsx#L520-L584)
 
 ### Progress Tracking
 
@@ -452,10 +528,27 @@ AuthAPI-->>Client : Protected Resource
 
 ### Real-time Updates
 
-The system supports real-time updates through periodic polling and event-driven refreshes with progress synchronization:
+**Updated** The system now supports comprehensive real-time updates through multiple integration points:
+
+```mermaid
+flowchart TD
+FormSubmit[Form Submission] --> APICall[API Call]
+APICall --> RefreshEvent[Dispatch Refresh Event]
+RefreshEvent --> QuadrantSidebar[Quadrant Sidebar Listener]
+RefreshEvent --> PlanTable[Plan Table Listener]
+QuadrantSidebar --> FetchData[Fetch Updated Data]
+PlanTable --> FetchData
+FetchData --> UpdateUI[Update UI Components]
+UpdateUI --> Success[Show Success Message]
+```
+
+**Diagram sources**
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
+- [src/components/quadrant-left-sidebar.tsx:428-438](file://src/components/quadrant-left-sidebar.tsx#L428-L438)
 
 **Section sources**
-- [src/components/quadrant-left-sidebar.tsx:408-424](file://src/components/quadrant-left-sidebar.tsx#L408-L424)
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
+- [src/components/quadrant-left-sidebar.tsx:420-438](file://src/components/quadrant-left-sidebar.tsx#L420-L438)
 
 ## Performance Considerations
 
@@ -468,6 +561,7 @@ The system implements several performance optimization strategies:
 3. **Indexing Strategy**: Proper indexing on frequently queried fields
 4. **Connection Pooling**: Efficient database connection management
 5. **Progress Record Optimization**: Selective loading of progress records for quadrant display
+6. **Undefined Value Filtering**: Backend filtering prevents unnecessary database updates
 
 ### Frontend Performance
 
@@ -476,6 +570,7 @@ The system implements several performance optimization strategies:
 3. **Debounced Search**: Input debouncing for search operations
 4. **Lazy Loading**: Components load only when needed
 5. **Real-time Updates**: Optimized refresh intervals for quadrant data
+6. **Event-driven Architecture**: Efficient component communication through custom events
 
 ## Security Implementation
 
@@ -494,6 +589,7 @@ The system implements comprehensive security measures:
 - **Cross-Site Scripting (XSS) Prevention**: Input validation and sanitization
 - **Cross-Site Request Forgery (CSRF) Protection**: Token-based authentication
 - **Data Encryption**: Sensitive data encryption at rest and in transit
+- **Undefined Value Safety**: Backend filtering prevents accidental data corruption
 
 **Section sources**
 - [src/lib/auth.ts:4-33](file://src/lib/auth.ts#L4-L33)
@@ -509,12 +605,14 @@ The system implements comprehensive security measures:
 - Ensure `plan_id` is provided for updates
 - Validate JSON structure for POST requests
 - Check tag array format for plan creation
+- Verify undefined values are properly filtered in PUT requests
 
 **Issue**: 500 Internal Server Errors
 **Solution**: Check database connectivity and Prisma configuration
 - Verify PostgreSQL connection string
 - Ensure database migrations are applied
 - Check Prisma client initialization
+- Verify undefined value filtering logic
 
 #### Frontend Issues
 
@@ -523,12 +621,21 @@ The system implements comprehensive security measures:
 - Check network tab for failed requests
 - Verify `/api/plan/priority` endpoint response includes progress records
 - Ensure proper error handling in sidebar component
+- Check for refresh event listener issues
 
 **Issue**: Drag and drop not working
 **Solution**: Check browser compatibility and permissions
 - Verify browser supports HTML5 drag and drop
 - Ensure proper event handlers are attached
 - Check for JavaScript errors in console
+- Verify refreshQuadrantSidebar utility function
+
+**Issue**: Form submission failures
+**Solution**: Check form data handling and API integration
+- Verify priority_quadrant and is_scheduled fields are properly included
+- Ensure undefined values are filtered before API calls
+- Check for proper error handling in form submission
+- Verify refreshQuadrantSidebar is called after successful updates
 
 #### Database Issues
 
@@ -538,22 +645,30 @@ The system implements comprehensive security measures:
 - Ensure proper error handling for duplicates
 - Verify database unique constraint enforcement
 
+**Issue**: Data integrity problems
+**Solution**: Check undefined value filtering
+- Verify PUT endpoints properly filter undefined values
+- Ensure database updates only occur for non-undefined fields
+- Check for proper error handling in update operations
+
 **Section sources**
-- [src/app/api/plan/route.ts:107-114](file://src/app/api/plan/route.ts#L107-L114)
-- [src/app/api/plan/priority/route.ts:72-77](file://src/app/api/plan/priority/route.ts#L72-L77)
+- [src/app/api/plan/route.ts:85-111](file://src/app/api/plan/route.ts#L85-L111)
+- [src/app/api/plan/priority/route.ts:72-110](file://src/app/api/plan/priority/route.ts#L72-L110)
+- [src/lib/utils.ts:8-16](file://src/lib/utils.ts#L8-L16)
 
 ## Conclusion
 
 The Enhanced Plan Management System provides a comprehensive solution for task and goal management with advanced features including:
 
-- **Flexible Filtering**: Multi-dimensional filtering with tags, difficulty, scheduling status, and quadrant assignment
+- **Enhanced Form Handling**: Sophisticated form processing with proper undefined value management for improved data integrity
 - **Priority Management**: Four-quadrant prioritization with drag-and-drop interface and complete progress tracking
+- **Real-time Integration**: Seamless real-time updates through custom event system and quadrant sidebar refresh
 - **Recurring Tasks**: Intelligent cycle detection and progress tracking
-- **Real-time Collaboration**: Live updates and synchronized data with progress synchronization
-- **Advanced Reporting**: Comprehensive progress tracking and analytics with quadrant-based insights
-- **Secure Architecture**: Robust authentication and authorization system
+- **Advanced Filtering**: Multi-dimensional filtering with tags, difficulty, scheduling status, and quadrant assignment
+- **Robust API Integration**: Proper form handling and API integration with comprehensive error handling
+- **Secure Architecture**: Robust authentication and authorization system with data protection measures
 
-The recent enhancement to the priority API endpoint significantly improves the system's capability to provide complete task information across all quadrants. By including progress records for all four quadrants (q1, q2, q3, q4), users can now access comprehensive task history and progress data regardless of quadrant assignment, enabling better decision-making and progress monitoring.
+The recent enhancements significantly improve the system's capability to provide complete task information across all quadrants. The enhanced PUT endpoints now properly handle undefined values during updates, preventing accidental data overwrites and ensuring data integrity. The addition of real-time quadrant sidebar refresh integration provides seamless user experience with immediate visual feedback for all plan management operations.
 
 The system's modular design allows for easy extension and customization while maintaining high performance and reliability. The combination of modern frontend technologies with a robust backend ensures a smooth user experience across all devices and use cases.
 

@@ -14,6 +14,14 @@
 - [package.json](file://package.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced ChatWrapper markdown rendering with refined paragraph margins and increased line heights
+- Improved list item display with proper marker positioning and spacing
+- Comprehensive CSS adjustments for proper list rendering within markdown content
+- Added support for nested lists and enhanced marker display
+- Refined hydration error fixes for paragraph and block elements
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -28,7 +36,7 @@
 
 ## Introduction
 This document provides comprehensive documentation for the AI chat interface components in the project. It focuses on:
-- ChatWrapper: the main chat container with hydration-safe rendering, styles, and message handling
+- ChatWrapper: the main chat container with hydration-safe rendering, styles, and enhanced markdown rendering with refined paragraph margins and improved list display
 - CopilotClearingInput: the custom input component with auto-clearing, auto-resize, and submit handling
 - DefaultToolRender: the renderer for AI tool outputs and interactive elements
 - MCP client integration: Model Context Protocol client for AI communication protocols
@@ -45,7 +53,7 @@ The chat UI is built with Next.js and CopilotKit. The key files involved are:
 ```mermaid
 graph TB
 subgraph "Frontend"
-CW["ChatWrapper<br/>Chat container + hydration fix"]
+CW["ChatWrapper<br/>Enhanced markdown rendering + hydration fix"]
 CI["CopilotClearingInput<br/>Custom input + auto-clear"]
 DTR["DefaultToolRender<br/>Tool output renderer"]
 LYT["RootLayout<br/>CopilotKit provider"]
@@ -66,7 +74,7 @@ GCS --> CW
 ```
 
 **Diagram sources**
-- [chat-wrapper.tsx:1-709](file://src/components/chat-wrapper.tsx#L1-L709)
+- [chat-wrapper.tsx:1-819](file://src/components/chat-wrapper.tsx#L1-L819)
 - [copilot-clearing-input.tsx:1-175](file://src/components/copilot-clearing-input.tsx#L1-L175)
 - [default-tool-render.tsx:1-104](file://src/components/default-tool-render.tsx#L1-L104)
 - [layout.tsx:1-31](file://src/app/layout.tsx#L1-L31)
@@ -79,13 +87,13 @@ GCS --> CW
 - [globals.css:129-184](file://src/app/globals.css#L129-L184)
 
 ## Core Components
-- ChatWrapper: wraps CopilotChat with hydration-safe DOM mutation handling, global styles, and custom message/input styling. It injects CopilotClearingInput as the Input component and applies a theme.
+- ChatWrapper: wraps CopilotChat with hydration-safe DOM mutation handling, global styles, and enhanced markdown rendering. It injects CopilotClearingInput as the Input component and applies a theme with refined paragraph margins and improved list display.
 - CopilotClearingInput: a custom input with auto-resize textarea, controlled clearing after send, keyboard shortcuts, and power-by branding.
 - DefaultToolRender: renders tool call status, name, parameters, and results in an expandable UI with animated indicators.
 - MCP Client: a Model Context Protocol client that connects via SSE, lists tools, caches tool definitions, and executes tool calls with robust argument normalization.
 
 **Section sources**
-- [chat-wrapper.tsx:7-709](file://src/components/chat-wrapper.tsx#L7-L709)
+- [chat-wrapper.tsx:7-819](file://src/components/chat-wrapper.tsx#L7-L819)
 - [copilot-clearing-input.tsx:84-175](file://src/components/copilot-clearing-input.tsx#L84-L175)
 - [default-tool-render.tsx:12-104](file://src/components/default-tool-render.tsx#L12-L104)
 - [mcp-client.ts:26-449](file://src/app/utils/mcp-client.ts#L26-L449)
@@ -118,7 +126,7 @@ CC-->>U : Updated UI
 ```
 
 **Diagram sources**
-- [chat-wrapper.tsx:698-706](file://src/components/chat-wrapper.tsx#L698-L706)
+- [chat-wrapper.tsx:808-816](file://src/components/chat-wrapper.tsx#L808-L816)
 - [copilot-clearing-input.tsx:105-119](file://src/components/copilot-clearing-input.tsx#L105-L119)
 - [route.ts:1456-1636](file://src/app/api/copilotkit/route.ts#L1456-L1636)
 - [mcp-client.ts:115-300](file://src/app/utils/mcp-client.ts#L115-L300)
@@ -126,8 +134,9 @@ CC-->>U : Updated UI
 ## Detailed Component Analysis
 
 ### ChatWrapper
-- Purpose: Provides the chat container, hydration-safe DOM fixes, global styles, and theme injection.
+- Purpose: Provides the chat container, hydration-safe DOM fixes, global styles, and theme injection with enhanced markdown rendering.
 - Hydration fixes: Uses MutationObserver and periodic checks to adjust nested block elements inside paragraphs to prevent hydration mismatches.
+- Enhanced markdown rendering: Features refined paragraph margins (0.25rem top/bottom), increased line heights (1.55 for bubbles, 1.6 for markdown), improved list item display with proper spacing (0.15rem top/bottom), and comprehensive CSS adjustments for proper list rendering including nested lists and marker display.
 - Styles: Applies extensive CopilotKit overrides for messages, input, buttons, and markdown rendering; includes animations and responsive design.
 - Integration: Passes CopilotClearingInput as the Input component and sets labels for title, initial message, and placeholder.
 
@@ -138,17 +147,20 @@ CheckMounted --> |No| Loading["Show loading spinner"]
 CheckMounted --> |Yes| HydrFix["Setup hydration fix observers"]
 HydrFix --> Observe["Observe messages container mutations"]
 Observe --> Periodic["Periodic fix every 2s"]
-Periodic --> ApplyStyles["Inject global styles"]
+Periodic --> ApplyStyles["Inject enhanced global styles"]
 ApplyStyles --> RenderChat["Render CopilotChat with Input=CI"]
 RenderChat --> End(["Ready"])
 ```
 
+**Updated** Enhanced markdown rendering with refined paragraph margins (0.25rem), increased line heights (1.55 for message bubbles, 1.6 for markdown content), improved list item spacing (0.15rem), and comprehensive CSS for proper list marker display including nested lists.
+
 **Diagram sources**
 - [chat-wrapper.tsx:11-59](file://src/components/chat-wrapper.tsx#L11-L59)
-- [chat-wrapper.tsx:82-709](file://src/components/chat-wrapper.tsx#L82-L709)
+- [chat-wrapper.tsx:51-94](file://src/components/chat-wrapper.tsx#L51-L94)
+- [chat-wrapper.tsx:127-819](file://src/components/chat-wrapper.tsx#L127-L819)
 
 **Section sources**
-- [chat-wrapper.tsx:7-709](file://src/components/chat-wrapper.tsx#L7-L709)
+- [chat-wrapper.tsx:7-819](file://src/components/chat-wrapper.tsx#L7-L819)
 
 ### CopilotClearingInput
 - Purpose: A custom input component that ensures the textarea is cleared immediately after sending, with auto-resize behavior and keyboard handling.
@@ -279,7 +291,7 @@ API-->>CC : Deliver response
 ## Dependency Analysis
 - Frontend dependencies: @copilotkit/react-ui, @copilotkit/react-core, styled-jsx, tailwind-merge.
 - Backend dependencies: @copilotkit/runtime, @copilotkit/react-ui styles, @modelcontextprotocol/sdk.
-- Global styles: CopilotKit default styles imported and customized overrides for chat containers and markdown.
+- Global styles: CopilotKit default styles imported and customized overrides for chat containers and enhanced markdown rendering.
 
 ```mermaid
 graph LR
@@ -316,8 +328,7 @@ API --> MCP
 - Scrollbars and animations: Smooth animations and scrollbars are enabled; consider prefers-reduced-motion media queries for accessibility.
 - Network latency: SSE-based MCP client and runtime streaming; debounce user input and throttle frequent updates.
 - Tool caching: MCP tools are cached to reduce repeated network calls; invalidate cache on disconnect.
-
-[No sources needed since this section provides general guidance]
+- Enhanced markdown rendering: Optimized CSS selectors and reduced specificity to minimize style recalculation during message rendering.
 
 ## Troubleshooting Guide
 - Hydration mismatch: ChatWrapper includes targeted fixes for nested block elements inside paragraphs; if issues persist, verify global styles and ensure hydration runs after mount.
@@ -325,6 +336,7 @@ API --> MCP
 - Tool execution failures: MCP client logs errors and marks disconnected; check serverUrl, headers, and network connectivity.
 - Backend errors: The API route returns structured 500 responses with error details; inspect logs for stack traces and unsupported roles filtering.
 - Missing CopilotKit styles: Ensure @copilotkit/react-ui/styles.css is imported and globals.css overrides are applied.
+- Markdown rendering issues: Enhanced CSS rules for proper list marker display and paragraph spacing; verify that nested lists render correctly with proper indentation and markers.
 
 **Section sources**
 - [chat-wrapper.tsx:17-59](file://src/components/chat-wrapper.tsx#L17-L59)
@@ -333,9 +345,7 @@ API --> MCP
 - [route.ts:1621-1634](file://src/app/api/copilotkit/route.ts#L1621-L1634)
 
 ## Conclusion
-The chat interface combines a robust frontend with CopilotKit and a powerful backend runtime. ChatWrapper ensures hydration safety and polished UI, CopilotClearingInput delivers reliable input behavior, and DefaultToolRender presents tool outputs clearly. The MCP client enables standardized protocol communication, while the backend runtime integrates actions for goal/plan/progress management. Together, these components provide a scalable, customizable, and performant AI chat experience.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The chat interface combines a robust frontend with CopilotKit and a powerful backend runtime. ChatWrapper ensures hydration safety and polished UI with enhanced markdown rendering featuring refined paragraph margins, increased line heights, and improved list display. CopilotClearingInput delivers reliable input behavior, and DefaultToolRender presents tool outputs clearly. The MCP client enables standardized protocol communication, while the backend runtime integrates actions for goal/plan/progress management. Together, these components provide a scalable, customizable, and performant AI chat experience with superior markdown rendering capabilities.
 
 ## Appendices
 
@@ -343,7 +353,7 @@ The chat interface combines a robust frontend with CopilotKit and a powerful bac
 
 - Chat initialization
   - Wrap your app with the CopilotKit provider and render ChatWrapper or CopilotChat.
-  - Reference: [layout.tsx:24-26](file://src/app/layout.tsx#L24-L26), [chat-wrapper.tsx:698-706](file://src/components/chat-wrapper.tsx#L698-L706)
+  - Reference: [layout.tsx:24-26](file://src/app/layout.tsx#L24-L26), [chat-wrapper.tsx:808-816](file://src/components/chat-wrapper.tsx#L808-L816)
 
 - Message flow
   - User types in CopilotClearingInput, presses Enter, triggers send, and the message is delivered to the backend runtime.
@@ -363,7 +373,7 @@ The chat interface combines a robust frontend with CopilotKit and a powerful bac
   - Reference: [layout.tsx](file://src/app/layout.tsx#L14), [chat-wrapper.tsx:93-96](file://src/components/chat-wrapper.tsx#L93-L96)
 
 - Message formatting
-  - Customize markdown rendering and bubble styles in ChatWrapper’s global styles.
+  - Customize markdown rendering and bubble styles in ChatWrapper's enhanced global styles.
   - Reference: [chat-wrapper.tsx:264-539](file://src/components/chat-wrapper.tsx#L264-L539), [globals.css:187-295](file://src/app/globals.css#L187-L295)
 
 - Input behavior
@@ -373,6 +383,18 @@ The chat interface combines a robust frontend with CopilotKit and a powerful bac
 - Tool integration
   - Extend MCP client tools and enhance descriptions with required parameters and examples.
   - Reference: [mcp-client.ts:115-234](file://src/app/utils/mcp-client.ts#L115-L234), [mcp-client.ts:369-413](file://src/app/utils/mcp-client.ts#L369-L413)
+
+### Enhanced Markdown Rendering Features
+- Refined paragraph margins: 0.25rem top and bottom spacing for consistent vertical rhythm
+- Increased line heights: 1.55 for message bubbles, 1.6 for markdown content for improved readability
+- Improved list item display: 0.15rem spacing with proper marker positioning and nesting support
+- Comprehensive CSS adjustments: Proper list rendering including nested lists, marker display, and paragraph fixes
+- Hydration error prevention: Specialized CSS classes for fixing paragraph/block element conflicts
+
+**Section sources**
+- [chat-wrapper.tsx:497-511](file://src/components/chat-wrapper.tsx#L497-L511)
+- [chat-wrapper.tsx:459-495](file://src/components/chat-wrapper.tsx#L459-L495)
+- [chat-wrapper.tsx:312-430](file://src/components/chat-wrapper.tsx#L312-L430)
 
 ### Real-time Updates
 - SSE-based MCP client and runtime streaming provide near-real-time updates.

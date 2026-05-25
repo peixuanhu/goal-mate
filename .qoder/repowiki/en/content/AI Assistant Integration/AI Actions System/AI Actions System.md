@@ -8,6 +8,14 @@
 - [README.md](file://README.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced queryPlans action with comprehensive time-range filtering capabilities
+- Added support for today, yesterday, this week, next week, this month, next month, this quarter, and this year time periods
+- Implemented precise date boundary calculations for progress record filtering
+- Updated action parameter schemas to include timeRange parameter
+- Enhanced system prompts with time period filtering guidelines
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -28,7 +36,7 @@
 
 The AI Actions System in Goal Mate is built around CopilotKit integration, providing intelligent automation capabilities for goal and plan management. The system enables natural language interactions with AI assistants that can automatically detect user intents and execute corresponding system actions.
 
-The system currently implements six core AI actions: `recommendTasks`, `queryPlans`, `createGoal`, `getSystemOptions`, `createPlan`, `findPlan`, and `updateProgress`. These actions work together to provide a comprehensive AI-powered productivity management solution.
+The system currently implements seven core AI actions: `recommendTasks`, `queryPlans`, `createGoal`, `getSystemOptions`, `createPlan`, `findPlan`, `updateProgress`, `addProgressRecord`, and `analyzeAndRecordProgress`. These actions work together to provide a comprehensive AI-powered productivity management solution with advanced time-range filtering capabilities.
 
 ## Project Structure
 
@@ -53,6 +61,8 @@ I[getSystemOptions]
 J[createPlan]
 K[findPlan]
 L[updateProgress]
+M[addProgressRecord]
+N[analyzeAndRecordProgress]
 end
 A --> B
 A --> C
@@ -63,6 +73,8 @@ C --> I
 C --> J
 C --> K
 C --> L
+C --> M
+C --> N
 F --> D
 G --> D
 H --> D
@@ -70,6 +82,8 @@ I --> D
 J --> D
 K --> D
 L --> D
+M --> D
+N --> D
 D --> E
 ```
 
@@ -78,7 +92,7 @@ D --> E
 - [schema.prisma:16-61](file://prisma/schema.prisma#L16-L61)
 
 **Section sources**
-- [route.ts:1-1636](file://src/app/api/copilotkit/route.ts#L1-1636)
+- [route.ts:1-1636](file://src/app/api/copilotkit/route.ts#L1-L1636)
 - [schema.prisma:1-72](file://prisma/schema.prisma#L1-L72)
 
 ## Core Components
@@ -208,6 +222,8 @@ ReturnSuccess --> End
 - **difficulty** (string, optional): Filter by difficulty level
 - **tag** (string, optional): Filter by specific tag
 - **keyword** (string, optional): Search term for name/description
+- **includeCompleted** (boolean, optional): Include completed tasks (default: false)
+- **timeRange** (string, optional): Time range filter supporting: today, yesterday, this_week, next_week, this_month, next_month, this_quarter, this_year
 
 ### createGoal
 - **name** (string, required): Goal name
@@ -225,6 +241,8 @@ ReturnSuccess --> End
 
 ### findPlan
 - **searchTerm** (string, required): Search keywords for plan name, description, or tags
+- **includeCompleted** (boolean, optional): Include completed tasks (default: false)
+- **timeRange** (string, optional): Time range filter supporting: today, yesterday, this_week, next_week, this_month, next_month, this_quarter, this_year
 
 ### updateProgress
 - **plan_id** (string, required): Target plan identifier
@@ -232,6 +250,15 @@ ReturnSuccess --> End
 - **content** (string, optional): Progress description
 - **thinking** (string, optional): Reflection content
 - **custom_time** (string, optional): Natural language time description
+
+### addProgressRecord
+- **plan_identifier** (string, required): Target plan identifier (plan_id, name, or keyword)
+- **content** (string, required): Progress description
+- **thinking** (string, optional): Reflection content
+- **record_time** (string, optional): Natural language time description
+
+### analyzeAndRecordProgress
+- **user_report** (string, required): User's progress report containing activities, thoughts, and time information
 
 **Section sources**
 - [route.ts:293-306](file://src/app/api/copilotkit/route.ts#L293-L306)
@@ -241,6 +268,9 @@ ReturnSuccess --> End
 - [route.ts:549-549](file://src/app/api/copilotkit/route.ts#L549-L549)
 - [route.ts:627-627](file://src/app/api/copilotkit/route.ts#L627-L627)
 - [route.ts:739-739](file://src/app/api/copilotkit/route.ts#L739-L739)
+- [route.ts:1008-1042](file://src/app/api/copilotkit/route.ts#L1008-L1042)
+- [route.ts:1294-1322](file://src/app/api/copilotkit/route.ts#L1294-L1322)
+- [route.ts:1500-1509](file://src/app/api/copilotkit/route.ts#L1500-L1509)
 
 ## Database Interactions
 
@@ -331,6 +361,30 @@ Runtime-->>AI : Formatted action result
 - [route.ts:1456-1635](file://src/app/api/copilotkit/route.ts#L1456-L1635)
 
 ### Specialized Flows
+
+#### Time Range Filtering Flow
+The enhanced `queryPlans` and `findPlan` actions implement sophisticated time range filtering:
+
+```mermaid
+flowchart TD
+Start([Time Range Query]) --> ParseRange["Parse Time Range"]
+ParseRange --> CalcDates["Calculate Date Boundaries"]
+CalcDates --> FilterRecords["Filter Progress Records"]
+FilterRecords --> ApplyFilters["Apply Additional Filters"]
+ApplyFilters --> ReturnResults["Return Filtered Results"]
+CalcDates --> Today["Today: 00:00 to 23:59"]
+CalcDates --> Yesterday["Yesterday: 00:00 to 23:59"]
+CalcDates --> ThisWeek["This Week: Monday 00:00 to Sunday 23:59"]
+CalcDates --> NextWeek["Next Week: Monday 00:00 to Sunday 23:59"]
+CalcDates --> ThisMonth["This Month: 1st to Last Day 23:59"]
+CalcDates --> NextMonth["Next Month: 1st to Last Day 23:59"]
+CalcDates --> ThisQuarter["This Quarter: Quarter Start to Quarter End 23:59"]
+CalcDates --> ThisYear["This Year: Jan 1 to Dec 31 23:59"]
+```
+
+**Diagram sources**
+- [route.ts:563-632](file://src/app/api/copilotkit/route.ts#L563-L632)
+- [route.ts:898-962](file://src/app/api/copilotkit/route.ts#L898-L962)
 
 #### Progress Update Flow
 The `updateProgress` action implements sophisticated logic for handling different types of progress updates:
@@ -424,6 +478,31 @@ All action handlers return responses in a standardized format:
 }
 ```
 
+#### queryPlans Response
+```json
+{
+  "message": "Query explanation",
+  "timeRange": "today|this_week|this_month|...",
+  "plans": [
+    {
+      "plan_id": "plan_unique_id",
+      "name": "Plan Name",
+      "description": "Plan Description",
+      "difficulty": "medium",
+      "progress": 0.5,
+      "tags": ["tag1", "tag2"],
+      "progressRecords": [
+        {
+          "content": "Progress content",
+          "thinking": "Reflection content",
+          "gmt_create": "2024-01-01T12:00:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
 #### createPlan Response
 ```json
 {
@@ -452,7 +531,7 @@ All action handlers return responses in a standardized format:
     "record": {
       "content": "Progress content",
       "thinking": "Reflection content",
-      "gmt_create": "2024-01-01T12:00:00Z"
+      "gmt_create": "2024-01-01T15:00:00Z"
     }
   }
 }
@@ -495,7 +574,40 @@ All action handlers return responses in a standardized format:
 }
 ```
 
-### Example 2: Plan Creation
+### Example 2: Time-Restricted Plan Query
+**Input:**
+```json
+{
+  "keyword": "React",
+  "timeRange": "today",
+  "includeCompleted": false
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "plan_id": "plan_def456",
+      "name": "Complete React Project",
+      "difficulty": "hard",
+      "progress": 0.75,
+      "tags": ["programming", "react", "typescript"],
+      "progressRecords": [
+        {
+          "content": "Implemented authentication module",
+          "thinking": "JWT token handling was challenging but solved",
+          "gmt_create": "2024-01-01T14:30:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Example 3: Plan Creation
 **Input:**
 ```json
 {
@@ -520,7 +632,7 @@ All action handlers return responses in a standardized format:
 }
 ```
 
-### Example 3: Progress Update
+### Example 4: Progress Update with Time Range
 **Input:**
 ```json
 {
@@ -654,11 +766,14 @@ The AI Actions System in Goal Mate provides a robust foundation for AI-powered p
 
 Key strengths of the system include:
 
-1. **Comprehensive Coverage**: Six core actions covering the main productivity workflows
-2. **Robust Architecture**: Clear separation of concerns with proper error handling
-3. **Extensible Design**: Easy to add new actions following established patterns
-4. **Developer-Friendly**: Consistent APIs and comprehensive logging for debugging
+1. **Comprehensive Coverage**: Seven core actions covering the main productivity workflows
+2. **Advanced Time Filtering**: Sophisticated time-range filtering for precise data queries
+3. **Robust Architecture**: Clear separation of concerns with proper error handling
+4. **Extensible Design**: Easy to add new actions following established patterns
+5. **Developer-Friendly**: Consistent APIs and comprehensive logging for debugging
 
 The system successfully demonstrates how AI assistants can be integrated into productivity applications to automate routine tasks while maintaining flexibility for custom extensions.
 
-Future enhancements could include additional AI actions, improved recommendation algorithms, and expanded search capabilities to further enhance the user experience.
+Recent enhancements have significantly improved the system's ability to handle time-sensitive queries, making it more powerful for users who need to track progress within specific date ranges. The addition of comprehensive time-range filtering capabilities allows users to query their progress records with precision, supporting workflows that require temporal accuracy.
+
+Future enhancements could include additional AI actions, improved recommendation algorithms, expanded search capabilities, and more sophisticated time-based analytics to further enhance the user experience.

@@ -379,7 +379,7 @@ const customOpenAI = new CustomOpenAI({
 
 // 配置阿里云百炼适配器 - 使用更标准的模型名称
 const serviceAdapter = new OpenAIAdapter({
-  model: "qwen3.5-plus",
+  model: "qwen3.6-plus",
   openai: customOpenAI,
 });
 
