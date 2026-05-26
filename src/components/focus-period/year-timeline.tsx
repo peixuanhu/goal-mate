@@ -22,7 +22,7 @@ function getGoalLabel(period: { goal?: { name: string } | null }): string {
   return period.goal?.name ?? "目标已删除"
 }
 
-export function YearTimeline({ year, periods, today }: YearTimelineProps) {
+export function YearTimeline({ year, periods, today = new Date() }: YearTimelineProps) {
   const segments = buildTimelineSegments(periods, year)
   const showTodayMarker = today?.getFullYear() === year
   const todayPercent = showTodayMarker ? dateToYearPercent(today, year) : null
