@@ -68,6 +68,14 @@ export function normalizeDateInput(date: string | Date): string {
   return parseDateOnly(date).toISOString().slice(0, 10)
 }
 
+export function normalizeLocalDateInput(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${day}`
+}
+
 export function parseDateOnly(date: string | Date): Date {
   if (date instanceof Date) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -88,7 +96,7 @@ export function parseDateOnly(date: string | Date): Date {
 }
 
 export function dateToYearDay(date: string | Date, year: number): number {
-  const parsedDate = parseDateOnly(date)
+  const parsedDate = parseDateOnly(date instanceof Date ? normalizeLocalDateInput(date) : date)
   const yearStart = parseDateOnly(getYearStart(year))
 
   return Math.floor((parsedDate.getTime() - yearStart.getTime()) / MS_PER_DAY)
@@ -134,7 +142,7 @@ export function hasDateRangeOverlap(
 }
 
 export function findCurrentFocusPeriod<T extends DateRange>(periods: T[], date: string | Date = new Date()): T | undefined {
-  const currentDate = normalizeDateInput(date)
+  const currentDate = date instanceof Date ? normalizeLocalDateInput(date) : normalizeDateInput(date)
 
   return [...periods]
     .sort((a, b) => normalizeDateInput(a.start_date).localeCompare(normalizeDateInput(b.start_date)))

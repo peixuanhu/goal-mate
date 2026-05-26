@@ -9,9 +9,19 @@ export interface ComboboxProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
+  allowCustomOption?: boolean
+  emptyMessage?: string
 }
 
-export function Combobox({ options, value, onChange, placeholder, className }: ComboboxProps) {
+export function Combobox({
+  options,
+  value,
+  onChange,
+  placeholder,
+  className,
+  allowCustomOption = true,
+  emptyMessage = "没有匹配项",
+}: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [input, setInput] = React.useState("")
   const filtered = React.useMemo(() =>
@@ -50,12 +60,16 @@ export function Combobox({ options, value, onChange, placeholder, className }: C
             }}
           />
           <div className="max-h-48 overflow-y-auto">
-            {filtered.length === 0 && input ? (
+            {filtered.length === 0 && input && allowCustomOption ? (
               <div
                 className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
                 onMouseDown={() => { onChange(input); setOpen(false) }}
               >
-                新建标签 " {input} "
+                新建标签 &quot;{input}&quot;
+              </div>
+            ) : filtered.length === 0 && input ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                {emptyMessage}
               </div>
             ) : filtered.map(opt => (
               <div

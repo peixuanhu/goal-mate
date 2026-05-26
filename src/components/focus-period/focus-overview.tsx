@@ -151,7 +151,7 @@ export function FocusOverview() {
 
   const savedPeriods = React.useMemo(() => periods.filter(period => !isDraftPeriod(period)), [periods])
   const currentPeriod = React.useMemo(() => findCurrentFocusPeriod(savedPeriods), [savedPeriods])
-  const currentGoalName = currentPeriod?.goal?.name
+  const currentGoalName = currentPeriod ? currentPeriod.goal?.name ?? "目标已删除" : undefined
   const currentGoalTag = currentPeriod?.goal?.tag
 
   async function savePeriod(period: FocusPeriodView): Promise<FocusPeriodView> {

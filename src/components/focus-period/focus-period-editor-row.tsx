@@ -243,6 +243,8 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
             onChange={handleGoalChange}
             placeholder="搜索目标"
             className="w-full"
+            allowCustomOption={false}
+            emptyMessage="没有匹配的目标"
           />
         </div>
         <div className="space-y-2">

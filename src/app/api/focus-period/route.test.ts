@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
 const prismaMock = vi.hoisted(() => ({
+  $executeRaw: vi.fn(),
+  $transaction: vi.fn(async (callback: (client: unknown) => unknown) => callback(prismaMock)),
   focusPeriod: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -151,6 +153,19 @@ describe("/api/focus-period", () => {
     expect(prismaMock.focusPeriod.create).not.toHaveBeenCalled()
   })
 
+  it("POST rejects malformed JSON with a validation error", async () => {
+    const response = await POST(
+      request("http://localhost/api/focus-period", {
+        method: "POST",
+        body: "{",
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "请求体必须是有效 JSON 对象" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("POST rejects missing goals", async () => {
     prismaMock.focusPeriod.findMany.mockResolvedValue([])
     prismaMock.goal.findUnique.mockResolvedValue(null)
@@ -203,6 +218,8 @@ describe("/api/focus-period", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(prismaMock.focusPeriod.create).toHaveBeenCalledWith({
       data: {
         period_id: expect.stringMatching(/^focus_[a-f0-9]{10}$/),
@@ -227,6 +244,7 @@ describe("/api/focus-period", () => {
   it("PUT validates while ignoring the updated period and returns the mapped record", async () => {
     prismaMock.focusPeriod.findUnique.mockResolvedValue({
       period_id: "period_music",
+      year: 2026,
     })
     prismaMock.focusPeriod.findMany.mockResolvedValue([
       {
@@ -264,6 +282,8 @@ describe("/api/focus-period", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(prismaMock.focusPeriod.update).toHaveBeenCalledWith({
       where: { period_id: "period_music" },
       data: {
@@ -325,6 +345,19 @@ describe("/api/focus-period", () => {
     expect(prismaMock.focusPeriod.findUnique).not.toHaveBeenCalled()
     expect(prismaMock.focusPeriod.findMany).not.toHaveBeenCalled()
     expect(prismaMock.focusPeriod.update).not.toHaveBeenCalled()
+  })
+
+  it("PUT rejects null JSON bodies with a validation error", async () => {
+    const response = await PUT(
+      request("http://localhost/api/focus-period", {
+        method: "PUT",
+        body: "null",
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "请求体必须是有效 JSON 对象" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   it("DELETE requires period_id and deletes matching periods", async () => {

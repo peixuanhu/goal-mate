@@ -53,6 +53,23 @@ describe("focus-period-utils", () => {
     expect(findCurrentFocusPeriod(periods, new Date("2026-09-01T00:00:00.000Z"))).toBeUndefined()
   })
 
+  it("uses the local calendar day when finding the current period from Date", () => {
+    const localMidnightPeriod = [
+      {
+        period_id: "period_local_day",
+        year: 2026,
+        start_date: "2026-05-02",
+        end_date: "2026-05-02",
+        goal_id: "goal_local_day",
+        color: "#4f46e5",
+        goal: { goal_id: "goal_local_day", name: "Local day", tag: "Time" },
+      },
+    ]
+
+    expect(findCurrentFocusPeriod(localMidnightPeriod, new Date(2026, 4, 2, 0, 30))?.period_id).toBe("period_local_day")
+    expect(dateToYearPercent(new Date(2026, 11, 31, 23, 30), 2026)).toBe(100)
+  })
+
   it("allows adjacent periods but rejects overlaps", () => {
     expect(
       hasDateRangeOverlap(
