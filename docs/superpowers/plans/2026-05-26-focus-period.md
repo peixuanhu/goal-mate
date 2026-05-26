@@ -1260,7 +1260,7 @@ Create `src/components/focus-period/focus-period-drawer.tsx`:
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { assignFocusColor, buildTimelineSegments, getYearStart } from "@/lib/focus-period-utils"
+import { assignFocusColor, buildTimelineSegments } from "@/lib/focus-period-utils"
 import { FocusPeriodEditorRow } from "./focus-period-editor-row"
 import type { FocusPeriodView, GoalOption } from "./types"
 
@@ -1291,17 +1291,17 @@ export function FocusPeriodDrawer({
 
   function addDraft() {
     const segments = buildTimelineSegments(
-      periods.filter(period => !period.period_id.startsWith("draft_")),
+      periods,
       year,
     )
     const firstGap = segments.find(segment => segment.kind === "gap")
-    const startDate = firstGap?.start_date ?? getYearStart(year)
+    if (!firstGap) return
 
     onCreateDraft({
       period_id: `draft_${Date.now()}`,
       year,
-      start_date: startDate,
-      end_date: firstGap?.end_date ?? startDate,
+      start_date: firstGap.start_date,
+      end_date: firstGap.end_date,
       goal_id: "",
       color: assignFocusColor(periods.length),
       goal: null,
@@ -1336,6 +1336,7 @@ export function FocusPeriodDrawer({
           <Button type="button" onClick={addDraft}>
             新增阶段
           </Button>
+          {/* If the year is fully covered, disable/no-op add in the real implementation and show 当前年份没有可用空白时间段. */}
         </div>
 
         <div className="space-y-3">
