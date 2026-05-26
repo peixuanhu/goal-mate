@@ -41,6 +41,10 @@ function isDraftPeriod(period: FocusPeriodView): boolean {
   return period.period_id.startsWith("draft_")
 }
 
+function isIncompleteDraftPeriod(period: FocusPeriodView): boolean {
+  return isDraftPeriod(period) && (!period.goal_id || !period.start_date || !period.end_date)
+}
+
 function findFirstAvailableGap(year: number, periods: FocusPeriodView[]) {
   const nonDraftPeriods = periods.filter(period => !isDraftPeriod(period))
   return buildTimelineSegments(nonDraftPeriods, year).find(segment => segment.kind === "gap")
@@ -89,6 +93,16 @@ export function FocusPeriodDrawer({
   const drawerRef = React.useRef<HTMLElement>(null)
   const firstGap = React.useMemo(() => findFirstAvailableGap(year, periods), [periods, year])
   const hasAvailableGap = Boolean(firstGap)
+  const hasIncompleteDraft = React.useMemo(() => periods.some(isIncompleteDraftPeriod), [periods])
+  const hasValidYearInput = isValidYear(yearInput)
+  const addDisabled = !hasAvailableGap || hasIncompleteDraft || !hasValidYearInput
+  const addDisabledMessage = !hasValidYearInput
+    ? `请输入 ${MIN_YEAR}-${MAX_YEAR} 之间的年份`
+    : hasIncompleteDraft
+      ? "请先完成当前草稿阶段"
+      : !hasAvailableGap
+        ? "当前年份没有可用空白时间段"
+        : null
 
   React.useEffect(() => {
     setYearInput(String(year))
@@ -117,6 +131,16 @@ export function FocusPeriodDrawer({
   }
 
   function handleCreateDraft() {
+    if (!hasValidYearInput) {
+      setDraftError(`请输入 ${MIN_YEAR}-${MAX_YEAR} 之间的年份`)
+      return
+    }
+
+    if (hasIncompleteDraft) {
+      setDraftError("请先完成当前草稿阶段")
+      return
+    }
+
     const draftPeriod = createDraftPeriod(year, periods)
     if (!draftPeriod) {
       setDraftError("当前年份没有可用空白时间段")
@@ -232,9 +256,9 @@ export function FocusPeriodDrawer({
           <Button
             type="button"
             onClick={handleCreateDraft}
-            disabled={!hasAvailableGap}
+            disabled={addDisabled}
             className="sm:ml-auto"
-            title={hasAvailableGap ? "新增阶段" : "当前年份没有可用空白时间段"}
+            title={addDisabledMessage ?? "新增阶段"}
           >
             <Plus className="size-4" />
             新增阶段
@@ -242,9 +266,9 @@ export function FocusPeriodDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-          {draftError || !hasAvailableGap ? (
+          {draftError || addDisabledMessage ? (
             <p className="mb-3 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
-              {draftError ?? "当前年份没有可用空白时间段"}
+              {draftError ?? addDisabledMessage}
             </p>
           ) : null}
           {periods.length === 0 ? (
