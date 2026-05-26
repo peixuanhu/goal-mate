@@ -76,7 +76,7 @@ export function FocusPeriodDrawer({
         aria-label="关闭专注阶段抽屉"
       />
       <aside
-        className="absolute inset-x-0 bottom-0 flex max-h-[92vh] flex-col rounded-t-lg bg-background shadow-xl md:inset-x-auto md:bottom-0 md:right-0 md:top-0 md:h-full md:max-h-none md:w-[min(34rem,100vw)] md:rounded-none md:border-l"
+        className="absolute inset-x-0 bottom-0 flex h-[92dvh] max-h-[92dvh] flex-col rounded-t-lg bg-background shadow-xl lg:inset-x-auto lg:inset-y-0 lg:left-auto lg:right-0 lg:h-full lg:max-h-none lg:w-[520px] lg:rounded-none lg:border-l"
         role="dialog"
         aria-modal="true"
         aria-labelledby="focus-period-drawer-title"
