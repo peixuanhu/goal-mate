@@ -52,7 +52,7 @@ export function Combobox({
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
               if (e.key === "Enter") {
-                if (input && !options.includes(input)) {
+                if (input && !options.includes(input) && allowCustomOption) {
                   onChange(input)
                   setOpen(false)
                 }

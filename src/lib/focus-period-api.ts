@@ -36,7 +36,7 @@ export function validateFocusPeriodInput(
   if (!Number.isInteger(input.year)) {
     return { ok: false, message: "年份必须是整数" }
   }
-  if (!input.goal_id) {
+  if (typeof input.goal_id !== "string" || !input.goal_id) {
     return { ok: false, message: "必须选择一个目标" }
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(input.color)) {

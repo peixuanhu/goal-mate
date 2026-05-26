@@ -152,6 +152,21 @@ describe("focus-period-api", () => {
     ).toEqual({ ok: false, message: "必须选择一个目标" })
   })
 
+  it("rejects non-string goals", () => {
+    expect(
+      validateFocusPeriodInput(
+        {
+          year: 2026,
+          start_date: "2026-07-01",
+          end_date: "2026-08-31",
+          goal_id: 123,
+          color: "#ea580c",
+        } as unknown as FocusPeriodInput,
+        [],
+      ),
+    ).toEqual({ ok: false, message: "必须选择一个目标" })
+  })
+
   it("rejects non-hex colors", () => {
     expect(
       validateFocusPeriodInput(
