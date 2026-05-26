@@ -17,6 +17,15 @@ function isDraftPeriod(period: FocusPeriodView): boolean {
   return period.period_id.startsWith("draft_")
 }
 
+function isFocusGoalSummary(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.goal_id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.tag === "string"
+  )
+}
+
 function isFocusPeriodView(value: unknown): value is FocusPeriodView {
   return (
     isRecord(value) &&
@@ -26,7 +35,7 @@ function isFocusPeriodView(value: unknown): value is FocusPeriodView {
     typeof value.end_date === "string" &&
     typeof value.goal_id === "string" &&
     typeof value.color === "string" &&
-    (value.goal === null || value.goal === undefined || isRecord(value.goal))
+    (value.goal === null || value.goal === undefined || isFocusGoalSummary(value.goal))
   )
 }
 
@@ -84,9 +93,11 @@ export function FocusOverview() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const requestIdRef = React.useRef(0)
+  const localMutationVersionRef = React.useRef(0)
 
   const loadFocusData = React.useCallback(async () => {
     const requestId = requestIdRef.current + 1
+    const mutationVersion = localMutationVersionRef.current
     requestIdRef.current = requestId
 
     setLoading(true)
@@ -114,14 +125,18 @@ export function FocusOverview() {
         return
       }
 
-      setPeriods(sortPeriods(loadedPeriods))
+      if (localMutationVersionRef.current === mutationVersion) {
+        setPeriods(sortPeriods(loadedPeriods))
+      }
       setGoals(loadedGoals)
     } catch (loadError) {
       if (requestIdRef.current !== requestId) {
         return
       }
 
-      setPeriods([])
+      if (localMutationVersionRef.current === mutationVersion) {
+        setPeriods([])
+      }
       setError(loadError instanceof Error && loadError.message ? loadError.message : "专注概览加载失败")
     } finally {
       if (requestIdRef.current === requestId) {
@@ -140,6 +155,7 @@ export function FocusOverview() {
   const currentGoalTag = currentPeriod?.goal?.tag
 
   async function savePeriod(period: FocusPeriodView): Promise<FocusPeriodView> {
+    localMutationVersionRef.current += 1
     const isDraft = isDraftPeriod(period)
     const response = await fetch("/api/focus-period", {
       method: isDraft ? "POST" : "PUT",
@@ -174,6 +190,8 @@ export function FocusOverview() {
   }
 
   async function deletePeriod(periodId: string): Promise<void> {
+    localMutationVersionRef.current += 1
+
     if (periodId.startsWith("draft_")) {
       setPeriods(currentPeriods => currentPeriods.filter(period => period.period_id !== periodId))
       return
@@ -191,6 +209,7 @@ export function FocusOverview() {
   }
 
   function addDraft(period: FocusPeriodView) {
+    localMutationVersionRef.current += 1
     setPeriods(currentPeriods => sortPeriods([...currentPeriods, period]))
   }
 
