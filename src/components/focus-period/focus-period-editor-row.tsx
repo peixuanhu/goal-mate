@@ -18,8 +18,39 @@ interface FocusPeriodEditorRowProps {
   onDelete: (periodId: string) => Promise<void> | void
 }
 
-function getGoalLabel(goal: Pick<GoalOption, "name" | "tag">): string {
+interface GoalLabelData {
+  options: string[]
+  goalsByLabel: Map<string, GoalOption>
+  labelsByGoalId: Map<string, string>
+}
+
+const AUTOSAVE_DELAY_MS = 300
+
+function getBaseGoalLabel(goal: Pick<GoalOption, "name" | "tag">): string {
   return `${goal.name} · ${goal.tag}`
+}
+
+function buildGoalLabelData(goals: GoalOption[]): GoalLabelData {
+  const baseLabelCounts = new Map<string, number>()
+  goals.forEach(goal => {
+    const baseLabel = getBaseGoalLabel(goal)
+    baseLabelCounts.set(baseLabel, (baseLabelCounts.get(baseLabel) ?? 0) + 1)
+  })
+
+  const options: string[] = []
+  const goalsByLabel = new Map<string, GoalOption>()
+  const labelsByGoalId = new Map<string, string>()
+
+  goals.forEach(goal => {
+    const baseLabel = getBaseGoalLabel(goal)
+    const label = (baseLabelCounts.get(baseLabel) ?? 0) > 1 ? `${baseLabel} · ${goal.goal_id}` : baseLabel
+
+    options.push(label)
+    goalsByLabel.set(label, goal)
+    labelsByGoalId.set(goal.goal_id, label)
+  })
+
+  return { options, goalsByLabel, labelsByGoalId }
 }
 
 function getPeriodKey(period: FocusPeriodView): string {
@@ -51,72 +82,111 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
   const [saving, setSaving] = React.useState(false)
   const previousPeriodRef = React.useRef(period)
   const lastSavedKeyRef = React.useRef(getPeriodKey(period))
+  const latestDraftRef = React.useRef(period)
+  const inFlightRef = React.useRef(false)
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const goalOptions = React.useMemo(() => goals.map(getGoalLabel), [goals])
-  const goalsByLabel = React.useMemo(() => {
-    return new Map(goals.map(goal => [getGoalLabel(goal), goal]))
-  }, [goals])
-  const selectedGoal = React.useMemo(() => goals.find(goal => goal.goal_id === draft.goal_id), [draft.goal_id, goals])
-  const selectedGoalLabel = selectedGoal ? getGoalLabel(selectedGoal) : ""
+  const goalLabelData = React.useMemo(() => buildGoalLabelData(goals), [goals])
+  const selectedGoal = React.useMemo(
+    () => goals.find(goal => goal.goal_id === draft.goal_id) ?? draft.goal,
+    [draft.goal, draft.goal_id, goals],
+  )
+  const selectedGoalLabel = selectedGoal
+    ? goalLabelData.labelsByGoalId.get(selectedGoal.goal_id) ?? getBaseGoalLabel(selectedGoal)
+    : ""
+
+  const flushAutosave = React.useCallback(async () => {
+    if (inFlightRef.current) {
+      return
+    }
+
+    const draftToSave = latestDraftRef.current
+    const draftKey = getPeriodKey(draftToSave)
+
+    if (draftKey === lastSavedKeyRef.current || !isCompletePeriod(draftToSave)) {
+      return
+    }
+
+    inFlightRef.current = true
+    setSaving(true)
+    setError(null)
+
+    try {
+      const savedPeriod = await Promise.resolve(onSave(draftToSave))
+      const nextPeriod = savedPeriod ?? draftToSave
+      const nextPeriodKey = getPeriodKey(nextPeriod)
+      const latestKey = getPeriodKey(latestDraftRef.current)
+
+      previousPeriodRef.current = nextPeriod
+      lastSavedKeyRef.current = nextPeriodKey
+
+      if (savedPeriod && latestKey === draftKey) {
+        latestDraftRef.current = savedPeriod
+        setDraft(savedPeriod)
+      } else if (savedPeriod && latestDraftRef.current.period_id === draftToSave.period_id) {
+        const latestWithSavedId = {
+          ...latestDraftRef.current,
+          period_id: savedPeriod.period_id,
+        }
+        latestDraftRef.current = latestWithSavedId
+        setDraft(latestWithSavedId)
+      }
+    } catch (saveError) {
+      const latestKey = getPeriodKey(latestDraftRef.current)
+
+      if (latestKey === draftKey) {
+        const previousPeriod = previousPeriodRef.current
+        latestDraftRef.current = previousPeriod
+        setDraft(previousPeriod)
+        lastSavedKeyRef.current = getPeriodKey(previousPeriod)
+        setError(getErrorMessage(saveError))
+      }
+    } finally {
+      inFlightRef.current = false
+      setSaving(false)
+
+      const latestDraft = latestDraftRef.current
+      if (isCompletePeriod(latestDraft) && getPeriodKey(latestDraft) !== lastSavedKeyRef.current) {
+        void flushAutosave()
+      }
+    }
+  }, [onSave])
 
   React.useEffect(() => {
     setDraft(period)
     setError(null)
     previousPeriodRef.current = period
     lastSavedKeyRef.current = getPeriodKey(period)
+    latestDraftRef.current = period
   }, [period])
 
   React.useEffect(() => {
-    const draftKey = getPeriodKey(draft)
+    latestDraftRef.current = draft
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
 
-    if (draftKey === lastSavedKeyRef.current || !isCompletePeriod(draft)) {
+    if (!isCompletePeriod(draft) || getPeriodKey(draft) === lastSavedKeyRef.current) {
       return
     }
 
-    let cancelled = false
-    setSaving(true)
-    setError(null)
-
-    Promise.resolve(onSave(draft))
-      .then(savedPeriod => {
-        if (cancelled) {
-          return
-        }
-
-        const nextPeriod = savedPeriod ?? draft
-        previousPeriodRef.current = nextPeriod
-        lastSavedKeyRef.current = getPeriodKey(nextPeriod)
-        if (savedPeriod) {
-          setDraft(savedPeriod)
-        }
-      })
-      .catch(saveError => {
-        if (cancelled) {
-          return
-        }
-
-        const previousPeriod = previousPeriodRef.current
-        setDraft(previousPeriod)
-        lastSavedKeyRef.current = getPeriodKey(previousPeriod)
-        setError(getErrorMessage(saveError))
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSaving(false)
-        }
-      })
+    debounceRef.current = setTimeout(() => {
+      void flushAutosave()
+    }, AUTOSAVE_DELAY_MS)
 
     return () => {
-      cancelled = true
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
     }
-  }, [draft, onSave])
+  }, [draft, flushAutosave])
 
   function updateDraft(updates: Partial<FocusPeriodView>) {
     setDraft(current => ({ ...current, ...updates }))
   }
 
   function handleGoalChange(label: string) {
-    const goal = goalsByLabel.get(label)
+    const goal = goalLabelData.goalsByLabel.get(label)
     if (!goal) {
       return
     }
@@ -129,6 +199,16 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
         tag: goal.tag,
       },
     })
+  }
+
+  async function handleDelete() {
+    setError(null)
+
+    try {
+      await Promise.resolve(onDelete(draft.period_id))
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError))
+    }
   }
 
   return (
@@ -145,7 +225,7 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
           variant="ghost"
           size="icon"
           className="shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={() => onDelete(draft.period_id)}
+          onClick={handleDelete}
           disabled={saving}
           aria-label="删除阶段"
           title="删除阶段"
@@ -158,7 +238,7 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
         <div className="space-y-2">
           <Label>绑定目标</Label>
           <Combobox
-            options={goalOptions}
+            options={goalLabelData.options}
             value={selectedGoalLabel}
             onChange={handleGoalChange}
             placeholder="搜索目标"
