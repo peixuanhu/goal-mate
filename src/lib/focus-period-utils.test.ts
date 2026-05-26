@@ -71,7 +71,7 @@ describe("focus-period-utils", () => {
   it("builds gray gap segments around colored focus periods", () => {
     const segments = buildTimelineSegments(periods, 2026)
     expect(segments.map(segment => segment.kind)).toEqual(["gap", "period", "period", "gap"])
-    expect(segments[0]).toMatchObject({ kind: "gap", start_date: "2026-01-01", end_date: "2026-04-30" })
+    expect(segments[0]).toMatchObject({ kind: "gap", start_date: "2026-01-01", end_date: "2026-04-30", color: "#e5e7eb" })
     expect(segments[1]).toMatchObject({ kind: "period", period_id: "period_music", color: "#0f766e" })
   })
 
