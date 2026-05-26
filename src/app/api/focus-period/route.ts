@@ -28,8 +28,16 @@ function validationError(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
+function notFoundError() {
+  return NextResponse.json({ success: false, message: "专注阶段不存在" }, { status: 404 })
+}
+
 function mapGoalsById(goals: FocusGoalSummary[]): Map<string, FocusGoalSummary> {
   return new Map(goals.map(goal => [goal.goal_id, goal]))
+}
+
+function validateWithoutExistingPeriods(input: FocusPeriodInput) {
+  return validateFocusPeriodInput(input, [])
 }
 
 async function listExistingPeriods(year: number): Promise<ExistingFocusPeriod[]> {
@@ -81,6 +89,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const input = await req.json() as FocusPeriodInput
+  const preliminaryValidation = validateWithoutExistingPeriods(input)
+  if (!preliminaryValidation.ok) {
+    return validationError(preliminaryValidation.message)
+  }
+
   const existingPeriods = await listExistingPeriods(input.year)
   const validation = validateFocusPeriodInput(input, existingPeriods)
   if (!validation.ok) {
@@ -119,6 +132,19 @@ export async function PUT(req: NextRequest) {
     goal_id: data.goal_id,
     color: data.color,
   }
+  const preliminaryValidation = validateWithoutExistingPeriods(input)
+  if (!preliminaryValidation.ok) {
+    return validationError(preliminaryValidation.message)
+  }
+
+  const existingPeriod = await prisma.focusPeriod.findUnique({
+    where: { period_id: data.period_id },
+    select: { period_id: true },
+  })
+  if (!existingPeriod) {
+    return notFoundError()
+  }
+
   const existingPeriods = await listExistingPeriods(input.year)
   const validation = validateFocusPeriodInput(input, existingPeriods, data.period_id)
   if (!validation.ok) {
@@ -149,6 +175,14 @@ export async function DELETE(req: NextRequest) {
   const periodId = searchParams.get("period_id")
   if (!periodId) {
     return validationError("period_id required")
+  }
+
+  const existingPeriod = await prisma.focusPeriod.findUnique({
+    where: { period_id: periodId },
+    select: { period_id: true },
+  })
+  if (!existingPeriod) {
+    return notFoundError()
   }
 
   await prisma.focusPeriod.delete({

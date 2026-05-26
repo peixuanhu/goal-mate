@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 const prismaMock = vi.hoisted(() => ({
   focusPeriod: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -31,7 +32,7 @@ async function json(response: Response) {
 
 describe("/api/focus-period", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   it("GET returns periods and marks deleted goals as null", async () => {
@@ -130,6 +131,26 @@ describe("/api/focus-period", () => {
     expect(prismaMock.focusPeriod.create).not.toHaveBeenCalled()
   })
 
+  it("POST rejects invalid years before querying Prisma", async () => {
+    const response = await POST(
+      request("http://localhost/api/focus-period", {
+        method: "POST",
+        body: JSON.stringify({
+          year: "2026",
+          start_date: "2026-07-01",
+          end_date: "2026-08-31",
+          goal_id: "goal_music",
+          color: "#ea580c",
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "年份必须是整数" })
+    expect(prismaMock.focusPeriod.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.focusPeriod.create).not.toHaveBeenCalled()
+  })
+
   it("POST rejects missing goals", async () => {
     prismaMock.focusPeriod.findMany.mockResolvedValue([])
     prismaMock.goal.findUnique.mockResolvedValue(null)
@@ -204,6 +225,9 @@ describe("/api/focus-period", () => {
   })
 
   it("PUT validates while ignoring the updated period and returns the mapped record", async () => {
+    prismaMock.focusPeriod.findUnique.mockResolvedValue({
+      period_id: "period_music",
+    })
     prismaMock.focusPeriod.findMany.mockResolvedValue([
       {
         period_id: "period_music",
@@ -258,11 +282,60 @@ describe("/api/focus-period", () => {
     })
   })
 
+  it("PUT rejects nonexistent periods", async () => {
+    prismaMock.focusPeriod.findUnique.mockResolvedValue(null)
+
+    const response = await PUT(
+      request("http://localhost/api/focus-period", {
+        method: "PUT",
+        body: JSON.stringify({
+          period_id: "period_missing",
+          year: 2026,
+          start_date: "2026-05-15",
+          end_date: "2026-06-15",
+          goal_id: "goal_music",
+          color: "#0f766e",
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(await json(response)).toEqual({ success: false, message: "专注阶段不存在" })
+    expect(prismaMock.focusPeriod.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.focusPeriod.update).not.toHaveBeenCalled()
+  })
+
+  it("PUT rejects invalid years before querying Prisma", async () => {
+    const response = await PUT(
+      request("http://localhost/api/focus-period", {
+        method: "PUT",
+        body: JSON.stringify({
+          period_id: "period_music",
+          year: "2026",
+          start_date: "2026-05-15",
+          end_date: "2026-06-15",
+          goal_id: "goal_music",
+          color: "#0f766e",
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "年份必须是整数" })
+    expect(prismaMock.focusPeriod.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.focusPeriod.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.focusPeriod.update).not.toHaveBeenCalled()
+  })
+
   it("DELETE requires period_id and deletes matching periods", async () => {
     const missingResponse = await DELETE(request("http://localhost/api/focus-period"))
 
     expect(missingResponse.status).toBe(400)
     expect(await json(missingResponse)).toEqual({ error: "period_id required" })
+
+    prismaMock.focusPeriod.findUnique.mockResolvedValue({
+      period_id: "period_music",
+    })
 
     const response = await DELETE(request("http://localhost/api/focus-period?period_id=period_music"))
 
@@ -271,5 +344,15 @@ describe("/api/focus-period", () => {
     expect(prismaMock.focusPeriod.delete).toHaveBeenCalledWith({
       where: { period_id: "period_music" },
     })
+  })
+
+  it("DELETE rejects nonexistent periods", async () => {
+    prismaMock.focusPeriod.findUnique.mockResolvedValue(null)
+
+    const response = await DELETE(request("http://localhost/api/focus-period?period_id=period_missing"))
+
+    expect(response.status).toBe(404)
+    expect(await json(response)).toEqual({ success: false, message: "专注阶段不存在" })
+    expect(prismaMock.focusPeriod.delete).not.toHaveBeenCalled()
   })
 })
