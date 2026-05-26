@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MainLayout } from "@/components/main-layout";
 import { MobileQuadrantWrapper } from "@/components/mobile-quadrant-wrapper";
+import { FocusOverview } from "@/components/focus-period/focus-overview"
 import { redirect } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
 
@@ -17,9 +18,11 @@ export default async function Home() {
   return (
     <MainLayout>
       <div className="flex min-h-screen flex-col items-center gap-6 bg-muted p-4 sm:gap-8 sm:p-8">
-        <h1 className="mb-4 text-center text-2xl font-bold tracking-tight sm:mb-8 sm:text-3xl">
+        <h1 className="mb-2 text-center text-2xl font-bold tracking-tight sm:mb-4 sm:text-3xl">
           Goal Mate - AI智能目标管理
         </h1>
+
+        <FocusOverview />
         
         {/* 移动端四象限 - 仅在移动端显示 */}
         <MobileQuadrantWrapper />
@@ -103,7 +106,7 @@ export default async function Home() {
                   <li>&quot;完成了Python基础语法学习，对面向对象编程有了新的理解&quot;</li>
                   <li>&quot;跑了5公里，比昨天快了30秒，但是膝盖有点酸&quot;</li>
                 </ul>
-                <p className="text-xs text-gray-500 mt-2">🔧 AI会自动查找相关计划并智能分析，分割成"完成事项"和"心得思考"</p>
+                <p className="text-xs text-gray-500 mt-2">🔧 AI会自动查找相关计划并智能分析，分割成&quot;完成事项&quot;和&quot;心得思考&quot;</p>
               </div>
               
               <div>
