@@ -42,10 +42,16 @@ export function validateFocusPeriodInput(
   if (!/^#[0-9a-fA-F]{6}$/.test(input.color)) {
     return { ok: false, message: "颜色必须是十六进制色值" }
   }
+
+  const parsedRange = parseFocusPeriodDateRange(input)
+  if (!parsedRange) {
+    return { ok: false, message: "日期格式无效" }
+  }
+
   if (!input.start_date.startsWith(`${input.year}-`) || !input.end_date.startsWith(`${input.year}-`)) {
     return { ok: false, message: "开始日期和结束日期必须属于同一年" }
   }
-  if (parseDateOnly(input.start_date).getTime() > parseDateOnly(input.end_date).getTime()) {
+  if (parsedRange.startDate.getTime() > parsedRange.endDate.getTime()) {
     return { ok: false, message: "开始日期不能晚于结束日期" }
   }
   if (hasDateRangeOverlap(input, existingPeriods, ignorePeriodId)) {
@@ -53,6 +59,21 @@ export function validateFocusPeriodInput(
   }
 
   return { ok: true }
+}
+
+function parseFocusPeriodDateRange(input: FocusPeriodInput): { startDate: Date; endDate: Date } | null {
+  if (typeof input.start_date !== "string" || typeof input.end_date !== "string") {
+    return null
+  }
+
+  try {
+    return {
+      startDate: parseDateOnly(input.start_date),
+      endDate: parseDateOnly(input.end_date),
+    }
+  } catch {
+    return null
+  }
 }
 
 export function mapFocusPeriodRecord(
