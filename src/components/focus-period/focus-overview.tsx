@@ -9,20 +9,50 @@ import { FocusPeriodDrawer } from "./focus-period-drawer"
 import type { FocusPeriodView, GoalOption } from "./types"
 import { YearTimeline } from "./year-timeline"
 
-interface FocusPeriodListResponse {
-  list?: FocusPeriodView[]
-}
-
-interface GoalListResponse {
-  list?: Array<{
-    goal_id: string
-    name: string
-    tag: string
-  }>
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
 }
 
 function isDraftPeriod(period: FocusPeriodView): boolean {
   return period.period_id.startsWith("draft_")
+}
+
+function isFocusPeriodView(value: unknown): value is FocusPeriodView {
+  return (
+    isRecord(value) &&
+    typeof value.period_id === "string" &&
+    typeof value.year === "number" &&
+    typeof value.start_date === "string" &&
+    typeof value.end_date === "string" &&
+    typeof value.goal_id === "string" &&
+    typeof value.color === "string" &&
+    (value.goal === null || value.goal === undefined || isRecord(value.goal))
+  )
+}
+
+function isGoalOption(value: unknown): value is GoalOption {
+  return (
+    isRecord(value) &&
+    typeof value.goal_id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.tag === "string"
+  )
+}
+
+function parseFocusPeriodList(data: unknown): FocusPeriodView[] {
+  if (!isRecord(data) || !Array.isArray(data.list) || !data.list.every(isFocusPeriodView)) {
+    throw new Error("专注阶段数据格式无效")
+  }
+
+  return data.list
+}
+
+function parseGoalList(data: unknown): GoalOption[] {
+  if (!isRecord(data) || !Array.isArray(data.list) || !data.list.every(isGoalOption)) {
+    throw new Error("目标列表数据格式无效")
+  }
+
+  return data.list
 }
 
 function sortPeriods(periods: FocusPeriodView[]): FocusPeriodView[] {
@@ -53,14 +83,20 @@ export function FocusOverview() {
   const [drawerOpen, setDrawerOpen] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const requestIdRef = React.useRef(0)
 
   const loadFocusData = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
+
     setLoading(true)
     setError(null)
+    setPeriods([])
 
     try {
+      const targetYear = year
       const [periodsResponse, goalsResponse] = await Promise.all([
-        fetch(`/api/focus-period?year=${year}`),
+        fetch(`/api/focus-period?year=${targetYear}`),
         fetch("/api/goal?pageSize=1000"),
       ])
 
@@ -71,19 +107,26 @@ export function FocusOverview() {
         throw new Error(await readApiError(goalsResponse, "目标列表加载失败"))
       }
 
-      const periodsData = await periodsResponse.json() as FocusPeriodListResponse
-      const goalsData = await goalsResponse.json() as GoalListResponse
+      const loadedPeriods = parseFocusPeriodList(await periodsResponse.json())
+      const loadedGoals = parseGoalList(await goalsResponse.json())
 
-      setPeriods(sortPeriods(periodsData.list ?? []))
-      setGoals((goalsData.list ?? []).map(goal => ({
-        goal_id: goal.goal_id,
-        name: goal.name,
-        tag: goal.tag,
-      })))
+      if (requestIdRef.current !== requestId) {
+        return
+      }
+
+      setPeriods(sortPeriods(loadedPeriods))
+      setGoals(loadedGoals)
     } catch (loadError) {
+      if (requestIdRef.current !== requestId) {
+        return
+      }
+
+      setPeriods([])
       setError(loadError instanceof Error && loadError.message ? loadError.message : "专注概览加载失败")
     } finally {
-      setLoading(false)
+      if (requestIdRef.current === requestId) {
+        setLoading(false)
+      }
     }
   }, [year])
 
@@ -91,8 +134,8 @@ export function FocusOverview() {
     void loadFocusData()
   }, [loadFocusData])
 
-  const currentPeriod = React.useMemo(() => findCurrentFocusPeriod(periods), [periods])
   const savedPeriods = React.useMemo(() => periods.filter(period => !isDraftPeriod(period)), [periods])
+  const currentPeriod = React.useMemo(() => findCurrentFocusPeriod(savedPeriods), [savedPeriods])
   const currentGoalName = currentPeriod?.goal?.name
   const currentGoalTag = currentPeriod?.goal?.tag
 
@@ -115,7 +158,12 @@ export function FocusOverview() {
       throw new Error(await readApiError(response, "保存专注阶段失败"))
     }
 
-    const savedPeriod = await response.json() as FocusPeriodView
+    const savedData = await response.json()
+    if (!isFocusPeriodView(savedData)) {
+      throw new Error("专注阶段保存结果格式无效")
+    }
+
+    const savedPeriod = savedData
     setPeriods(currentPeriods => sortPeriods(
       currentPeriods.map(currentPeriodItem =>
         currentPeriodItem.period_id === period.period_id ? savedPeriod : currentPeriodItem,
@@ -143,7 +191,7 @@ export function FocusOverview() {
   }
 
   function addDraft(period: FocusPeriodView) {
-    setPeriods(currentPeriods => [...currentPeriods, period])
+    setPeriods(currentPeriods => sortPeriods([...currentPeriods, period]))
   }
 
   return (
