@@ -24,21 +24,21 @@ model Goal {
 }
 
 model Plan {
-  id           Int      @id @default(autoincrement())
-  gmt_create   DateTime @default(now())
-  gmt_modified DateTime @updatedAt
-  plan_id      String   @unique
-  name         String
-  description  String?
-  difficulty   String?
-  progress     Float    @default(0)
-  is_recurring Boolean  @default(false)
-  recurrence_type String?
-  recurrence_value String?
-  priority_quadrant String?  // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
-  is_scheduled Boolean  @default(false) // 是否被安排到四象限中显示
-  tags         PlanTagAssociation[]
-  progressRecords ProgressRecord[]
+  id                Int                  @id @default(autoincrement())
+  gmt_create        DateTime             @default(now())
+  gmt_modified      DateTime             @updatedAt
+  plan_id           String               @unique
+  name              String
+  description       String?
+  difficulty        String?
+  progress          Float                @default(0)
+  is_recurring      Boolean              @default(false)
+  recurrence_type   String?
+  recurrence_value  String?
+  priority_quadrant String? // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
+  is_scheduled      Boolean              @default(false) // 是否被安排到四象限中显示
+  tags              PlanTagAssociation[]
+  progressRecords   ProgressRecord[]
 }
 
 model PlanTagAssociation {
@@ -68,4 +68,19 @@ model Report {
   title        String
   subtitle     String?
   content      String?
+}
+
+model FocusPeriod {
+  id           Int      @id @default(autoincrement())
+  gmt_create   DateTime @default(now())
+  gmt_modified DateTime @updatedAt
+  period_id    String   @unique
+  year         Int
+  start_date   DateTime @db.Date
+  end_date     DateTime @db.Date
+  goal_id      String
+  color        String
+
+  @@index([year, start_date])
+  @@index([goal_id])
 }
