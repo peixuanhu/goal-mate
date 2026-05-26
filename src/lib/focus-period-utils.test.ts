@@ -72,7 +72,34 @@ describe("focus-period-utils", () => {
     const segments = buildTimelineSegments(periods, 2026)
     expect(segments.map(segment => segment.kind)).toEqual(["gap", "period", "period", "gap"])
     expect(segments[0]).toMatchObject({ kind: "gap", start_date: "2026-01-01", end_date: "2026-04-30", color: "#e5e7eb" })
-    expect(segments[1]).toMatchObject({ kind: "period", period_id: "period_music", color: "#0f766e" })
+    expect(segments[1]).toMatchObject({ kind: "period", period_id: "period_music", color: "#0f766e", leftPercent: 120 / 365 * 100 })
+    expect(segments[0].leftPercent + segments[0].widthPercent).toBeCloseTo(segments[1].leftPercent)
+    expect(segments[1].leftPercent + segments[1].widthPercent).toBeCloseTo(segments[2].leftPercent)
+  })
+
+  it("keeps a one-day final segment within the year timeline", () => {
+    const segments = buildTimelineSegments(
+      [
+        {
+          period_id: "period_year_end",
+          year: 2026,
+          start_date: "2026-12-31",
+          end_date: "2026-12-31",
+          goal_id: "goal_year_end",
+          color: "#4f46e5",
+          goal: { goal_id: "goal_year_end", name: "Year-end review", tag: "Review" },
+        },
+      ],
+      2026,
+    )
+    const finalPeriod = segments.find(segment => segment.kind === "period" && segment.period_id === "period_year_end")
+
+    expect(finalPeriod).toMatchObject({
+      kind: "period",
+      leftPercent: 364 / 365 * 100,
+      widthPercent: 1 / 365 * 100,
+    })
+    expect(finalPeriod!.leftPercent + finalPeriod!.widthPercent).toBeCloseTo(100)
   })
 
   it("assigns stable colors by index", () => {

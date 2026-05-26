@@ -24,12 +24,12 @@ export type TimelineSegment =
       start_date: string
       end_date: string
       color: "#e5e7eb"
-      startPercent: number
+      leftPercent: number
       widthPercent: number
     }
   | (FocusPeriodView & {
       kind: "period"
-      startPercent: number
+      leftPercent: number
       widthPercent: number
     })
 
@@ -182,7 +182,7 @@ function createGapSegment(startDate: string, endDate: string, year: number): Tim
     start_date: startDate,
     end_date: endDate,
     color: GAP_COLOR,
-    startPercent: dateToYearPercent(startDate, year),
+    leftPercent: getInclusiveLeftPercent(startDate, year),
     widthPercent: getInclusiveWidthPercent(startDate, endDate, year),
   }
 }
@@ -191,9 +191,15 @@ function createPeriodSegment(period: FocusPeriodView, year: number): TimelineSeg
   return {
     ...period,
     kind: "period",
-    startPercent: dateToYearPercent(period.start_date, year),
+    leftPercent: getInclusiveLeftPercent(period.start_date, year),
     widthPercent: getInclusiveWidthPercent(period.start_date, period.end_date, year),
   }
+}
+
+function getInclusiveLeftPercent(startDate: string, year: number): number {
+  const startDay = Math.min(Math.max(dateToYearDay(startDate, year), 0), daysInYear(year) - 1)
+
+  return (startDay / daysInYear(year)) * 100
 }
 
 function getInclusiveWidthPercent(startDate: string, endDate: string, year: number): number {
