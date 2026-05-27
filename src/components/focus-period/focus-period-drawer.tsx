@@ -50,7 +50,7 @@ function findFirstAvailableGap(year: number, periods: FocusPeriodView[]) {
   return buildTimelineSegments(nonDraftPeriods, year).find(segment => segment.kind === "gap")
 }
 
-function createDraftPeriod(year: number, periods: FocusPeriodView[]): FocusPeriodView | null {
+export function createDraftPeriod(year: number, periods: FocusPeriodView[]): FocusPeriodView | null {
   const firstGap = findFirstAvailableGap(year, periods)
   if (!firstGap) {
     return null
@@ -59,8 +59,8 @@ function createDraftPeriod(year: number, periods: FocusPeriodView[]): FocusPerio
   return {
     period_id: `draft_${Date.now()}`,
     year,
-    start_date: firstGap.start_date,
-    end_date: firstGap.end_date,
+    start_date: "",
+    end_date: "",
     goal_id: "",
     color: assignFocusColor(periods.length),
     goal: null,
