@@ -32,6 +32,12 @@ async function json(response: Response) {
   return response.json()
 }
 
+function getRawSqlTemplate(call: unknown[]): string {
+  const template = call[0]
+
+  return Array.isArray(template) ? template.join("?") : ""
+}
+
 describe("/api/focus-period", () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -220,6 +226,7 @@ describe("/api/focus-period", () => {
     expect(response.status).toBe(200)
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
     expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(getRawSqlTemplate(prismaMock.$executeRaw.mock.calls[0])).toBe("SELECT pg_advisory_xact_lock(?::int, ?::int)")
     expect(prismaMock.focusPeriod.create).toHaveBeenCalledWith({
       data: {
         period_id: expect.stringMatching(/^focus_[a-f0-9]{10}$/),

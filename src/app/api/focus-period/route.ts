@@ -75,7 +75,7 @@ function toFocusPeriodInput(data: Record<string, unknown>): FocusPeriodInput {
 }
 
 async function lockFocusPeriodYear(db: FocusPeriodDb, year: number) {
-  await db.$executeRaw`SELECT pg_advisory_xact_lock(${FOCUS_PERIOD_LOCK_NAMESPACE}, ${year})`
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${FOCUS_PERIOD_LOCK_NAMESPACE}::int, ${year}::int)`
 }
 
 async function listExistingPeriods(db: FocusPeriodDb, year: number): Promise<ExistingFocusPeriod[]> {
