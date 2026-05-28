@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -13,6 +14,7 @@ import {
 import {
   SortableContext,
   arrayMove,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -69,7 +71,7 @@ function formatRecentProgress(plan: GoalPlan): string {
   return new Date(firstRecord.gmt_create).toLocaleDateString("zh-CN")
 }
 
-function SortablePlanRow({ plan, index }: { plan: GoalPlan; index: number }) {
+function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: number; disabled: boolean }) {
   const {
     attributes,
     listeners,
@@ -77,7 +79,7 @@ function SortablePlanRow({ plan, index }: { plan: GoalPlan; index: number }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: plan.plan_id })
+  } = useSortable({ id: plan.plan_id, disabled })
 
   return (
     <div
@@ -89,6 +91,7 @@ function SortablePlanRow({ plan, index }: { plan: GoalPlan; index: number }) {
     >
       <button
         type="button"
+        disabled={disabled}
         className="flex h-8 w-8 items-center justify-center rounded border text-gray-500 hover:bg-gray-50"
         aria-label={`拖拽排序 ${plan.name}`}
         {...attributes}
@@ -116,13 +119,17 @@ function SortablePlanRow({ plan, index }: { plan: GoalPlan; index: number }) {
 
 export function GoalPlanList({ goalId }: GoalPlanListProps) {
   const router = useRouter()
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
   const [plans, setPlans] = React.useState<GoalPlan[]>([])
   const [unassignedPlans, setUnassignedPlans] = React.useState<GoalPlan[]>([])
   const [selectedPlanId, setSelectedPlanId] = React.useState("")
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const savingRef = React.useRef(false)
 
   const loadPlans = React.useCallback(async () => {
     setLoading(true)
@@ -149,11 +156,24 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
     }
   }, [goalId])
 
+  const refreshUnassignedPlans = React.useCallback(async () => {
+    const response = await fetch("/api/plan?unassigned=true&pageSize=1000")
+    if (!response.ok) {
+      throw new Error(await readApiError(response, "未归属计划加载失败"))
+    }
+
+    const data = await response.json() as { list?: GoalPlan[] }
+    const nextUnassignedPlans = data.list ?? []
+    setUnassignedPlans(nextUnassignedPlans)
+    return nextUnassignedPlans
+  }, [])
+
   React.useEffect(() => {
     void loadPlans()
   }, [loadPlans])
 
   async function saveOrder(nextPlans: GoalPlan[], previousPlans: GoalPlan[]) {
+    savingRef.current = true
     setSaving(true)
     setError(null)
     try {
@@ -174,11 +194,14 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
       setPlans(previousPlans)
       setError(saveError instanceof Error ? saveError.message : "排序保存失败")
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (savingRef.current) return
+
     const { active, over } = event
     if (!over || active.id === over.id) return
 
@@ -193,10 +216,18 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
   }
 
   async function attachSelectedPlan() {
-    if (!selectedPlanId) return
+    if (!selectedPlanId || savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setError(null)
     try {
+      const latestUnassignedPlans = await refreshUnassignedPlans()
+      const selectedPlanStillUnassigned = latestUnassignedPlans.some(plan => plan.plan_id === selectedPlanId)
+      if (!selectedPlanStillUnassigned) {
+        setSelectedPlanId("")
+        throw new Error("该计划已被关联到其他目标，请重新选择")
+      }
+
       const response = await fetch("/api/plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -210,6 +241,7 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
     } catch (attachError) {
       setError(attachError instanceof Error ? attachError.message : "添加已有计划失败")
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -257,7 +289,7 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
             <div className="overflow-x-auto rounded border bg-white dark:bg-gray-950">
               <div className="min-w-[760px]">
                 {plans.map((plan, index) => (
-                  <SortablePlanRow key={plan.plan_id} plan={plan} index={index} />
+                  <SortablePlanRow key={plan.plan_id} plan={plan} index={index} disabled={saving} />
                 ))}
               </div>
             </div>
