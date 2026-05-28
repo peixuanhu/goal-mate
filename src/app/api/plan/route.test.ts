@@ -185,6 +185,51 @@ describe("/api/plan", () => {
     })
   })
 
+  it("PUT attaches a plan when expected_goal_id matches unassigned state", async () => {
+    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_ddia", goal_id: null })
+    prismaMock.goal.findUnique.mockResolvedValue({ goal_id: "goal_arch" })
+    prismaMock.plan.aggregate.mockResolvedValue({ _max: { goal_position: null } })
+    prismaMock.plan.update.mockResolvedValue({ ...basePlan, goal_position: 1000 })
+
+    const response = await PUT(
+      request("http://localhost/api/plan", {
+        method: "PUT",
+        body: JSON.stringify({
+          plan_id: "plan_ddia",
+          goal_id: "goal_arch",
+          expected_goal_id: null,
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.plan.update).toHaveBeenCalledWith({
+      where: { plan_id: "plan_ddia" },
+      data: { goal_id: "goal_arch", goal_position: 1000 },
+    })
+  })
+
+  it("PUT rejects attach when expected_goal_id no longer matches unassigned state", async () => {
+    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_ddia", goal_id: "goal_other" })
+
+    const response = await PUT(
+      request("http://localhost/api/plan", {
+        method: "PUT",
+        body: JSON.stringify({
+          plan_id: "plan_ddia",
+          goal_id: "goal_arch",
+          expected_goal_id: null,
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({ error: "计划归属已变化，请刷新后重试" })
+    expect(prismaMock.goal.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.plan.aggregate).not.toHaveBeenCalled()
+    expect(prismaMock.plan.update).not.toHaveBeenCalled()
+  })
+
   it("PUT clears goal ownership and position", async () => {
     prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_ddia", goal_id: "goal_arch" })
     prismaMock.plan.update.mockResolvedValue({ ...basePlan, goal_id: null, goal_position: null })

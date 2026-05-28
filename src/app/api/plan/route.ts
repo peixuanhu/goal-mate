@@ -18,6 +18,7 @@ const CREATE_OMIT_FIELDS = new Set([
 
 const UPDATE_OMIT_FIELDS = new Set([
   'plan_id',
+  'expected_goal_id',
   'tags',
   'goal_id',
   'goal_position',
@@ -152,17 +153,22 @@ export async function PUT(req: NextRequest) {
   const data = await req.json() as Record<string, unknown>
   const plan_id = data.plan_id as string
   const tags = data.tags
+  const hasExpectedGoalId = Object.prototype.hasOwnProperty.call(data, 'expected_goal_id')
 
   const updateData = omitFields(data, UPDATE_OMIT_FIELDS)
 
   if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
     const nextGoalId = normalizeGoalId(data.goal_id)
+    const expectedGoalId = normalizeGoalId(data.expected_goal_id)
     const existingPlan = await prisma.plan.findUnique({
       where: { plan_id },
       select: { goal_id: true },
     })
     if (!existingPlan) {
       return NextResponse.json({ error: '计划不存在' }, { status: 404 })
+    }
+    if (hasExpectedGoalId && existingPlan.goal_id !== expectedGoalId) {
+      return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
     }
 
     if (nextGoalId === null) {

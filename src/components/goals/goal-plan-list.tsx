@@ -231,7 +231,7 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
       const response = await fetch("/api/plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan_id: selectedPlanId, goal_id: goalId }),
+        body: JSON.stringify({ plan_id: selectedPlanId, goal_id: goalId, expected_goal_id: null }),
       })
       if (!response.ok) {
         throw new Error(await readApiError(response, "添加已有计划失败"))
