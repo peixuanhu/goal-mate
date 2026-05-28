@@ -5,6 +5,43 @@ import { getNextGoalPosition } from '@/lib/plan-goal-utils'
 
 const prisma = new PrismaClient()
 
+const CREATE_OMIT_FIELDS = new Set([
+  'tags',
+  'goal_id',
+  'goal_position',
+  'goal',
+  'id',
+  'gmt_create',
+  'gmt_modified',
+  'progressRecords',
+])
+
+const UPDATE_OMIT_FIELDS = new Set([
+  'plan_id',
+  'tags',
+  'goal_id',
+  'goal_position',
+  'goal',
+  'id',
+  'gmt_create',
+  'gmt_modified',
+  'progressRecords',
+])
+
+function omitFields(data: Record<string, unknown>, fieldsToOmit: Set<string>): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (!fieldsToOmit.has(key) && value !== undefined) {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+function sanitizeCreateData(data: Record<string, unknown>): Omit<Prisma.PlanUncheckedCreateInput, 'plan_id' | 'goal_id' | 'goal_position'> {
+  return omitFields(data, CREATE_OMIT_FIELDS) as Omit<Prisma.PlanUncheckedCreateInput, 'plan_id' | 'goal_id' | 'goal_position'>
+}
+
 function normalizeGoalId(value: unknown): string | null | undefined {
   if (value === undefined) return undefined
   if (value === null || value === '') return null
@@ -83,12 +120,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const data = await req.json()
-  const { tags, goal_id: rawGoalId, goal_position, goal, ...planData } = data
-  const goal_id = normalizeGoalId(rawGoalId)
+  const data = await req.json() as Record<string, unknown>
+  const tags = data.tags
+  const goal_id = normalizeGoalId(data.goal_id)
 
   const createData: Prisma.PlanUncheckedCreateInput = {
-    ...planData,
+    ...sanitizeCreateData(data),
     plan_id: `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
   }
 
@@ -112,18 +149,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const data = await req.json()
-  const { plan_id, tags, progressRecords, id, gmt_create, gmt_modified, goal, goal_position, ...rest } = data
+  const data = await req.json() as Record<string, unknown>
+  const plan_id = data.plan_id as string
+  const tags = data.tags
 
-  const updateData: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(rest)) {
-    if (key !== 'goal_id' && value !== undefined) {
-      updateData[key] = value
-    }
-  }
+  const updateData = omitFields(data, UPDATE_OMIT_FIELDS)
 
-  if (Object.prototype.hasOwnProperty.call(rest, 'goal_id')) {
-    const nextGoalId = normalizeGoalId(rest.goal_id)
+  if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
+    const nextGoalId = normalizeGoalId(data.goal_id)
     const existingPlan = await prisma.plan.findUnique({
       where: { plan_id },
       select: { goal_id: true },
@@ -166,4 +199,4 @@ export async function DELETE(req: NextRequest) {
   if (!plan_id) return NextResponse.json({ success: false, message: 'plan_id required' }, { status: 400 })
   await prisma.plan.delete({ where: { plan_id } })
   return NextResponse.json({ success: true })
-} 
+}
