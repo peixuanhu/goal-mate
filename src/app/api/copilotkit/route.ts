@@ -4,12 +4,22 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import OpenAI from "openai";
 import { isRecurringTaskCompleted } from "@/lib/recurring-utils";
+import {
+  GOAL_ROUTE_LOCK_NAMESPACE,
+  getGoalRouteLockKey,
+  getNextGoalPosition,
+} from "@/lib/plan-goal-utils";
 
 const prisma = new PrismaClient();
+type PlanGoalDb = PrismaClient | Prisma.TransactionClient;
+
+async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${GOAL_ROUTE_LOCK_NAMESPACE}::int, ${getGoalRouteLockKey(goal_id)}::int)`;
+}
 
 /**
  * 通义千问等 OpenAI 兼容 API：带 tool_calls 的 assistant 之后必须为每个 tool_call_id
@@ -219,6 +229,7 @@ class CustomOpenAI extends OpenAI {
    - **计划标签**：可以多选标签，用逗号分隔
    - **标签语言**：统一使用英文填写
    - **标签优先级**：优先使用系统中已有的标签，避免创建重复标签
+   - **目标归属**：如果计划明显服务于某个已有目标，先查询目标并在创建计划时传入对应 goal_id；如果不确定归属，先向用户确认。
 
 3. **常用标签参考**（在已有标签不足时使用）：
    - 学习类：study, programming, reading, learning, music
@@ -690,10 +701,10 @@ const runtime = new CopilotRuntime({
       },
     },
 
-    // 获取系统选项（标签和难度）
+    // 获取系统选项（标签、难度和目标）
     {
       name: "getSystemOptions",
-      description: "获取系统中已有的标签列表和标准难度选项，用于创建计划时参考",
+      description: "获取系统中已有的标签列表、目标列表和标准难度选项，用于创建计划时参考",
       parameters: [],
       handler: async () => {
         console.log("📋 getSystemOptions called");
@@ -703,21 +714,29 @@ const runtime = new CopilotRuntime({
             select: { tag: true },
             distinct: ['tag']
           });
+
+          const existingGoals = await prisma.goal.findMany({
+            select: { goal_id: true, name: true, tag: true },
+            orderBy: { gmt_create: 'desc' }
+          });
           
           const tagList = existingTags.map((t: any) => t.tag);
+          const goalList = existingGoals.map((goal) => `- ${goal.name}（标签：${goal.tag || '无'}，goal_id：${goal.goal_id}）`);
           
           // 标准难度选项
           const difficultyOptions = ['easy', 'medium', 'hard'];
           
           console.log("📋 Available tags:", tagList);
+          console.log("🎯 Available goals:", existingGoals);
           console.log("📋 Difficulty options:", difficultyOptions);
           
           return { 
             success: true, 
             data: {
               existingTags: tagList,
+              existingGoals,
               difficultyOptions: difficultyOptions,
-              message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。`
+              message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n已有目标：\n${goalList.length > 0 ? goalList.join('\n') : '暂无目标'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。如果计划明显服务于某个已有目标，请使用对应 goal_id。`
             }
           };
         } catch (error: any) {
@@ -755,12 +774,19 @@ const runtime = new CopilotRuntime({
           type: "string",
           description: "标签，多个标签用逗号分隔",
           required: true,
+        },
+        {
+          name: "goal_id",
+          type: "string",
+          description: "可选。计划所属目标的 goal_id；如果用户明确指定目标，应先查询目标后传入该字段。",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("📋 createPlan called:", args);
         try {
-          const { name, description, difficulty, tags } = args;
+          const { name, description, difficulty, tags, goal_id } = args;
+          const normalizedGoalId = typeof goal_id === 'string' && goal_id.trim() ? goal_id.trim() : undefined;
           
           // 验证难度值是否为标准值
           const validDifficulties = ['easy', 'medium', 'hard'];
@@ -777,38 +803,60 @@ const runtime = new CopilotRuntime({
           
           // 生成唯一的plan_id
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
-          
-          // 创建计划
-          const plan = await prisma.plan.create({
-            data: {
-              plan_id,
-              name,
-              description: description || '',
-              difficulty: difficulty,
-              progress: 0,
-            }
-          });
 
-          // 创建标签关联
-          for (const tag of tagList) {
-            await prisma.planTagAssociation.create({
+          const transactionResult = await prisma.$transaction(async tx => {
+            let goalPosition: number | null = null;
+            if (normalizedGoalId) {
+              await lockGoalRoute(tx, normalizedGoalId);
+              const existingGoal = await tx.goal.findUnique({ where: { goal_id: normalizedGoalId } });
+              if (!existingGoal) {
+                throw new Error(`目标不存在：${normalizedGoalId}`);
+              }
+
+              const positionResult = await tx.plan.aggregate({
+                where: { goal_id: normalizedGoalId },
+                _max: { goal_position: true },
+              });
+              goalPosition = getNextGoalPosition(positionResult._max.goal_position);
+            }
+
+            // 创建计划
+            const plan = await tx.plan.create({
               data: {
-                plan_id: plan.plan_id,
-                tag
+                plan_id,
+                name,
+                description: description || '',
+                difficulty: difficulty,
+                progress: 0,
+                ...(normalizedGoalId ? { goal_id: normalizedGoalId, goal_position: goalPosition } : {}),
               }
             });
-          }
 
-          // 返回创建的计划信息（包含标签）
-          const createdPlan = await prisma.plan.findUnique({
-            where: { plan_id },
-            include: { tags: true }
+            // 创建标签关联
+            for (const tag of tagList) {
+              await tx.planTagAssociation.create({
+                data: {
+                  plan_id: plan.plan_id,
+                  tag
+                }
+              });
+            }
+
+            // 返回创建的计划信息（包含标签）
+            const createdPlan = await tx.plan.findUnique({
+              where: { plan_id },
+              include: { tags: true }
+            });
+
+            return {
+              plan,
+              data: {
+                ...createdPlan,
+                tags: createdPlan?.tags.map((t: any) => t.tag) || []
+              }
+            };
           });
-
-          const result = {
-            ...createdPlan,
-            tags: createdPlan?.tags.map((t: any) => t.tag) || []
-          };
+          const { plan, data: result } = transactionResult;
 
           console.log("✅ Plan created:", result);
           return { 
