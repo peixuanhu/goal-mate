@@ -6,7 +6,7 @@ import { buildGoalPositionUpdates, validateGoalPlanOrder } from '@/lib/plan-goal
 const prisma = new PrismaClient()
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0)
+  return Array.isArray(value) && value.length > 0 && value.every(item => typeof item === 'string' && item.length > 0)
 }
 
 export async function PUT(req: NextRequest) {
@@ -17,7 +17,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: '请求体必须是有效 JSON 对象' }, { status: 400 })
   }
 
-  if (!data || typeof data !== 'object') {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return NextResponse.json({ error: '请求体必须是有效 JSON 对象' }, { status: 400 })
   }
 

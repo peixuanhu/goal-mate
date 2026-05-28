@@ -107,6 +107,37 @@ describe("/api/plan/order", () => {
     expect(prismaMock.plan.update).not.toHaveBeenCalled()
   })
 
+  it("rejects array JSON bodies", async () => {
+    const response = await PUT(
+      request("http://localhost/api/plan/order", {
+        method: "PUT",
+        body: JSON.stringify([]),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "请求体必须是有效 JSON 对象" })
+    expect(prismaMock.goal.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.plan.update).not.toHaveBeenCalled()
+  })
+
+  it("rejects empty ordered plan ids at route validation", async () => {
+    const response = await PUT(
+      request("http://localhost/api/plan/order", {
+        method: "PUT",
+        body: JSON.stringify({
+          goal_id: "goal_arch",
+          ordered_plan_ids: [],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "ordered_plan_ids must be a non-empty string array" })
+    expect(prismaMock.goal.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.plan.update).not.toHaveBeenCalled()
+  })
+
   it("rejects incomplete ordering", async () => {
     prismaMock.goal.findUnique.mockResolvedValue({ goal_id: "goal_arch" })
     prismaMock.plan.findMany.mockResolvedValue([
