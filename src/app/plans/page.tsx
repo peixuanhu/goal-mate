@@ -597,7 +597,7 @@ export default function PlansPage() {
                 value={form.description || ''}
                 onChange={(value: string) => setForm(f => ({ ...f, description: value }))}
                 placeholder="请输入详细描述，可以包含链接、备注等信息..."
-                minHeight="150px"
+                minHeight={150}
               />
 
               {/* 标签字段 - 独立行 */}
