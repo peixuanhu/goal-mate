@@ -112,6 +112,11 @@ function DraggableTableRow({
 }
 
 export default function PlansPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialUrlGoalId = searchParams.get('goal_id');
+  const lastAppliedUrlGoalIdRef = useRef<string | null>(initialUrlGoalId);
+  const fetchPlansRequestIdRef = useRef(0);
   const [plans, setPlans] = useState<Plan[]>([])
   const [allPlans, setAllPlans] = useState<Plan[]>([])  // 存储所有计划用于本地排序
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -122,18 +127,15 @@ export default function PlansPage() {
   const [pageNum, setPageNum] = useState(1)
   const [pageSize] = useState(10)
   const [total, setTotal] = useState(0)
-  const [form, setForm] = useState<PlanForm>({ tags: [], progress: '', is_recurring: false })
+  const [form, setForm] = useState<PlanForm>({ tags: [], progress: '', is_recurring: false, goal_id: initialUrlGoalId || null })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' })
   const [highlightPlanId, setHighlightPlanId] = useState<string | null>(null)  // 新增：高亮计划ID
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const lastAppliedUrlGoalIdRef = useRef<string | null>(null);
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [newTagInput, setNewTagInput] = useState<string>('')  // 新增：独立管理新标签输入框的值
   const [goalOptions, setGoalOptions] = useState<GoalOption[]>([])
-  const [goalFilter, setGoalFilter] = useState('all')
+  const [goalFilter, setGoalFilter] = useState(initialUrlGoalId || 'all')
 
   // 判断计划是否已完成的函数
   const isPlanCompleted = (plan: Plan): boolean => {
@@ -209,18 +211,25 @@ export default function PlansPage() {
   };
 
   const fetchPlans = async () => {
+    const requestId = fetchPlansRequestIdRef.current + 1;
+    fetchPlansRequestIdRef.current = requestId;
+    const requestGoalFilter = goalFilter;
     setLoading(true)
     // 获取所有数据，在前端进行筛选和排序
     const params = new URLSearchParams({ pageSize: '1000' })
-    if (goalFilter !== 'all') {
-      if (goalFilter === 'unassigned') {
+    if (requestGoalFilter !== 'all') {
+      if (requestGoalFilter === 'unassigned') {
         params.set('unassigned', 'true')
       } else {
-        params.set('goal_id', goalFilter)
+        params.set('goal_id', requestGoalFilter)
       }
     }
     const res = await fetch(`/api/plan?${params}`)
     const data = await res.json()
+
+    if (requestId !== fetchPlansRequestIdRef.current) {
+      return;
+    }
     
     setAllPlans(data.list || [])
     
@@ -235,7 +244,7 @@ export default function PlansPage() {
     setPlans(paginatedPlans)
     setTotal(filteredPlans.length)
     setLoading(false)
-    setForm({ tags: [], progress: '', is_recurring: false, goal_id: goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null })
+    setForm({ tags: [], progress: '', is_recurring: false, goal_id: requestGoalFilter !== 'all' && requestGoalFilter !== 'unassigned' ? requestGoalFilter : null })
     setEditingId(null)
   }
 
@@ -804,7 +813,7 @@ export default function PlansPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                           加载中...
@@ -813,7 +822,7 @@ export default function PlansPage() {
                     </TableRow>
                   ) : plans.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         <div className="space-y-2">
                           <div className="text-gray-500 dark:text-gray-400">暂无计划记录</div>
                           <div className="text-sm text-gray-400 dark:text-gray-500">开始创建您的第一个计划吧！</div>
