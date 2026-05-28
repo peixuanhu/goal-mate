@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -129,6 +129,7 @@ export default function PlansPage() {
   const [highlightPlanId, setHighlightPlanId] = useState<string | null>(null)  // 新增：高亮计划ID
   const router = useRouter();
   const searchParams = useSearchParams();
+  const lastAppliedUrlGoalIdRef = useRef<string | null>(null);
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [newTagInput, setNewTagInput] = useState<string>('')  // 新增：独立管理新标签输入框的值
   const [goalOptions, setGoalOptions] = useState<GoalOption[]>([])
@@ -224,8 +225,8 @@ export default function PlansPage() {
     setAllPlans(data.list || [])
     
     // 应用筛选和排序
-    let filteredPlans = filterPlans(data.list || []);
-    let sortedPlans = sortPlans(filteredPlans, sortConfig);
+    const filteredPlans = filterPlans(data.list || []);
+    const sortedPlans = sortPlans(filteredPlans, sortConfig);
     
     // 应用分页
     const startIndex = (pageNum - 1) * pageSize;
@@ -246,9 +247,12 @@ export default function PlansPage() {
     }
 
     const urlGoalId = searchParams.get('goal_id');
-    if (urlGoalId && goalFilter !== urlGoalId) {
+    if (urlGoalId && lastAppliedUrlGoalIdRef.current !== urlGoalId) {
+      lastAppliedUrlGoalIdRef.current = urlGoalId;
       setGoalFilter(urlGoalId);
       setForm(f => ({ ...f, goal_id: urlGoalId }));
+    } else if (!urlGoalId) {
+      lastAppliedUrlGoalIdRef.current = null;
     }
     
     // 如果URL有highlight参数，设置高亮计划
@@ -260,13 +264,13 @@ export default function PlansPage() {
         setHighlightPlanId(null);
       }, 5000);
     }
-  }, [searchParams, selectedTags, goalFilter]);
+  }, [searchParams, selectedTags]);
 
   // 当筛选条件或排序配置变化时重新筛选和排序
   useEffect(() => {
     if (allPlans.length > 0) {
-      let filteredPlans = filterPlans(allPlans);
-      let sortedPlans = sortPlans(filteredPlans, sortConfig);
+      const filteredPlans = filterPlans(allPlans);
+      const sortedPlans = sortPlans(filteredPlans, sortConfig);
       
       // 如果有高亮计划且不在筛选结果中，则添加到结果中
       if (highlightPlanId) {
@@ -298,8 +302,8 @@ export default function PlansPage() {
   // 当页码变化时重新分页
   useEffect(() => {
     if (allPlans.length > 0) {
-      let filteredPlans = filterPlans(allPlans);
-      let sortedPlans = sortPlans(filteredPlans, sortConfig);
+      const filteredPlans = filterPlans(allPlans);
+      const sortedPlans = sortPlans(filteredPlans, sortConfig);
       
       // 如果有高亮计划且不在筛选结果中，则添加到结果中
       if (highlightPlanId) {
@@ -571,7 +575,7 @@ export default function PlansPage() {
                     <ul className="mt-1 ml-4 space-y-1 list-disc">
                       <li>通过记录进展来标记完成状态，无需设置进度百分比</li>
                       <li>系统会自动统计当前周期内的完成次数</li>
-                      <li>达到目标次数后该周期会标记为"已完成"</li>
+                      <li>达到目标次数后该周期会标记为&quot;已完成&quot;</li>
                     </ul>
                   </div>
                 </div>
