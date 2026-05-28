@@ -219,6 +219,7 @@ class CustomOpenAI extends OpenAI {
    - **计划标签**：可以多选标签，用逗号分隔
    - **标签语言**：统一使用英文填写
    - **标签优先级**：优先使用系统中已有的标签，避免创建重复标签
+   - **目标归属**：如果计划明显服务于某个已有目标，先查询目标并在创建计划时传入对应 goal_id；如果不确定归属，先向用户确认。
 
 3. **常用标签参考**（在已有标签不足时使用）：
    - 学习类：study, programming, reading, learning, music
@@ -755,12 +756,18 @@ const runtime = new CopilotRuntime({
           type: "string",
           description: "标签，多个标签用逗号分隔",
           required: true,
+        },
+        {
+          name: "goal_id",
+          type: "string",
+          description: "可选。计划所属目标的 goal_id；如果用户明确指定目标，应先查询目标后传入该字段。",
+          required: false,
         }
       ],
       handler: async (args: any) => {
         console.log("📋 createPlan called:", args);
         try {
-          const { name, description, difficulty, tags } = args;
+          const { name, description, difficulty, tags, goal_id } = args;
           
           // 验证难度值是否为标准值
           const validDifficulties = ['easy', 'medium', 'hard'];
@@ -777,6 +784,23 @@ const runtime = new CopilotRuntime({
           
           // 生成唯一的plan_id
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
+
+          let goalPosition: number | null = null;
+          if (goal_id) {
+            const existingGoal = await prisma.goal.findUnique({ where: { goal_id } });
+            if (!existingGoal) {
+              return {
+                success: false,
+                error: `目标不存在：${goal_id}`,
+              };
+            }
+
+            const positionResult = await prisma.plan.aggregate({
+              where: { goal_id },
+              _max: { goal_position: true },
+            });
+            goalPosition = (positionResult._max.goal_position ?? 0) + 1000;
+          }
           
           // 创建计划
           const plan = await prisma.plan.create({
@@ -786,6 +810,7 @@ const runtime = new CopilotRuntime({
               description: description || '',
               difficulty: difficulty,
               progress: 0,
+              ...(goal_id ? { goal_id, goal_position: goalPosition } : {}),
             }
           });
 
