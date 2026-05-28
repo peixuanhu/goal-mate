@@ -146,6 +146,7 @@ describe("/api/plan", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.goal.findUnique).toHaveBeenCalledWith({ where: { goal_id: "goal_arch" } })
     expect(prismaMock.plan.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         name: "读完 DDIA",
@@ -154,6 +155,9 @@ describe("/api/plan", () => {
         goal_position: 3000,
         plan_id: expect.stringMatching(/^plan_[a-f0-9]{10}$/),
       }),
+    })
+    expect(prismaMock.planTagAssociation.create).toHaveBeenCalledWith({
+      data: { plan_id: "plan_ddia", tag: "reading" },
     })
   })
 
@@ -174,6 +178,7 @@ describe("/api/plan", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.goal.findUnique).toHaveBeenCalledWith({ where: { goal_id: "goal_arch" } })
     expect(prismaMock.plan.update).toHaveBeenCalledWith({
       where: { plan_id: "plan_ddia" },
       data: { goal_id: "goal_arch", goal_position: 1000 },
