@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { getNextGoalPosition } from '@/lib/plan-goal-utils'
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   const { tags, goal_id: rawGoalId, goal_position, goal, ...planData } = data
   const goal_id = normalizeGoalId(rawGoalId)
 
-  const createData: Record<string, unknown> = {
+  const createData: Prisma.PlanUncheckedCreateInput = {
     ...planData,
     plan_id: `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
   }
