@@ -691,10 +691,10 @@ const runtime = new CopilotRuntime({
       },
     },
 
-    // 获取系统选项（标签和难度）
+    // 获取系统选项（标签、难度和目标）
     {
       name: "getSystemOptions",
-      description: "获取系统中已有的标签列表和标准难度选项，用于创建计划时参考",
+      description: "获取系统中已有的标签列表、目标列表和标准难度选项，用于创建计划时参考",
       parameters: [],
       handler: async () => {
         console.log("📋 getSystemOptions called");
@@ -704,21 +704,29 @@ const runtime = new CopilotRuntime({
             select: { tag: true },
             distinct: ['tag']
           });
+
+          const existingGoals = await prisma.goal.findMany({
+            select: { goal_id: true, name: true, tag: true },
+            orderBy: { gmt_create: 'desc' }
+          });
           
           const tagList = existingTags.map((t: any) => t.tag);
+          const goalList = existingGoals.map((goal) => `- ${goal.name}（标签：${goal.tag || '无'}，goal_id：${goal.goal_id}）`);
           
           // 标准难度选项
           const difficultyOptions = ['easy', 'medium', 'hard'];
           
           console.log("📋 Available tags:", tagList);
+          console.log("🎯 Available goals:", existingGoals);
           console.log("📋 Difficulty options:", difficultyOptions);
           
           return { 
             success: true, 
             data: {
               existingTags: tagList,
+              existingGoals,
               difficultyOptions: difficultyOptions,
-              message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。`
+              message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n已有目标：\n${goalList.length > 0 ? goalList.join('\n') : '暂无目标'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。如果计划明显服务于某个已有目标，请使用对应 goal_id。`
             }
           };
         } catch (error: any) {
@@ -768,6 +776,7 @@ const runtime = new CopilotRuntime({
         console.log("📋 createPlan called:", args);
         try {
           const { name, description, difficulty, tags, goal_id } = args;
+          const normalizedGoalId = typeof goal_id === 'string' && goal_id.trim() ? goal_id.trim() : undefined;
           
           // 验证难度值是否为标准值
           const validDifficulties = ['easy', 'medium', 'hard'];
@@ -786,17 +795,17 @@ const runtime = new CopilotRuntime({
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
 
           let goalPosition: number | null = null;
-          if (goal_id) {
-            const existingGoal = await prisma.goal.findUnique({ where: { goal_id } });
+          if (normalizedGoalId) {
+            const existingGoal = await prisma.goal.findUnique({ where: { goal_id: normalizedGoalId } });
             if (!existingGoal) {
               return {
                 success: false,
-                error: `目标不存在：${goal_id}`,
+                error: `目标不存在：${normalizedGoalId}`,
               };
             }
 
             const positionResult = await prisma.plan.aggregate({
-              where: { goal_id },
+              where: { goal_id: normalizedGoalId },
               _max: { goal_position: true },
             });
             goalPosition = (positionResult._max.goal_position ?? 0) + 1000;
@@ -810,7 +819,7 @@ const runtime = new CopilotRuntime({
               description: description || '',
               difficulty: difficulty,
               progress: 0,
-              ...(goal_id ? { goal_id, goal_position: goalPosition } : {}),
+              ...(normalizedGoalId ? { goal_id: normalizedGoalId, goal_position: goalPosition } : {}),
             }
           });
 
