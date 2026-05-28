@@ -4,12 +4,22 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import OpenAI from "openai";
 import { isRecurringTaskCompleted } from "@/lib/recurring-utils";
+import {
+  GOAL_ROUTE_LOCK_NAMESPACE,
+  getGoalRouteLockKey,
+  getNextGoalPosition,
+} from "@/lib/plan-goal-utils";
 
 const prisma = new PrismaClient();
+type PlanGoalDb = PrismaClient | Prisma.TransactionClient;
+
+async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${GOAL_ROUTE_LOCK_NAMESPACE}::int, ${getGoalRouteLockKey(goal_id)}::int)`;
+}
 
 /**
  * 通义千问等 OpenAI 兼容 API：带 tool_calls 的 assistant 之后必须为每个 tool_call_id
@@ -794,55 +804,59 @@ const runtime = new CopilotRuntime({
           // 生成唯一的plan_id
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
 
-          let goalPosition: number | null = null;
-          if (normalizedGoalId) {
-            const existingGoal = await prisma.goal.findUnique({ where: { goal_id: normalizedGoalId } });
-            if (!existingGoal) {
-              return {
-                success: false,
-                error: `目标不存在：${normalizedGoalId}`,
-              };
+          const transactionResult = await prisma.$transaction(async tx => {
+            let goalPosition: number | null = null;
+            if (normalizedGoalId) {
+              await lockGoalRoute(tx, normalizedGoalId);
+              const existingGoal = await tx.goal.findUnique({ where: { goal_id: normalizedGoalId } });
+              if (!existingGoal) {
+                throw new Error(`目标不存在：${normalizedGoalId}`);
+              }
+
+              const positionResult = await tx.plan.aggregate({
+                where: { goal_id: normalizedGoalId },
+                _max: { goal_position: true },
+              });
+              goalPosition = getNextGoalPosition(positionResult._max.goal_position);
             }
 
-            const positionResult = await prisma.plan.aggregate({
-              where: { goal_id: normalizedGoalId },
-              _max: { goal_position: true },
-            });
-            goalPosition = (positionResult._max.goal_position ?? 0) + 1000;
-          }
-          
-          // 创建计划
-          const plan = await prisma.plan.create({
-            data: {
-              plan_id,
-              name,
-              description: description || '',
-              difficulty: difficulty,
-              progress: 0,
-              ...(normalizedGoalId ? { goal_id: normalizedGoalId, goal_position: goalPosition } : {}),
-            }
-          });
-
-          // 创建标签关联
-          for (const tag of tagList) {
-            await prisma.planTagAssociation.create({
+            // 创建计划
+            const plan = await tx.plan.create({
               data: {
-                plan_id: plan.plan_id,
-                tag
+                plan_id,
+                name,
+                description: description || '',
+                difficulty: difficulty,
+                progress: 0,
+                ...(normalizedGoalId ? { goal_id: normalizedGoalId, goal_position: goalPosition } : {}),
               }
             });
-          }
 
-          // 返回创建的计划信息（包含标签）
-          const createdPlan = await prisma.plan.findUnique({
-            where: { plan_id },
-            include: { tags: true }
+            // 创建标签关联
+            for (const tag of tagList) {
+              await tx.planTagAssociation.create({
+                data: {
+                  plan_id: plan.plan_id,
+                  tag
+                }
+              });
+            }
+
+            // 返回创建的计划信息（包含标签）
+            const createdPlan = await tx.plan.findUnique({
+              where: { plan_id },
+              include: { tags: true }
+            });
+
+            return {
+              plan,
+              data: {
+                ...createdPlan,
+                tags: createdPlan?.tags.map((t: any) => t.tag) || []
+              }
+            };
           });
-
-          const result = {
-            ...createdPlan,
-            tags: createdPlan?.tags.map((t: any) => t.tag) || []
-          };
+          const { plan, data: result } = transactionResult;
 
           console.log("✅ Plan created:", result);
           return { 

@@ -1,4 +1,5 @@
 export const GOAL_POSITION_STEP = 1000
+export const GOAL_ROUTE_LOCK_NAMESPACE = 48231
 
 export type GoalPlanOrderCandidate = {
   plan_id: string
@@ -17,6 +18,16 @@ export type GoalPlanOrderValidationResult =
 
 export function getNextGoalPosition(maxGoalPosition: number | null | undefined): number {
   return typeof maxGoalPosition === "number" ? maxGoalPosition + GOAL_POSITION_STEP : GOAL_POSITION_STEP
+}
+
+export function getGoalRouteLockKey(goalId: string): number {
+  let hash = 0
+  for (let index = 0; index < goalId.length; index += 1) {
+    hash = Math.imul(31, hash) + goalId.charCodeAt(index)
+    hash |= 0
+  }
+
+  return hash
 }
 
 export function buildGoalPositionUpdates(orderedPlanIds: string[]): Array<{ plan_id: string; goal_position: number }> {

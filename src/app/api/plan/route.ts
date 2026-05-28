@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient, type Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
-import { getNextGoalPosition } from '@/lib/plan-goal-utils'
+import {
+  GOAL_ROUTE_LOCK_NAMESPACE,
+  getGoalRouteLockKey,
+  getNextGoalPosition,
+} from '@/lib/plan-goal-utils'
 
 const prisma = new PrismaClient()
+
+class GoalNotFoundError extends Error {}
+class PlanNotFoundError extends Error {}
+class PlanOwnershipChangedError extends Error {}
+
+type PlanGoalDb = PrismaClient | Prisma.TransactionClient
 
 const CREATE_OMIT_FIELDS = new Set([
   'tags',
@@ -49,8 +59,12 @@ function normalizeGoalId(value: unknown): string | null | undefined {
   return String(value)
 }
 
-async function getNextPositionForGoal(goal_id: string): Promise<number> {
-  const result = await prisma.plan.aggregate({
+async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${GOAL_ROUTE_LOCK_NAMESPACE}::int, ${getGoalRouteLockKey(goal_id)}::int)`
+}
+
+async function getNextPositionForGoal(db: PlanGoalDb, goal_id: string): Promise<number> {
+  const result = await db.plan.aggregate({
     where: { goal_id },
     _max: { goal_position: true },
   })
@@ -130,23 +144,36 @@ export async function POST(req: NextRequest) {
     plan_id: `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
   }
 
-  if (goal_id) {
-    const existingGoal = await prisma.goal.findUnique({ where: { goal_id } })
-    if (!existingGoal) {
+  try {
+    const plan = await prisma.$transaction(async tx => {
+      if (goal_id) {
+        await lockGoalRoute(tx, goal_id)
+        const existingGoal = await tx.goal.findUnique({ where: { goal_id } })
+        if (!existingGoal) {
+          throw new GoalNotFoundError()
+        }
+        createData.goal_id = goal_id
+        createData.goal_position = await getNextPositionForGoal(tx, goal_id)
+      }
+
+      const plan = await tx.plan.create({ data: createData })
+
+      if (tags && Array.isArray(tags)) {
+        await Promise.all(tags.map((tag: string) =>
+          tx.planTagAssociation.create({ data: { plan_id: plan.plan_id, tag } })
+        ))
+      }
+
+      return plan
+    })
+
+    return NextResponse.json(plan)
+  } catch (error) {
+    if (error instanceof GoalNotFoundError) {
       return NextResponse.json({ error: '目标不存在' }, { status: 400 })
     }
-    createData.goal_id = goal_id
-    createData.goal_position = await getNextPositionForGoal(goal_id)
+    throw error
   }
-
-  const plan = await prisma.plan.create({ data: createData })
-
-  if (tags && Array.isArray(tags)) {
-    await Promise.all(tags.map((tag: string) =>
-      prisma.planTagAssociation.create({ data: { plan_id: plan.plan_id, tag } })
-    ))
-  }
-  return NextResponse.json(plan)
 }
 
 export async function PUT(req: NextRequest) {
@@ -157,74 +184,93 @@ export async function PUT(req: NextRequest) {
 
   const updateData = omitFields(data, UPDATE_OMIT_FIELDS)
 
-  if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
-    const nextGoalId = normalizeGoalId(data.goal_id)
-    const expectedGoalId = normalizeGoalId(data.expected_goal_id)
+  try {
+    const plan = await prisma.$transaction(async tx => {
+      if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
+        const nextGoalId = normalizeGoalId(data.goal_id)
+        const expectedGoalId = normalizeGoalId(data.expected_goal_id)
 
-    if (hasExpectedGoalId) {
-      if (nextGoalId === null) {
-        updateData.goal_id = null
-        updateData.goal_position = null
-      } else if (nextGoalId) {
-        const existingGoal = await prisma.goal.findUnique({ where: { goal_id: nextGoalId } })
-        if (!existingGoal) {
-          return NextResponse.json({ error: '目标不存在' }, { status: 400 })
+        if (hasExpectedGoalId) {
+          if (nextGoalId === null) {
+            updateData.goal_id = null
+            updateData.goal_position = null
+          } else if (nextGoalId) {
+            await lockGoalRoute(tx, nextGoalId)
+            const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
+            if (!existingGoal) {
+              throw new GoalNotFoundError()
+            }
+            updateData.goal_id = nextGoalId
+            updateData.goal_position = await getNextPositionForGoal(tx, nextGoalId)
+          }
+
+          const result = await tx.plan.updateMany({
+            where: { plan_id, goal_id: expectedGoalId },
+            data: updateData,
+          })
+          if (result.count === 0) {
+            throw new PlanOwnershipChangedError()
+          }
+
+          if (tags && Array.isArray(tags)) {
+            await tx.planTagAssociation.deleteMany({ where: { plan_id } })
+            await Promise.all(tags.map((tag: string) =>
+              tx.planTagAssociation.create({ data: { plan_id, tag } })
+            ))
+          }
+          return tx.plan.findUnique({ where: { plan_id } })
         }
-        updateData.goal_id = nextGoalId
-        updateData.goal_position = await getNextPositionForGoal(nextGoalId)
+
+        const existingPlan = await tx.plan.findUnique({
+          where: { plan_id },
+          select: { goal_id: true },
+        })
+        if (!existingPlan) {
+          throw new PlanNotFoundError()
+        }
+
+        if (nextGoalId === null) {
+          updateData.goal_id = null
+          updateData.goal_position = null
+        } else if (nextGoalId && nextGoalId !== existingPlan.goal_id) {
+          await lockGoalRoute(tx, nextGoalId)
+          const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
+          if (!existingGoal) {
+            throw new GoalNotFoundError()
+          }
+          updateData.goal_id = nextGoalId
+          updateData.goal_position = await getNextPositionForGoal(tx, nextGoalId)
+        }
       }
 
-      const result = await prisma.plan.updateMany({
-        where: { plan_id, goal_id: expectedGoalId },
-        data: updateData,
+      const plan = await tx.plan.update({
+        where: { plan_id },
+        data: updateData
       })
-      if (result.count === 0) {
-        return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
-      }
 
       if (tags && Array.isArray(tags)) {
-        await prisma.planTagAssociation.deleteMany({ where: { plan_id } })
+        await tx.planTagAssociation.deleteMany({ where: { plan_id } })
         await Promise.all(tags.map((tag: string) =>
-          prisma.planTagAssociation.create({ data: { plan_id, tag } })
+          tx.planTagAssociation.create({ data: { plan_id, tag } })
         ))
       }
-      const plan = await prisma.plan.findUnique({ where: { plan_id } })
-      return NextResponse.json(plan)
-    }
 
-    const existingPlan = await prisma.plan.findUnique({
-      where: { plan_id },
-      select: { goal_id: true },
+      return plan
     })
-    if (!existingPlan) {
+
+    return NextResponse.json(plan)
+  } catch (error) {
+    if (error instanceof GoalNotFoundError) {
+      return NextResponse.json({ error: '目标不存在' }, { status: 400 })
+    }
+    if (error instanceof PlanNotFoundError) {
       return NextResponse.json({ error: '计划不存在' }, { status: 404 })
     }
-
-    if (nextGoalId === null) {
-      updateData.goal_id = null
-      updateData.goal_position = null
-    } else if (nextGoalId && nextGoalId !== existingPlan.goal_id) {
-      const existingGoal = await prisma.goal.findUnique({ where: { goal_id: nextGoalId } })
-      if (!existingGoal) {
-        return NextResponse.json({ error: '目标不存在' }, { status: 400 })
-      }
-      updateData.goal_id = nextGoalId
-      updateData.goal_position = await getNextPositionForGoal(nextGoalId)
+    if (error instanceof PlanOwnershipChangedError) {
+      return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
     }
+    throw error
   }
-
-  const plan = await prisma.plan.update({
-    where: { plan_id },
-    data: updateData
-  })
-
-  if (tags && Array.isArray(tags)) {
-    await prisma.planTagAssociation.deleteMany({ where: { plan_id } })
-    await Promise.all(tags.map((tag: string) =>
-      prisma.planTagAssociation.create({ data: { plan_id, tag } })
-    ))
-  }
-  return NextResponse.json(plan)
 }
 
 // DELETE: DeletePlan

@@ -260,8 +260,10 @@ export default function PlansPage() {
       lastAppliedUrlGoalIdRef.current = urlGoalId;
       setGoalFilter(urlGoalId);
       setForm(f => ({ ...f, goal_id: urlGoalId }));
-    } else if (!urlGoalId) {
+    } else if (!urlGoalId && lastAppliedUrlGoalIdRef.current !== null) {
       lastAppliedUrlGoalIdRef.current = null;
+      setGoalFilter('all');
+      setForm(f => ({ ...f, goal_id: null }));
     }
     
     // 如果URL有highlight参数，设置高亮计划

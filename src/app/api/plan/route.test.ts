@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
 const prismaMock = vi.hoisted(() => ({
+  $executeRaw: vi.fn(),
+  $transaction: vi.fn(),
   plan: {
     findMany: vi.fn(),
     count: vi.fn(),
@@ -59,6 +61,7 @@ const basePlan = {
 describe("/api/plan", () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock))
   })
 
   it("GET filters strictly by Plan.goal_id", async () => {
@@ -147,6 +150,7 @@ describe("/api/plan", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(prismaMock.goal.findUnique).toHaveBeenCalledWith({ where: { goal_id: "goal_arch" } })
     expect(prismaMock.plan.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -179,6 +183,7 @@ describe("/api/plan", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(prismaMock.goal.findUnique).toHaveBeenCalledWith({ where: { goal_id: "goal_arch" } })
     expect(prismaMock.plan.update).toHaveBeenCalledWith({
       where: { plan_id: "plan_ddia" },
@@ -204,6 +209,7 @@ describe("/api/plan", () => {
     )
 
     expect(response.status).toBe(200)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(prismaMock.plan.updateMany).toHaveBeenCalledWith({
       where: { plan_id: "plan_ddia", goal_id: null },
       data: { goal_id: "goal_arch", goal_position: 1000 },
