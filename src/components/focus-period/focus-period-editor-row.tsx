@@ -8,6 +8,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+import { DatePicker } from "./date-picker"
 import type { FocusPeriodView, GoalOption } from "./types"
 
 interface FocusPeriodEditorRowProps {
@@ -249,20 +250,22 @@ export function FocusPeriodEditorRow({ period, goals, index, onSave, onDelete }:
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${draft.period_id}-start`}>开始日期</Label>
-          <Input
+          <DatePicker
             id={`${draft.period_id}-start`}
-            type="date"
             value={draft.start_date}
-            onChange={event => updateDraft({ start_date: event.target.value })}
+            year={draft.year}
+            fallbackMonthIndex={0}
+            onChange={value => updateDraft({ start_date: value })}
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${draft.period_id}-end`}>结束日期</Label>
-          <Input
+          <DatePicker
             id={`${draft.period_id}-end`}
-            type="date"
             value={draft.end_date}
-            onChange={event => updateDraft({ end_date: event.target.value })}
+            year={draft.year}
+            fallbackMonthIndex={draft.start_date ? Number(draft.start_date.slice(5, 7)) - 1 : 11}
+            onChange={value => updateDraft({ end_date: value })}
           />
         </div>
         <div className="space-y-2">
