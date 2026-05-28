@@ -160,15 +160,44 @@ export async function PUT(req: NextRequest) {
   if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
     const nextGoalId = normalizeGoalId(data.goal_id)
     const expectedGoalId = normalizeGoalId(data.expected_goal_id)
+
+    if (hasExpectedGoalId) {
+      if (nextGoalId === null) {
+        updateData.goal_id = null
+        updateData.goal_position = null
+      } else if (nextGoalId) {
+        const existingGoal = await prisma.goal.findUnique({ where: { goal_id: nextGoalId } })
+        if (!existingGoal) {
+          return NextResponse.json({ error: '目标不存在' }, { status: 400 })
+        }
+        updateData.goal_id = nextGoalId
+        updateData.goal_position = await getNextPositionForGoal(nextGoalId)
+      }
+
+      const result = await prisma.plan.updateMany({
+        where: { plan_id, goal_id: expectedGoalId },
+        data: updateData,
+      })
+      if (result.count === 0) {
+        return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
+      }
+
+      if (tags && Array.isArray(tags)) {
+        await prisma.planTagAssociation.deleteMany({ where: { plan_id } })
+        await Promise.all(tags.map((tag: string) =>
+          prisma.planTagAssociation.create({ data: { plan_id, tag } })
+        ))
+      }
+      const plan = await prisma.plan.findUnique({ where: { plan_id } })
+      return NextResponse.json(plan)
+    }
+
     const existingPlan = await prisma.plan.findUnique({
       where: { plan_id },
       select: { goal_id: true },
     })
     if (!existingPlan) {
       return NextResponse.json({ error: '计划不存在' }, { status: 404 })
-    }
-    if (hasExpectedGoalId && existingPlan.goal_id !== expectedGoalId) {
-      return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
     }
 
     if (nextGoalId === null) {
