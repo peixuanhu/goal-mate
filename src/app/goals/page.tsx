@@ -1,12 +1,11 @@
 "use client"
-import { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
@@ -14,6 +13,8 @@ import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
+import { GoalPlanList } from "@/components/goals/goal-plan-list"
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Goal {
   id: number
@@ -34,9 +35,21 @@ export default function GoalsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
-  const router = useRouter();
+  const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(() => new Set())
 
-  const fetchGoals = async () => {
+  const toggleGoalExpanded = (goalId: string) => {
+    setExpandedGoalIds(current => {
+      const next = new Set(current)
+      if (next.has(goalId)) {
+        next.delete(goalId)
+      } else {
+        next.add(goalId)
+      }
+      return next
+    })
+  }
+
+  const fetchGoals = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ 
       tag, 
@@ -49,15 +62,15 @@ export default function GoalsPage() {
     setGoals(data.list)
     setTotal(data.total)
     setLoading(false)
-  }
+  }, [pageNum, pageSize, searchQuery, tag])
 
   useEffect(() => {
     fetch('/api/tag?pageSize=1000').then(res => res.json()).then(setTagOptions)
   }, [])
 
-  useEffect(() => { fetchGoals() }, [tag, pageNum, searchQuery])
+  useEffect(() => { fetchGoals() }, [fetchGoals])
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     if (editingId) {
@@ -156,7 +169,7 @@ export default function GoalsPage() {
                   value={form.description || ''}
                   onChange={(value: string) => setForm(f => ({ ...f, description: value }))}
                   placeholder="请输入目标的详细描述，可以包含链接、备注等信息..."
-                  minHeight="150px"
+                  minHeight={150}
                 />
               </form>
 
@@ -192,9 +205,10 @@ export default function GoalsPage() {
 
               {/* 表格 - 添加横向滚动 */}
               <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
-                <Table className="min-w-[930px] w-full">
+                <Table className="min-w-[980px] w-full">
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[48px] min-w-[48px]"></TableHead>
                       <TableHead className="w-[220px] min-w-[220px]">名称</TableHead>
                       <TableHead className="w-[140px] min-w-[140px]">标签</TableHead>
                       <TableHead className="w-[380px] min-w-[380px]">描述</TableHead>
@@ -204,7 +218,7 @@ export default function GoalsPage() {
                   <TableBody>
                     {goals.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                           {loading ? (
                             <div className="flex items-center justify-center gap-2">
                               <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -219,60 +233,77 @@ export default function GoalsPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      goals.map(goal => (
-                        <TableRow key={goal.goal_id}>
-                          <TableCell className="w-[220px] min-w-[220px] font-medium">
-                            <TextPreview
-                              text={goal.name}
-                              maxLength={50}
-                              className="font-medium"
-                              truncateLines={2}
-                            />
-                          </TableCell>
-                          <TableCell className="w-[140px] min-w-[140px]">
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                              {goal.tag}
-                            </span>
-                          </TableCell>
-                          <TableCell className="w-[380px] min-w-[380px]">
-                            <MarkdownPreview
-                              content={goal.description || ''}
-                              maxLines={2}
-                              showToggle={true}
-                            />
-                          </TableCell>
-                          <TableCell className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
-                            <div className="flex flex-wrap gap-1 items-center justify-start">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => handleEdit(goal)} 
-                                className="h-8 px-2 text-xs"
-                                disabled={loading}
-                              >
-                                编辑
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="destructive" 
-                                onClick={() => handleDelete(goal.goal_id)} 
-                                className="h-8 px-2 text-xs"
-                                disabled={loading}
-                              >
-                                删除
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="secondary" 
-                                onClick={() => router.push(`/plans?tag=${goal.tag}`)}
-                                className="h-8 px-2 text-xs"
-                              >
-                                计划
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      goals.map(goal => {
+                        const expanded = expandedGoalIds.has(goal.goal_id)
+
+                        return (
+                          <React.Fragment key={goal.goal_id}>
+                            <TableRow>
+                              <TableCell className="w-[48px] min-w-[48px]">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  aria-label={expanded ? "收起关联计划" : "展开关联计划"}
+                                  onClick={() => toggleGoalExpanded(goal.goal_id)}
+                                >
+                                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </Button>
+                              </TableCell>
+                              <TableCell className="w-[220px] min-w-[220px] font-medium">
+                                <TextPreview
+                                  text={goal.name}
+                                  maxLength={50}
+                                  className="font-medium"
+                                  truncateLines={2}
+                                />
+                              </TableCell>
+                              <TableCell className="w-[140px] min-w-[140px]">
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                  {goal.tag}
+                                </span>
+                              </TableCell>
+                              <TableCell className="w-[380px] min-w-[380px]">
+                                <MarkdownPreview
+                                  content={goal.description || ''}
+                                  maxLines={2}
+                                  showToggle={true}
+                                />
+                              </TableCell>
+                              <TableCell className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
+                                <div className="flex flex-wrap gap-1 items-center justify-start">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleEdit(goal)}
+                                    className="h-8 px-2 text-xs"
+                                    disabled={loading}
+                                  >
+                                    编辑
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDelete(goal.goal_id)}
+                                    className="h-8 px-2 text-xs"
+                                    disabled={loading}
+                                  >
+                                    删除
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                            {expanded ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="bg-gray-50 p-3 dark:bg-gray-900">
+                                  <GoalPlanList goalId={goal.goal_id} />
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </React.Fragment>
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>
