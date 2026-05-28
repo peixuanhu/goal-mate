@@ -18,6 +18,12 @@ import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 
+interface GoalOption {
+  goal_id: string
+  name: string
+  tag: string
+}
+
 interface Plan {
   id: number
   plan_id: string
@@ -25,6 +31,9 @@ interface Plan {
   description: string
   difficulty: string
   progress: number
+  goal_id?: string | null
+  goal_position?: number | null
+  goal?: GoalOption | null
   is_recurring: boolean
   recurrence_type?: string
   recurrence_value?: string
@@ -42,6 +51,7 @@ type PlanForm = {
   description?: string;
   difficulty?: string;
   progress: string;
+  goal_id?: string | null;
   is_recurring: boolean;
   recurrence_type?: string;
   recurrence_value?: string;
@@ -121,6 +131,8 @@ export default function PlansPage() {
   const searchParams = useSearchParams();
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [newTagInput, setNewTagInput] = useState<string>('')  // 新增：独立管理新标签输入框的值
+  const [goalOptions, setGoalOptions] = useState<GoalOption[]>([])
+  const [goalFilter, setGoalFilter] = useState('all')
 
   // 判断计划是否已完成的函数
   const isPlanCompleted = (plan: Plan): boolean => {
@@ -186,8 +198,12 @@ export default function PlansPage() {
       const progressMatch = progressFilter === 'all' || 
         (progressFilter === 'completed' && isPlanCompleted(plan)) ||
         (progressFilter === 'incomplete' && !isPlanCompleted(plan));
+
+      const goalMatch = goalFilter === 'all' ||
+        (goalFilter === 'unassigned' && !plan.goal_id) ||
+        plan.goal_id === goalFilter;
       
-      return nameMatch && tagMatch && difficultyMatch && taskTypeMatch && progressMatch;
+      return nameMatch && tagMatch && difficultyMatch && taskTypeMatch && progressMatch && goalMatch;
     });
   };
 
@@ -195,6 +211,13 @@ export default function PlansPage() {
     setLoading(true)
     // 获取所有数据，在前端进行筛选和排序
     const params = new URLSearchParams({ pageSize: '1000' })
+    if (goalFilter !== 'all') {
+      if (goalFilter === 'unassigned') {
+        params.set('unassigned', 'true')
+      } else {
+        params.set('goal_id', goalFilter)
+      }
+    }
     const res = await fetch(`/api/plan?${params}`)
     const data = await res.json()
     
@@ -211,7 +234,7 @@ export default function PlansPage() {
     setPlans(paginatedPlans)
     setTotal(filteredPlans.length)
     setLoading(false)
-    setForm({ tags: [], progress: '', is_recurring: false })
+    setForm({ tags: [], progress: '', is_recurring: false, goal_id: goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null })
     setEditingId(null)
   }
 
@@ -220,6 +243,12 @@ export default function PlansPage() {
     const urlTag = searchParams.get('tag');
     if (urlTag && !selectedTags.includes(urlTag)) {
       setSelectedTags([urlTag]);
+    }
+
+    const urlGoalId = searchParams.get('goal_id');
+    if (urlGoalId && goalFilter !== urlGoalId) {
+      setGoalFilter(urlGoalId);
+      setForm(f => ({ ...f, goal_id: urlGoalId }));
     }
     
     // 如果URL有highlight参数，设置高亮计划
@@ -231,7 +260,7 @@ export default function PlansPage() {
         setHighlightPlanId(null);
       }, 5000);
     }
-  }, [searchParams, selectedTags]);
+  }, [searchParams, selectedTags, goalFilter]);
 
   // 当筛选条件或排序配置变化时重新筛选和排序
   useEffect(() => {
@@ -264,7 +293,7 @@ export default function PlansPage() {
       setPlans(paginatedPlans);
       setTotal(filteredPlans.length + (highlightPlanId && !filteredPlans.find(plan => plan.plan_id === highlightPlanId) ? 1 : 0));
     }
-  }, [selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, sortConfig, allPlans, pageSize, highlightPlanId]);
+  }, [selectedTags, difficulty, taskTypeFilter, progressFilter, goalFilter, searchQuery, sortConfig, allPlans, pageSize, highlightPlanId]);
 
   // 当页码变化时重新分页
   useEffect(() => {
@@ -286,14 +315,20 @@ export default function PlansPage() {
       
       setPlans(paginatedPlans);
     }
-  }, [pageNum, highlightPlanId, allPlans, sortConfig, selectedTags, difficulty, taskTypeFilter, progressFilter, searchQuery, pageSize]);
+  }, [pageNum, highlightPlanId, allPlans, sortConfig, selectedTags, difficulty, taskTypeFilter, progressFilter, goalFilter, searchQuery, pageSize]);
 
   useEffect(() => { 
     fetchPlans();
-  }, [])
+  }, [goalFilter])
 
   useEffect(() => {
     fetch('/api/tag?pageSize=1000').then(res => res.json()).then(setTagOptions)
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/goal?pageSize=1000')
+      .then(res => res.json())
+      .then(data => setGoalOptions(data.list || []))
   }, [])
 
   // 处理排序点击
@@ -341,7 +376,7 @@ export default function PlansPage() {
         headers: { 'Content-Type': 'application/json' }
       })
     }
-    setForm({ tags: [], progress: '', is_recurring: false })
+    setForm({ tags: [], progress: '', is_recurring: false, goal_id: goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null })
     setEditingId(null)
     await fetchPlans()
     // Refresh quadrant sidebar to reflect changes
@@ -359,7 +394,8 @@ export default function PlansPage() {
       recurrence_type: plan.recurrence_type,
       recurrence_value: plan.recurrence_value,
       priority_quadrant: plan.priority_quadrant,
-      is_scheduled: plan.is_scheduled
+      is_scheduled: plan.is_scheduled,
+      goal_id: plan.goal_id || null,
     })
     setEditingId(plan.plan_id)
   }
@@ -386,7 +422,7 @@ export default function PlansPage() {
           <CardContent className="space-y-6 px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* 表单字段 - 响应式布局 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">名称</Label>
                   <Input 
@@ -407,6 +443,25 @@ export default function PlansPage() {
                     <SelectContent>
                       <SelectItem value="all">全部难度</SelectItem>
                       {DIFFICULTY.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="goal_id">所属目标</Label>
+                  <Select
+                    value={form.goal_id || 'unassigned'}
+                    onValueChange={v => setForm(f => ({ ...f, goal_id: v === 'unassigned' ? null : v }))}
+                  >
+                    <SelectTrigger id="goal_id" className="w-full">
+                      <SelectValue placeholder="选择目标" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">未归属</SelectItem>
+                      {goalOptions.map(goal => (
+                        <SelectItem key={goal.goal_id} value={goal.goal_id}>
+                          {goal.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -440,7 +495,7 @@ export default function PlansPage() {
                         type="button" 
                         variant="secondary" 
                         className="min-h-10 w-full flex-1 sm:min-w-[80px]" 
-                        onClick={() => { setForm({ tags: [], progress: '', is_recurring: false }); setEditingId(null) }}
+                        onClick={() => { setForm({ tags: [], progress: '', is_recurring: false, goal_id: goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null }); setEditingId(null) }}
                       >
                         取消
                       </Button>
@@ -591,7 +646,7 @@ export default function PlansPage() {
                   <Label className="text-sm font-medium">筛选条件</Label>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                   {/* 搜索框 */}
                   <div className="space-y-2">
                     <Label>搜索名称</Label>
@@ -601,6 +656,24 @@ export default function PlansPage() {
                       onChange={e => setSearchQuery(e.target.value)}
                       className="w-full"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>筛选目标</Label>
+                    <Select value={goalFilter} onValueChange={setGoalFilter}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="全部目标" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部目标</SelectItem>
+                        <SelectItem value="unassigned">未归属</SelectItem>
+                        {goalOptions.map(goal => (
+                          <SelectItem key={goal.goal_id} value={goal.goal_id}>
+                            {goal.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* 难度筛选 */}
@@ -693,11 +766,12 @@ export default function PlansPage() {
 
             {/* 带排序功能的表格 */}
             <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
-              <Table className="min-w-[1200px]" style={{ tableLayout: 'fixed', width: '1200px' }}>
+              <Table className="min-w-[1320px]" style={{ tableLayout: 'fixed', width: '1320px' }}>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[40px] min-w-[40px] p-2" style={{ width: '40px' }}></TableHead>
                     <TableHead className="w-[220px] min-w-[220px]" style={{ width: '220px', maxWidth: '220px' }}>计划名称</TableHead>
+                    <TableHead className="w-[140px] min-w-[140px]" style={{ width: '140px', maxWidth: '140px' }}>所属目标</TableHead>
                     <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
                       <Button
                         variant="ghost"
@@ -726,7 +800,7 @@ export default function PlansPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                           加载中...
@@ -735,7 +809,7 @@ export default function PlansPage() {
                     </TableRow>
                   ) : plans.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         <div className="space-y-2">
                           <div className="text-gray-500 dark:text-gray-400">暂无计划记录</div>
                           <div className="text-sm text-gray-400 dark:text-gray-500">开始创建您的第一个计划吧！</div>
@@ -756,6 +830,15 @@ export default function PlansPage() {
                             className="font-medium"
                             truncateLines={1}
                           />
+                        </TableCell>
+                        <TableCell className="w-[140px] min-w-[140px]" style={{ width: '140px', maxWidth: '140px' }}>
+                          {plan.goal ? (
+                            <span className="inline-flex max-w-full rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">
+                              <span className="truncate">{plan.goal.name}</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">未归属</span>
+                          )}
                         </TableCell>
                         <TableCell className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
