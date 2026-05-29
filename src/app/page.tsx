@@ -67,6 +67,19 @@ export default async function Home() {
               </Button>
             </CardContent>
           </Card>
+          <Card className="mx-auto w-full max-w-sm sm:mx-0 sm:w-64">
+            <CardHeader>
+              <CardTitle>回顾</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                汇总本周完成事项和下周计划
+              </p>
+              <Button asChild className="w-full mt-2">
+                <Link href="/reports">进入回顾</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
         
         {/* AI助手使用提示 */}
