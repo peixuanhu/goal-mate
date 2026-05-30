@@ -24,6 +24,7 @@ import { GripVertical, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getRecurringTaskDetails, getRecurrenceTypeDisplay } from "@/lib/recurring-utils"
+import { cn } from "@/lib/utils"
 
 type GoalPlan = {
   plan_id: string
@@ -71,6 +72,21 @@ function formatRecentProgress(plan: GoalPlan): string {
   return new Date(firstRecord.gmt_create).toLocaleDateString("zh-CN")
 }
 
+function getDifficultyClass(difficulty?: string | null): string {
+  switch (difficulty) {
+    case "hard":
+    case "high":
+      return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+    case "medium":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+    case "easy":
+    case "low":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
+    default:
+      return "border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200"
+  }
+}
+
 function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: number; disabled: boolean }) {
   const {
     attributes,
@@ -85,7 +101,7 @@ function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: num
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`grid grid-cols-[32px_72px_minmax(180px,1fr)_96px_110px_160px] items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
+      className={`grid grid-cols-[32px_64px_minmax(180px,320px)_72px_150px_100px] justify-start items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
         isDragging ? "bg-blue-50 opacity-80" : "bg-white dark:bg-gray-950"
       }`}
     >
@@ -110,9 +126,11 @@ function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: num
           ))}
         </div>
       </div>
-      <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{plan.difficulty || "未设置"}</span>
-      <span className="text-gray-700 dark:text-gray-200">{formatProgress(plan)}</span>
-      <span className="text-gray-500">{formatRecentProgress(plan)}</span>
+      <span className={cn("inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", getDifficultyClass(plan.difficulty))}>
+        {plan.difficulty || "未设置"}
+      </span>
+      <span className="whitespace-nowrap text-gray-700 dark:text-gray-200">{formatProgress(plan)}</span>
+      <span className="whitespace-nowrap text-gray-500">{formatRecentProgress(plan)}</span>
     </div>
   )
 }
@@ -248,25 +266,27 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
 
   return (
     <div className="rounded-lg border bg-gray-50 p-3 dark:bg-gray-900">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm font-medium text-gray-700 dark:text-gray-200">目标执行路线</div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-            <SelectTrigger className="h-8 w-full bg-white sm:w-[220px]">
-              <SelectValue placeholder="添加未归属计划" />
-            </SelectTrigger>
-            <SelectContent>
-              {unassignedPlans.length === 0 ? (
-                <SelectItem value="none" disabled>暂无未归属计划</SelectItem>
-              ) : unassignedPlans.map(plan => (
-                <SelectItem key={plan.plan_id} value={plan.plan_id}>{plan.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button type="button" size="sm" variant="outline" disabled={!selectedPlanId || saving} onClick={() => void attachSelectedPlan()}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">目标执行路线</div>
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+          <div className="w-[220px] shrink-0">
+            <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+              <SelectTrigger className="h-8 w-full bg-white">
+                <SelectValue placeholder="添加未归属计划" />
+              </SelectTrigger>
+              <SelectContent>
+                {unassignedPlans.length === 0 ? (
+                  <SelectItem value="none" disabled>暂无未归属计划</SelectItem>
+                ) : unassignedPlans.map(plan => (
+                  <SelectItem key={plan.plan_id} value={plan.plan_id}>{plan.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="button" size="sm" variant="outline" className="shrink-0" disabled={!selectedPlanId || saving} onClick={() => void attachSelectedPlan()}>
             添加已有
           </Button>
-          <Button type="button" size="sm" onClick={() => router.push(`/plans?goal_id=${encodeURIComponent(goalId)}`)}>
+          <Button type="button" size="sm" className="shrink-0" onClick={() => router.push(`/plans?goal_id=${encodeURIComponent(goalId)}`)}>
             <Plus className="h-4 w-4" />
             新建计划
           </Button>
@@ -287,7 +307,7 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={plans.map(plan => plan.plan_id)} strategy={verticalListSortingStrategy}>
             <div className="overflow-x-auto rounded border bg-white dark:bg-gray-950">
-              <div className="min-w-[760px]">
+              <div className="min-w-[700px]">
                 {plans.map((plan, index) => (
                   <SortablePlanRow key={plan.plan_id} plan={plan} index={index} disabled={saving} />
                 ))}

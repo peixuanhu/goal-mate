@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -111,7 +111,7 @@ export default function ProgressPage() {
     }
   }, [searchParams]);
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
     // 确定要使用的plan_id
@@ -454,7 +454,7 @@ export default function ProgressPage() {
               </div>
               
               {/* 表格 - 添加横向滚动 */}
-              <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
+              <div className="max-w-full rounded-lg border">
                 <Table className="w-full min-w-[1090px]">
                   <TableHeader>
                     <TableRow>
@@ -520,12 +520,12 @@ export default function ProgressPage() {
                             />
                           </TableCell>
                           <TableCell className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
-                            <div className="flex flex-wrap gap-1 items-center justify-start">
+                            <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
                               <Button 
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleEdit(r)}
-                                className="h-8 px-2 text-xs"
+                                className="h-8 min-w-[56px] px-2 text-xs"
                                 disabled={loading}
                               >
                                 编辑
@@ -534,7 +534,7 @@ export default function ProgressPage() {
                                 size="sm" 
                                 variant="destructive" 
                                 onClick={() => handleDelete(r.id)}
-                                className="h-8 px-2 text-xs"
+                                className="h-8 min-w-[56px] px-2 text-xs"
                                 disabled={loading}
                               >
                                 删除

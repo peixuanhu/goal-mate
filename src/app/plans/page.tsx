@@ -780,7 +780,7 @@ export default function PlansPage() {
             </div>
 
             {/* 带排序功能的表格 */}
-            <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
+            <div className="max-w-full rounded-lg border">
               <Table className="min-w-[1320px]" style={{ tableLayout: 'fixed', width: '1320px' }}>
                 <TableHeader>
                   <TableRow>
@@ -809,7 +809,7 @@ export default function PlansPage() {
                     </TableHead>
                     <TableHead className="w-[100px] min-w-[100px]" style={{ width: '100px', maxWidth: '100px' }}>类型</TableHead>
                     <TableHead className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px' }}>描述</TableHead>
-                    <TableHead className="sticky right-0 z-[1] w-[170px] min-w-[170px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '170px', maxWidth: '170px' }}>操作</TableHead>
+                    <TableHead className="sticky right-0 z-[1] w-[230px] min-w-[230px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '230px', maxWidth: '230px' }}>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -928,15 +928,15 @@ export default function PlansPage() {
                             showToggle={true}
                           />
                         </TableCell>
-                        <TableCell className="sticky right-0 z-[1] w-[170px] min-w-[170px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '170px', maxWidth: '170px' }}>
-                          <div className="flex flex-wrap gap-1 items-center justify-start">
-                            <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 px-2 text-xs">
+                        <TableCell className="sticky right-0 z-[1] w-[230px] min-w-[230px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '230px', maxWidth: '230px' }}>
+                          <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
+                            <Button size="sm" variant="outline" onClick={() => handleEdit(plan)} className="h-8 min-w-[56px] px-2 text-xs">
                               编辑
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDelete(plan.plan_id)} className="h-8 px-2 text-xs">
+                            <Button size="sm" variant="destructive" onClick={() => handleDelete(plan.plan_id)} className="h-8 min-w-[56px] px-2 text-xs">
                               删除
                             </Button>
-                            <Button size="sm" variant="secondary" onClick={() => router.push(`/progress?plan_id=${plan.plan_id}`)} className="h-8 px-2 text-xs">
+                            <Button size="sm" variant="secondary" onClick={() => router.push(`/progress?plan_id=${plan.plan_id}`)} className="h-8 min-w-[56px] px-2 text-xs">
                               进展
                             </Button>
                           </div>

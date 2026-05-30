@@ -12,7 +12,6 @@ import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
-import { MarkdownPreview } from "@/components/ui/markdown-preview"
 import { GoalPlanList } from "@/components/goals/goal-plan-list"
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -204,15 +203,15 @@ export default function GoalsPage() {
               </div>
 
               {/* 表格 - 添加横向滚动 */}
-              <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border">
-                <Table className="min-w-[980px] w-full">
+              <div className="max-w-full rounded-lg border">
+                <Table className="w-full table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[48px] min-w-[48px]"></TableHead>
-                      <TableHead className="w-[220px] min-w-[220px]">名称</TableHead>
-                      <TableHead className="w-[140px] min-w-[140px]">标签</TableHead>
-                      <TableHead className="w-[380px] min-w-[380px]">描述</TableHead>
-                      <TableHead className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">操作</TableHead>
+                      <TableHead className="w-[48px]"></TableHead>
+                      <TableHead className="w-[30%]">名称</TableHead>
+                      <TableHead className="w-[140px]">标签</TableHead>
+                      <TableHead>描述</TableHead>
+                      <TableHead className="w-[180px] min-w-[180px]">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -239,7 +238,7 @@ export default function GoalsPage() {
                         return (
                           <React.Fragment key={goal.goal_id}>
                             <TableRow>
-                              <TableCell className="w-[48px] min-w-[48px]">
+                              <TableCell className="w-[48px]">
                                 <Button
                                   type="button"
                                   size="sm"
@@ -251,7 +250,7 @@ export default function GoalsPage() {
                                   {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 </Button>
                               </TableCell>
-                              <TableCell className="w-[220px] min-w-[220px] font-medium">
+                              <TableCell className="min-w-0 font-medium">
                                 <TextPreview
                                   text={goal.name}
                                   maxLength={50}
@@ -259,25 +258,25 @@ export default function GoalsPage() {
                                   truncateLines={2}
                                 />
                               </TableCell>
-                              <TableCell className="w-[140px] min-w-[140px]">
+                              <TableCell className="w-[140px]">
                                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                   {goal.tag}
                                 </span>
                               </TableCell>
-                              <TableCell className="w-[380px] min-w-[380px]">
-                                <MarkdownPreview
-                                  content={goal.description || ''}
-                                  maxLines={2}
-                                  showToggle={true}
+                              <TableCell className="min-w-0 overflow-hidden">
+                                <TextPreview
+                                  text={goal.description || ''}
+                                  maxLength={32}
+                                  truncateLines={2}
                                 />
                               </TableCell>
-                              <TableCell className="sticky right-0 z-[1] w-[190px] min-w-[190px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
-                                <div className="flex flex-wrap gap-1 items-center justify-start">
+                              <TableCell className="w-[180px] min-w-[180px]">
+                                <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap w-full">
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleEdit(goal)}
-                                    className="h-8 px-2 text-xs"
+                                    className="h-8 min-w-[56px] px-2 text-xs"
                                     disabled={loading}
                                   >
                                     编辑
@@ -286,7 +285,7 @@ export default function GoalsPage() {
                                     size="sm"
                                     variant="destructive"
                                     onClick={() => handleDelete(goal.goal_id)}
-                                    className="h-8 px-2 text-xs"
+                                    className="h-8 min-w-[56px] px-2 text-xs"
                                     disabled={loading}
                                   >
                                     删除
