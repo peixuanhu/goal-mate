@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Button } from "./button"
-import { Card, CardContent } from "./card"
 import { Copy, X, Check } from "lucide-react"
 
 interface TextPreviewProps {
@@ -10,16 +9,18 @@ interface TextPreviewProps {
   maxLength?: number
   className?: string
   truncateLines?: number
+  forceClamp?: boolean
 }
 
 export function TextPreview({ 
   text, 
   maxLength = 100, 
   className = "",
-  truncateLines = 2
+  truncateLines = 2,
+  forceClamp = false
 }: TextPreviewProps) {
   const [showTooltip, setShowTooltip] = useState(false)
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, showAbove: false })
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, width: 400, showAbove: false })
   const [copied, setCopied] = useState(false)
   const targetRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -28,9 +29,10 @@ export function TextPreview({
 
   // 改进截断逻辑 - 只要文本存在且长度超过maxLength就显示hover
   const shouldTruncate = text && text.length > maxLength
+  const shouldClamp = forceClamp || shouldTruncate
   const displayText = shouldTruncate ? text.substring(0, maxLength) + '...' : text
 
-  const handleMouseEnter = (e: React.MouseEvent) => {
+  const handleMouseEnter = () => {
     // 清除所有延迟
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current)
@@ -49,24 +51,25 @@ export function TextPreview({
       if (!targetRef.current) return // 确保元素仍然存在
       
       const rect = targetRef.current.getBoundingClientRect()
-      const tooltipHeight = 250 // 估算气泡高度
-      const tooltipWidth = 400
+      const tooltipHeight = Math.min(window.innerHeight * 0.6, 384)
+      const tooltipWidth = Math.min(460, window.innerWidth - 32)
       const spaceAbove = rect.top
       const spaceBelow = window.innerHeight - rect.bottom
-      const spaceRight = window.innerWidth - rect.left
       
       // 决定气泡显示在上方还是下方
       const showAbove = spaceBelow < tooltipHeight && spaceAbove > tooltipHeight
       
       // 决定水平位置
-      let leftPosition = rect.left
-      if (spaceRight < tooltipWidth) {
-        leftPosition = window.innerWidth - tooltipWidth - 20
-      }
+      const preferredLeft = rect.left + rect.width / 2 - tooltipWidth / 2
+      const leftPosition = Math.min(
+        Math.max(16, preferredLeft),
+        window.innerWidth - tooltipWidth - 16
+      )
       
       setTooltipPosition({
         top: showAbove ? rect.top : rect.bottom + 10,
-        left: Math.max(10, leftPosition), // 确保不超出左边界
+        left: leftPosition,
+        width: tooltipWidth,
         showAbove: showAbove
       })
       setShowTooltip(true)
@@ -122,7 +125,7 @@ export function TextPreview({
     const parts = text.split(urlRegex)
     
     return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
+      if (/^https?:\/\/[^\s<>"{}|\\^`[\]]+$/.test(part)) {
         return (
           <a
             key={index}
@@ -177,12 +180,12 @@ export function TextPreview({
         onMouseLeave={handleMouseLeave}
       >
         <div 
-          className={`break-words ${shouldTruncate ? 'line-clamp-' + truncateLines : ''}`}
+          className={`break-words ${shouldClamp ? 'line-clamp-' + truncateLines : ''}`}
           style={{
-            display: shouldTruncate ? '-webkit-box' : 'block',
-            WebkitLineClamp: shouldTruncate ? truncateLines : 'unset',
-            WebkitBoxOrient: shouldTruncate ? 'vertical' : 'unset',
-            overflow: shouldTruncate ? 'hidden' : 'visible'
+            display: shouldClamp ? '-webkit-box' : 'block',
+            WebkitLineClamp: shouldClamp ? truncateLines : 'unset',
+            WebkitBoxOrient: shouldClamp ? 'vertical' : 'unset',
+            overflow: shouldClamp ? 'hidden' : 'visible'
           }}
         >
           {renderTextWithLinks(displayText)}
@@ -198,83 +201,70 @@ export function TextPreview({
       {showTooltip && (
         <div
           ref={tooltipRef}
-          className="fixed z-50 max-w-sm min-w-72"
+          role="dialog"
+          aria-label="完整描述"
+          className="fixed z-50"
           style={{
             top: tooltipPosition.top,
             left: tooltipPosition.left,
+            width: tooltipPosition.width,
             transform: tooltipPosition.showAbove ? 'translateY(-100%)' : 'translateY(0)'
           }}
           onMouseEnter={handleTooltipMouseEnter}
           onMouseLeave={handleTooltipMouseLeave}
         >
-          <Card className="shadow-2xl border-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl overflow-hidden">
-            {/* 顶部装饰条 */}
-            <div className="h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
-            <CardContent className="p-0">
-              {/* 内容区域 */}
-              <div className="px-4 py-3">
-                <div className="max-h-40 overflow-y-auto text-sm text-gray-700 dark:text-gray-200 break-words whitespace-pre-wrap leading-relaxed scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                  {renderTextWithLinks(text)}
-                </div>
+          <div className="overflow-hidden rounded-lg border border-gray-200/80 bg-white/[0.98] shadow-[0_18px_50px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-950/[0.98] dark:shadow-[0_18px_50px_rgba(0,0,0,0.42)]">
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">完整描述</div>
+                <div className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">{text.length} 字符</div>
               </div>
-              
-              {/* 底部操作栏 */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50/80 dark:bg-gray-800/80 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleCopy}
-                    className={`h-7 px-2.5 text-xs font-medium transition-all duration-200 rounded-lg ${
-                      copied 
-                        ? 'text-green-600 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/20' 
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 mr-1.5" />
-                        已复制
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 mr-1.5" />
-                        复制
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowTooltip(false)}
-                    className="h-7 px-2.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-all duration-200 rounded-lg"
-                  >
-                    <X className="w-3.5 h-3.5 mr-1.5" />
-                    关闭
-                  </Button>
-                </div>
-                <div className="text-[11px] text-gray-400 dark:text-gray-500 font-medium tabular-nums">
-                  {text.length} 字符
-                </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCopy}
+                  className={`h-8 w-8 p-0 transition-colors ${
+                    copied
+                      ? 'text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
+                  }`}
+                  aria-label={copied ? "已复制" : "复制完整描述"}
+                  title={copied ? "已复制" : "复制"}
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowTooltip(false)}
+                  className="h-8 w-8 p-0 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+                  aria-label="关闭完整描述"
+                  title="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="max-h-[min(60vh,24rem)] overflow-y-auto px-4 py-3 text-sm leading-6 text-gray-700 dark:text-gray-200">
+              <div className="break-words whitespace-pre-wrap">
+                {renderTextWithLinks(text)}
+              </div>
+            </div>
+          </div>
           
           {/* 箭头指示器 */}
           <div 
-            className={`absolute left-6 w-3 h-3 bg-white dark:bg-gray-900 transform rotate-45 ${
+            className={`absolute left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-gray-200/80 bg-white dark:border-gray-700/80 dark:bg-gray-950 ${
               tooltipPosition.showAbove 
-                ? 'bottom-0 translate-y-1/2 border-r border-b border-gray-200 dark:border-gray-700' 
-                : '-top-1.5 -translate-y-1/2 border-l border-t border-gray-200 dark:border-gray-700'
+                ? 'bottom-0 translate-y-1/2 border-r border-b'
+                : 'top-0 -translate-y-1/2 border-l border-t'
             }`}
-            style={{
-              boxShadow: tooltipPosition.showAbove 
-                ? '2px 2px 4px rgba(0,0,0,0.05)' 
-                : '-2px -2px 4px rgba(0,0,0,0.05)'
-            }}
           />
         </div>
       )}
     </>
   )
-} 
+}

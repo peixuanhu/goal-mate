@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildCalendarMonth,
+  calculatePopoverLayout,
   formatDateForDisplay,
   formatMonthTitle,
   getMonthIndexFromDate,
@@ -34,5 +35,61 @@ describe("date-picker-utils", () => {
     expect(formatMonthTitle(2026, 4)).toBe("2026年5月")
     expect(getMonthIndexFromDate("2026-06-30", 0)).toBe(5)
     expect(getMonthIndexFromDate("", 11)).toBe(11)
+  })
+
+  it("keeps the date picker popover inside the viewport", () => {
+    expect(calculatePopoverLayout({
+      triggerBottom: 311,
+      triggerLeft: 796,
+      triggerTop: 275,
+      viewportHeight: 1150,
+      viewportWidth: 1030,
+    })).toEqual({
+      left: -70,
+      maxHeight: 322,
+      top: 44,
+      width: 288,
+    })
+
+    expect(calculatePopoverLayout({
+      triggerBottom: 311,
+      triggerLeft: 80,
+      triggerTop: 275,
+      viewportHeight: 1150,
+      viewportWidth: 1030,
+    })).toEqual({
+      left: 0,
+      maxHeight: 322,
+      top: 44,
+      width: 288,
+    })
+
+    expect(calculatePopoverLayout({
+      triggerBottom: 312,
+      triggerLeft: 12,
+      triggerTop: 276,
+      viewportHeight: 640,
+      viewportWidth: 280,
+    })).toEqual({
+      left: 4,
+      maxHeight: 322,
+      top: 26,
+      width: 248,
+    })
+  })
+
+  it("opens the date picker popover above the trigger when bottom space is tight", () => {
+    expect(calculatePopoverLayout({
+      triggerBottom: 569,
+      triggerLeft: 29,
+      triggerTop: 533,
+      viewportHeight: 844,
+      viewportWidth: 390,
+    })).toEqual({
+      left: 0,
+      maxHeight: 322,
+      top: -330,
+      width: 288,
+    })
   })
 })

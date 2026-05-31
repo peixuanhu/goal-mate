@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Plus } from "lucide-react"
+import { GripVertical, Plus, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -87,7 +87,19 @@ function getDifficultyClass(difficulty?: string | null): string {
   }
 }
 
-function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: number; disabled: boolean }) {
+function SortablePlanRow({
+  plan,
+  index,
+  disabled,
+  onDetach,
+  onOpenPlan,
+}: {
+  plan: GoalPlan
+  index: number
+  disabled: boolean
+  onDetach: (planId: string) => void
+  onOpenPlan: (planId: string) => void
+}) {
   const {
     attributes,
     listeners,
@@ -101,7 +113,7 @@ function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: num
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`grid grid-cols-[32px_64px_minmax(180px,320px)_72px_150px_100px] justify-start items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
+      className={`grid grid-cols-[32px_64px_minmax(180px,320px)_72px_150px_100px_72px] justify-start items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
         isDragging ? "bg-blue-50 opacity-80" : "bg-white dark:bg-gray-950"
       }`}
     >
@@ -117,7 +129,15 @@ function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: num
       </button>
       <span className="font-medium text-gray-700 dark:text-gray-200">第 {index + 1} 步</span>
       <div className="min-w-0">
-        <div className="truncate font-medium">{plan.name}</div>
+        <button
+          type="button"
+          disabled={disabled}
+          className="block w-full min-w-0 truncate rounded text-left font-medium text-blue-700 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:pointer-events-none disabled:text-gray-500 disabled:no-underline dark:text-blue-300 dark:hover:text-blue-200"
+          onClick={() => onOpenPlan(plan.plan_id)}
+          aria-label={`打开计划 ${plan.name}`}
+        >
+          {plan.name}
+        </button>
         <div className="mt-1 flex flex-wrap gap-1">
           {plan.tags.slice(0, 3).map(tag => (
             <span key={tag} className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
@@ -131,6 +151,18 @@ function SortablePlanRow({ plan, index, disabled }: { plan: GoalPlan; index: num
       </span>
       <span className="whitespace-nowrap text-gray-700 dark:text-gray-200">{formatProgress(plan)}</span>
       <span className="whitespace-nowrap text-gray-500">{formatRecentProgress(plan)}</span>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 justify-self-start px-2 text-xs"
+        disabled={disabled}
+        onClick={() => onDetach(plan.plan_id)}
+        aria-label={`移除关联计划 ${plan.name}`}
+      >
+        <X className="h-4 w-4" />
+        移除
+      </Button>
     </div>
   )
 }
@@ -235,12 +267,13 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
 
   async function attachSelectedPlan() {
     if (!selectedPlanId || savingRef.current) return
+    const attachedPlanId = selectedPlanId
     savingRef.current = true
     setSaving(true)
     setError(null)
     try {
       const latestUnassignedPlans = await refreshUnassignedPlans()
-      const selectedPlanStillUnassigned = latestUnassignedPlans.some(plan => plan.plan_id === selectedPlanId)
+      const selectedPlanStillUnassigned = latestUnassignedPlans.some(plan => plan.plan_id === attachedPlanId)
       if (!selectedPlanStillUnassigned) {
         setSelectedPlanId("")
         throw new Error("该计划已被关联到其他目标，请重新选择")
@@ -249,11 +282,12 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
       const response = await fetch("/api/plan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan_id: selectedPlanId, goal_id: goalId, expected_goal_id: null }),
+        body: JSON.stringify({ plan_id: attachedPlanId, goal_id: goalId, expected_goal_id: null }),
       })
       if (!response.ok) {
         throw new Error(await readApiError(response, "添加已有计划失败"))
       }
+      setUnassignedPlans(current => current.filter(plan => plan.plan_id !== attachedPlanId))
       setSelectedPlanId("")
       await loadPlans()
     } catch (attachError) {
@@ -262,6 +296,36 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
       savingRef.current = false
       setSaving(false)
     }
+  }
+
+  async function detachPlan(planId: string) {
+    if (savingRef.current) return
+    const previousPlans = plans
+    savingRef.current = true
+    setSaving(true)
+    setError(null)
+    setPlans(current => current.filter(plan => plan.plan_id !== planId))
+    try {
+      const response = await fetch("/api/plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: planId, goal_id: null, expected_goal_id: goalId }),
+      })
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "移除关联计划失败"))
+      }
+      await loadPlans()
+    } catch (detachError) {
+      setPlans(previousPlans)
+      setError(detachError instanceof Error ? detachError.message : "移除关联计划失败")
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  function openPlan(planId: string) {
+    router.push(`/plans?goal_id=${encodeURIComponent(goalId)}&highlight=${encodeURIComponent(planId)}`)
   }
 
   return (
@@ -307,9 +371,16 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={plans.map(plan => plan.plan_id)} strategy={verticalListSortingStrategy}>
             <div className="overflow-x-auto rounded border bg-white dark:bg-gray-950">
-              <div className="min-w-[700px]">
+              <div className="min-w-[790px]">
                 {plans.map((plan, index) => (
-                  <SortablePlanRow key={plan.plan_id} plan={plan} index={index} disabled={saving} />
+                  <SortablePlanRow
+                    key={plan.plan_id}
+                    plan={plan}
+                    index={index}
+                    disabled={saving}
+                    onDetach={detachPlan}
+                    onOpenPlan={openPlan}
+                  />
                 ))}
               </div>
             </div>

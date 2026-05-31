@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { CalendarDays, Eye, RefreshCcw, Save, Trash2 } from "lucide-react"
+import { CalendarDays, RefreshCcw, Save, Trash2 } from "lucide-react"
 
 import AuthGuard from "@/components/AuthGuard"
 import { MainLayout } from "@/components/main-layout"
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { TextPreview } from "@/components/ui/text-preview"
 import { renderWeeklyReportMarkdown, type WeeklyReportSummary } from "@/lib/weekly-report"
 
 type Report = {
@@ -186,7 +187,7 @@ export default function ReportsPage() {
                             {item.goalName}{item.goalTag ? ` / ${item.goalTag}` : ""}
                           </div>
                         )}
-                        <MarkdownPreview content={item.content} maxLines={3} showToggle={true} />
+                        <TextPreview text={item.content} maxLength={120} truncateLines={3} />
                       </div>
                     ))}
                   </div>
@@ -264,14 +265,16 @@ export default function ReportsPage() {
                       </TableRow>
                     ) : reports.map(report => (
                       <TableRow key={report.report_id}>
-                        <TableCell className="whitespace-normal font-medium">{report.title}</TableCell>
-                        <TableCell className="whitespace-normal text-sm text-muted-foreground">{report.subtitle || "无摘要"}</TableCell>
+                        <TableCell className="min-w-0 font-medium">
+                          <TextPreview text={report.title} maxLength={48} truncateLines={2} />
+                        </TableCell>
+                        <TableCell className="min-w-0 text-sm text-muted-foreground">
+                          <TextPreview text={report.subtitle || "无摘要"} maxLength={72} truncateLines={2} />
+                        </TableCell>
                         <TableCell className="text-sm">{new Date(report.gmt_create).toLocaleString()}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button type="button" size="sm" variant="outline" aria-label="查看报告" onClick={() => setSelectedReport(report)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <Button type="button" size="sm" variant="outline" aria-label="查看报告" onClick={() => setSelectedReport(report)}>查看</Button>
                             <Button type="button" size="sm" variant="destructive" aria-label="删除报告" onClick={() => handleDelete(report.report_id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -291,7 +294,7 @@ export default function ReportsPage() {
                 <CardTitle className="text-lg sm:text-xl">{selectedReport.title}</CardTitle>
               </CardHeader>
               <CardContent>
-                <MarkdownPreview content={selectedReport.content || ""} maxLines={20} showToggle={true} />
+                <MarkdownPreview content={selectedReport.content || ""} maxLines={9999} showToggle={false} />
               </CardContent>
             </Card>
           )}

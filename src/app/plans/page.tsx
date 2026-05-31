@@ -15,7 +15,6 @@ import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
-import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 
 interface GoalOption {
@@ -922,10 +921,10 @@ export default function PlansPage() {
                           )}
                         </TableCell>
                         <TableCell className="w-[350px] min-w-[350px]" style={{ width: '350px', maxWidth: '350px', overflow: 'hidden' }}>
-                          <MarkdownPreview
-                            content={plan.description || ''}
-                            maxLines={2}
-                            showToggle={true}
+                          <TextPreview
+                            text={plan.description || ''}
+                            maxLength={80}
+                            truncateLines={2}
                           />
                         </TableCell>
                         <TableCell className="sticky right-0 z-[1] w-[230px] min-w-[230px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950" style={{ width: '230px', maxWidth: '230px' }}>

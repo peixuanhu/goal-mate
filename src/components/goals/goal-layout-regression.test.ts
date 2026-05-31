@@ -63,12 +63,13 @@ describe("table action layout regression", () => {
     expect(source).toContain("text={report.subtitle || \"无摘要\"}")
   })
 
-  it("uses hover previews for progress record list content instead of markdown eye toggles", () => {
+  it("keeps progress record content and thinking visible without markdown eye toggles", () => {
     const source = readProjectFile("src/app/progress/page.tsx")
 
     expect(source).not.toContain("MarkdownPreview")
     expect(source).toContain("text={r.content}")
     expect(source).toContain("text={r.thinking || ''}")
+    expect(source).not.toContain("showToggle={true}")
   })
 
   it("uses hover previews for weekly completed item lists without markdown eye toggles", () => {
@@ -147,6 +148,32 @@ describe("table action layout regression", () => {
 
     expect(source).not.toContain("max-w-full overflow-x-auto overscroll-x-contain rounded-lg border")
     expect(source).toContain("inline-flex items-center justify-end gap-2 whitespace-nowrap")
+  })
+
+  it("keeps progress content and thinking columns visible without horizontal scrolling", () => {
+    const source = readProjectFile("src/app/progress/page.tsx")
+
+    expect(source).toContain('<Table className="w-full table-fixed">')
+    expect(source).not.toContain("min-w-[1090px]")
+    expect(source).toContain('TableHead className="w-[24%]"')
+    expect(source).toContain('TableHead className="w-[24%]"')
+    expect(source).toContain('TableCell className="min-w-0 overflow-hidden"')
+  })
+
+  it("prevents progress plan names from overlapping adjacent content", () => {
+    const source = readProjectFile("src/app/progress/page.tsx")
+
+    expect(source).toContain('TableCell className="w-[128px] min-w-0 overflow-hidden font-medium"')
+    expect(source).toContain('className="block min-w-0 max-w-full overflow-hidden text-blue-600')
+    expect(source).toContain("forceClamp")
+  })
+
+  it("supports container-based clamping for compact hover previews", () => {
+    const source = readProjectFile("src/components/ui/text-preview.tsx")
+
+    expect(source).toContain("forceClamp?: boolean")
+    expect(source).toContain("const shouldClamp = forceClamp || shouldTruncate")
+    expect(source).toContain("overflow: shouldClamp ? 'hidden' : 'visible'")
   })
 
   it("loads associated plans for the current focus goal from the existing plan API", () => {

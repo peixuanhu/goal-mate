@@ -5,6 +5,30 @@ export interface CalendarDay {
   disabled: boolean
 }
 
+interface PopoverLayoutOptions {
+  triggerBottom: number
+  triggerLeft: number
+  triggerTop: number
+  viewportHeight: number
+  viewportWidth: number
+  popoverGap?: number
+  popoverHeight?: number
+  popoverWidth?: number
+  viewportMargin?: number
+}
+
+export interface PopoverLayout {
+  left: number
+  maxHeight: number
+  top: number
+  width: number
+}
+
+const DEFAULT_POPOVER_GAP = 8
+const DEFAULT_POPOVER_HEIGHT = 322
+const DEFAULT_POPOVER_WIDTH = 288
+const DEFAULT_VIEWPORT_MARGIN = 16
+
 export function formatDateForDisplay(date: string): string {
   return date ? date.replaceAll("-", "/") : ""
 }
@@ -50,4 +74,38 @@ export function buildCalendarMonth(year: number, monthIndex: number): CalendarDa
       disabled: cellYear !== year,
     }
   })
+}
+
+export function calculatePopoverLayout({
+  triggerBottom,
+  triggerLeft,
+  triggerTop,
+  viewportHeight,
+  viewportWidth,
+  popoverGap = DEFAULT_POPOVER_GAP,
+  popoverHeight = DEFAULT_POPOVER_HEIGHT,
+  popoverWidth = DEFAULT_POPOVER_WIDTH,
+  viewportMargin = DEFAULT_VIEWPORT_MARGIN,
+}: PopoverLayoutOptions): PopoverLayout {
+  const availableWidth = Math.max(0, viewportWidth - viewportMargin * 2)
+  const availableHeight = Math.max(0, viewportHeight - viewportMargin * 2)
+  const width = Math.min(popoverWidth, availableWidth)
+  const maxHeight = Math.min(popoverHeight, availableHeight)
+  const minLeft = viewportMargin
+  const maxLeft = Math.max(minLeft, viewportWidth - viewportMargin - width)
+  const viewportLeft = Math.min(Math.max(triggerLeft, minLeft), maxLeft)
+
+  const belowTop = triggerBottom + popoverGap
+  const aboveTop = triggerTop - popoverGap - maxHeight
+  const maxTop = Math.max(viewportMargin, viewportHeight - viewportMargin - maxHeight)
+  const viewportTop = belowTop + maxHeight <= viewportHeight - viewportMargin || aboveTop < viewportMargin
+    ? Math.min(Math.max(belowTop, viewportMargin), maxTop)
+    : aboveTop
+
+  return {
+    left: viewportLeft - triggerLeft,
+    maxHeight,
+    top: viewportTop - triggerTop,
+    width,
+  }
 }

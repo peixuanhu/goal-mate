@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 
 import {
   buildCalendarMonth,
+  calculatePopoverLayout,
   formatDateForDisplay,
   formatMonthTitle,
   getMonthIndexFromDate,
@@ -26,8 +27,24 @@ const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"]
 export function DatePicker({ id, value, year, fallbackMonthIndex, onChange }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const [monthIndex, setMonthIndex] = React.useState(() => getMonthIndexFromDate(value, fallbackMonthIndex))
+  const [popoverLayout, setPopoverLayout] = React.useState({ left: 0, maxHeight: 322, top: 44, width: 288 })
   const containerRef = React.useRef<HTMLDivElement>(null)
   const days = React.useMemo(() => buildCalendarMonth(year, monthIndex), [monthIndex, year])
+
+  const updatePopoverLayout = React.useCallback(() => {
+    if (!containerRef.current || typeof window === "undefined") {
+      return
+    }
+
+    const triggerRect = containerRef.current.getBoundingClientRect()
+    setPopoverLayout(calculatePopoverLayout({
+      triggerBottom: triggerRect.bottom,
+      triggerLeft: triggerRect.left,
+      triggerTop: triggerRect.top,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    }))
+  }, [])
 
   React.useEffect(() => {
     if (!open) {
@@ -35,7 +52,22 @@ export function DatePicker({ id, value, year, fallbackMonthIndex, onChange }: Da
     }
 
     setMonthIndex(getMonthIndexFromDate(value, fallbackMonthIndex))
-  }, [fallbackMonthIndex, open, value])
+    updatePopoverLayout()
+  }, [fallbackMonthIndex, open, updatePopoverLayout, value])
+
+  React.useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    window.addEventListener("resize", updatePopoverLayout)
+    window.addEventListener("scroll", updatePopoverLayout, true)
+
+    return () => {
+      window.removeEventListener("resize", updatePopoverLayout)
+      window.removeEventListener("scroll", updatePopoverLayout, true)
+    }
+  }, [open, updatePopoverLayout])
 
   React.useEffect(() => {
     if (!open) {
@@ -75,7 +107,13 @@ export function DatePicker({ id, value, year, fallbackMonthIndex, onChange }: Da
           "h-9 w-full justify-start px-3 text-left font-normal",
           !value && "text-muted-foreground",
         )}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => {
+          if (!open) {
+            updatePopoverLayout()
+          }
+
+          setOpen(current => !current)
+        }}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
@@ -85,7 +123,13 @@ export function DatePicker({ id, value, year, fallbackMonthIndex, onChange }: Da
 
       {open ? (
         <div
-          className="absolute left-0 z-[60] mt-2 w-72 rounded-md border bg-popover p-3 shadow-lg"
+          className="absolute z-[60] overflow-y-auto rounded-md border bg-popover p-3 shadow-lg"
+          style={{
+            left: popoverLayout.left,
+            maxHeight: popoverLayout.maxHeight,
+            top: popoverLayout.top,
+            width: popoverLayout.width,
+          }}
           role="dialog"
           aria-label="选择日期"
         >

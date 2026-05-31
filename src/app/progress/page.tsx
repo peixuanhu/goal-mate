@@ -14,7 +14,6 @@ import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
-import { MarkdownPreview } from "@/components/ui/markdown-preview"
 
 interface Plan {
   plan_id: string
@@ -352,7 +351,7 @@ export default function ProgressPage() {
                         onChange={(value: string) => setForm(f => ({ ...f, content: value }))}
                         placeholder="请详细描述今天的进展，包括完成的任务、遇到的问题、取得的成果等..."
                         required
-                        minHeight="180px"
+                        minHeight={180}
                       />
 
                       {/* 计划进度调整（仅限非周期性任务） */}
@@ -421,7 +420,7 @@ export default function ProgressPage() {
                         value={form.thinking || ''}
                         onChange={(value: string) => setForm(f => ({ ...f, thinking: value }))}
                         placeholder="请记录您的思考和反思，包括学到的知识点、改进的方向、下次的计划等..."
-                        minHeight="180px"
+                        minHeight={180}
                       />
 
                       {/* 操作按钮 */}
@@ -453,16 +452,16 @@ export default function ProgressPage() {
                 </h3>
               </div>
               
-              {/* 表格 - 添加横向滚动 */}
+              {/* 表格 */}
               <div className="max-w-full rounded-lg border">
-                <Table className="w-full min-w-[1090px]">
+                <Table className="w-full table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[150px] min-w-[150px]">时间</TableHead>
-                      {planId === 'all' && <TableHead className="w-[160px] min-w-[160px]">计划名称</TableHead>}
-                      <TableHead className="w-[320px] min-w-[320px]">内容</TableHead>
-                      <TableHead className="w-[320px] min-w-[320px]">思考</TableHead>
-                      <TableHead className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">操作</TableHead>
+                      <TableHead className="w-[120px]">时间</TableHead>
+                      {planId === 'all' && <TableHead className="w-[128px]">计划名称</TableHead>}
+                      <TableHead className="w-[24%]">内容</TableHead>
+                      <TableHead className="w-[24%]">思考</TableHead>
+                      <TableHead className="sticky right-0 z-[1] w-[116px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -487,39 +486,44 @@ export default function ProgressPage() {
                     ) : (
                       records.map(r => (
                         <TableRow key={r.id} className={editingId === r.id ? 'bg-blue-50 dark:bg-blue-950' : ''}>
-                          <TableCell className="w-[150px] min-w-[150px] text-sm font-mono">
+                          <TableCell className="w-[120px] text-sm font-mono">
                             {new Date(r.gmt_create).toLocaleString()}
                           </TableCell>
                           {planId === 'all' && (
-                            <TableCell className="w-[160px] min-w-[160px] font-medium">
+                            <TableCell className="w-[128px] min-w-0 overflow-hidden font-medium">
                               <Link 
                                 href={`/plans?highlight=${r.plan_id}`}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
+                                className="block min-w-0 max-w-full overflow-hidden text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
                               >
                                 <TextPreview
                                   text={r.plan_name || ''}
-                                  maxLength={40}
-                                  className="font-medium"
+                                  maxLength={28}
+                                  className="max-w-full font-medium"
                                   truncateLines={1}
+                                  forceClamp
                                 />
                               </Link>
                             </TableCell>
                           )}
-                          <TableCell className="w-[320px] min-w-[320px]">
-                            <MarkdownPreview
-                              content={r.content}
-                              maxLines={3}
-                              showToggle={true}
+                          <TableCell className="min-w-0 overflow-hidden">
+                            <TextPreview
+                              text={r.content}
+                              maxLength={88}
+                              className="max-w-full"
+                              truncateLines={3}
+                              forceClamp
                             />
                           </TableCell>
-                          <TableCell className="w-[320px] min-w-[320px]">
-                            <MarkdownPreview
-                              content={r.thinking || ''}
-                              maxLines={3}
-                              showToggle={true}
+                          <TableCell className="min-w-0 overflow-hidden">
+                            <TextPreview
+                              text={r.thinking || ''}
+                              maxLength={88}
+                              className="max-w-full"
+                              truncateLines={3}
+                              forceClamp
                             />
                           </TableCell>
-                          <TableCell className="sticky right-0 z-[1] w-[140px] min-w-[140px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
+                          <TableCell className="sticky right-0 z-[1] w-[116px] border-l bg-white shadow-[-6px_0_8px_-4px_rgba(0,0,0,0.08)] dark:bg-gray-950">
                             <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
                               <Button 
                                 size="sm" 
