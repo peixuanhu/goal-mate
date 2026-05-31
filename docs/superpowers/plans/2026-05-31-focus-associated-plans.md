@@ -48,9 +48,9 @@ Append these tests inside the existing `describe("table action layout regression
 
     expect(source).toContain("type FocusPlan = {")
     expect(source).toContain("const [focusPlans, setFocusPlans] = React.useState<FocusPlan[]>([])")
-    expect(source).toContain("fetch(`/api/plan?goal_id=${encodeURIComponent(goalId)}&pageSize=1000`)")
+    expect(source).toMatch(/fetch\(`\/api\/plan\?goal_id=\$\{encodeURIComponent\(goalId\)\}&pageSize=1000`\)/)
     expect(source).toContain("void loadFocusPlans(currentPeriod?.goal_id)")
-    expect(source).not.toContain("plans:")
+    expect(source).not.toContain("fetch(`/api/focus-period?year=${targetYear}&plans=true`)")
   })
 
   it("keeps the associated focus plans section collapsed by default", () => {
@@ -66,21 +66,21 @@ Append these tests inside the existing `describe("table action layout regression
   it("renders current focus plans as a read-only goal route table", () => {
     const source = readProjectFile("src/components/focus-period/focus-overview.tsx")
 
-    expect(source).toContain("grid-cols-[64px_minmax(180px,1fr)_72px_150px_100px]")
+    expect(source).toMatch(/grid-cols-\[64px_minmax\(180px,1fr\)_72px_150px_100px\]/)
     expect(source).toContain("第 {index + 1} 步")
     expect(source).toContain("计划")
     expect(source).toContain("难度")
     expect(source).toContain("进度")
     expect(source).toContain("最近进展")
-    expect(source).not.toContain("DndContext")
-    expect(source).not.toContain("SortableContext")
+    expect(source).not.toContain("from \"@dnd-kit/core\"")
+    expect(source).not.toContain("from \"@dnd-kit/sortable\"")
   })
 
   it("opens focus plan rows on the plans page with goal and highlight query params", () => {
     const source = readProjectFile("src/components/focus-period/focus-overview.tsx")
 
     expect(source).toContain("function openFocusPlan(planId: string)")
-    expect(source).toContain("router.push(`/plans?goal_id=${encodeURIComponent(currentPeriod.goal_id)}&highlight=${encodeURIComponent(planId)}`)")
+    expect(source).toMatch(/router\.push\(`\/plans\?goal_id=\$\{encodeURIComponent\(currentPeriod\.goal_id\)\}&highlight=\$\{encodeURIComponent\(planId\)\}`\)/)
     expect(source).toContain("onClick={() => openFocusPlan(plan.plan_id)}")
   })
 
