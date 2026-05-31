@@ -176,6 +176,7 @@ export function FocusOverview() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const requestIdRef = React.useRef(0)
+  const plansRequestIdRef = React.useRef(0)
   const localMutationVersionRef = React.useRef(0)
 
   const loadFocusData = React.useCallback(async () => {
@@ -233,6 +234,9 @@ export function FocusOverview() {
   }, [loadFocusData])
 
   const loadFocusPlans = React.useCallback(async (goalId?: string) => {
+    const requestId = plansRequestIdRef.current + 1
+    plansRequestIdRef.current = requestId
+
     if (!goalId) {
       setFocusPlans([])
       setFocusPlansError(null)
@@ -250,12 +254,23 @@ export function FocusOverview() {
         throw new Error(await readApiError(response, "关联计划加载失败"))
       }
 
-      setFocusPlans(parseFocusPlanList(await response.json()))
+      const loadedPlans = parseFocusPlanList(await response.json())
+      if (plansRequestIdRef.current !== requestId) {
+        return
+      }
+
+      setFocusPlans(loadedPlans)
     } catch (loadError) {
+      if (plansRequestIdRef.current !== requestId) {
+        return
+      }
+
       setFocusPlans([])
       setFocusPlansError(loadError instanceof Error && loadError.message ? loadError.message : "关联计划加载失败")
     } finally {
-      setFocusPlansLoading(false)
+      if (plansRequestIdRef.current === requestId) {
+        setFocusPlansLoading(false)
+      }
     }
   }, [])
 
@@ -362,6 +377,70 @@ export function FocusOverview() {
           >
             {currentGoalTag ?? "目标已删除"}
           </span>
+        </div>
+      ) : null}
+
+      {currentPeriod ? (
+        <div className="mt-4 rounded-md border bg-muted/20">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40"
+            aria-expanded={focusPlansOpen}
+            onClick={() => setFocusPlansOpen(open => !open)}
+          >
+            <span className="font-medium">
+              关联计划
+              <span className="ml-2 text-muted-foreground">{focusPlansLoading ? "加载中" : `${focusPlans.length} 个`}</span>
+            </span>
+            {focusPlansOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {focusPlansOpen ? (
+            <div className="border-t px-3 py-3">
+              {focusPlansError ? (
+                <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+                  <p>{focusPlansError}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void loadFocusPlans(currentPeriod.goal_id)}>
+                    重试
+                  </Button>
+                </div>
+              ) : focusPlansLoading ? (
+                <div className="py-5 text-center text-sm text-muted-foreground">加载关联计划...</div>
+              ) : focusPlans.length === 0 ? (
+                <div className="rounded border border-dashed bg-background py-5 text-center text-sm text-muted-foreground">
+                  暂无关联计划
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded border bg-background">
+                  <div className="min-w-[640px]">
+                    <div className="grid grid-cols-[64px_minmax(180px,1fr)_72px_150px_100px] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+                      <span>步骤</span>
+                      <span>计划</span>
+                      <span>难度</span>
+                      <span>进度</span>
+                      <span>最近进展</span>
+                    </div>
+                    {focusPlans.map((plan, index) => (
+                      <button
+                        key={plan.plan_id}
+                        type="button"
+                        className="grid w-full grid-cols-[64px_minmax(180px,1fr)_72px_150px_100px] items-center gap-3 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/40"
+                        onClick={() => openFocusPlan(plan.plan_id)}
+                      >
+                        <span className="whitespace-nowrap font-medium text-muted-foreground">第 {index + 1} 步</span>
+                        <span className="min-w-0 truncate font-medium">{plan.name}</span>
+                        <span className={cn("inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", getPlanDifficultyClass(plan.difficulty))}>
+                          {plan.difficulty || "未设置"}
+                        </span>
+                        <span className="whitespace-nowrap text-muted-foreground">{formatPlanProgress(plan)}</span>
+                        <span className="whitespace-nowrap text-muted-foreground">{formatPlanRecentProgress(plan)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
