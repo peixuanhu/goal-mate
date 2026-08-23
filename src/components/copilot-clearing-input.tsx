@@ -11,6 +11,12 @@ import type { InputProps } from "@copilotkit/react-ui";
 import { useChatContext } from "@copilotkit/react-ui";
 import { useCopilotContext } from "@copilotkit/react-core";
 
+declare global {
+  interface Window {
+    __copilotSend?: (message: string) => void;
+  }
+}
+
 const MAX_NEWLINES = 6;
 
 const AutoResizingTextarea = forwardRef<
@@ -104,7 +110,7 @@ export function CopilotClearingInput({
 
   // 暴露 send 方法供外部调用
   useEffect(() => {
-    (window as any).__copilotSend = (message: string) => {
+    window.__copilotSend = (message: string) => {
       if (!inProgress && message.trim()) {
         flushSync(() => {
           setText(message);
@@ -120,7 +126,7 @@ export function CopilotClearingInput({
     };
     
     return () => {
-      delete (window as any).__copilotSend;
+      delete window.__copilotSend;
     };
   }, [inProgress, onSend]);
 

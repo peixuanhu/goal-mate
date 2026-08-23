@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Plan } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           console.log("🔍 Searching plans by progress content keywords");
           
           const contentLower = content.toLowerCase();
-          let searchPlans: any[] = [];
+          let searchPlans: Plan[] = [];
           
           if (contentLower.includes('leetcode') || contentLower.includes('每日一题') || contentLower.includes('刷题')) {
             searchPlans = await prisma.plan.findMany({
@@ -150,4 +150,4 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : "Unknown error"
     }, { status: 500 });
   }
-} 
+}

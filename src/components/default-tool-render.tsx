@@ -5,8 +5,8 @@ import * as React from "react";
 interface ToolCallProps {
   status: "complete" | "inProgress" | "executing";
   name?: string;
-  args?: any;
-  result?: any;
+  args?: unknown;
+  result?: unknown;
 }
 
 export function DefaultToolRender({status, name = "", args, result}: ToolCallProps) {
@@ -42,7 +42,7 @@ export function DefaultToolRender({status, name = "", args, result}: ToolCallPro
   };
 
   // Simplified format function
-  const format = (content: any): React.ReactNode => {
+  const format = (content: unknown): React.ReactNode => {
     if (!content) return null;
     return typeof content === "object" 
       ? <span>{JSON.stringify(content, null, 2)}</span>
@@ -76,14 +76,14 @@ export function DefaultToolRender({status, name = "", args, result}: ToolCallPro
             <div className={classes.sectionTitle}>Name</div>
             <pre className={classes.codeBlock}>{name}</pre>
           </div>
-          {args && (
+          {Boolean(args) && (
             <div className={classes.section}>
               <div className={classes.sectionTitle}>Parameters</div>
               <pre className={classes.codeBlock}>{format(args)}</pre>
             </div>
           )}
 
-          {status === "complete" && result && (
+          {status === "complete" && Boolean(result) && (
             <div className={classes.section}>
               <div className={classes.sectionTitle}>Result</div>
               <pre className={classes.codeBlock}>{format(result)}</pre>
@@ -95,7 +95,13 @@ export function DefaultToolRender({status, name = "", args, result}: ToolCallPro
   );
 }
 
-const ChevronRight = ({ isOpen, chevronClasses }: { isOpen: boolean; chevronClasses: any }) => {
+const ChevronRight = ({
+  isOpen,
+  chevronClasses,
+}: {
+  isOpen: boolean;
+  chevronClasses: { base: string; open: string; hover: string };
+}) => {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`${chevronClasses.base} ${isOpen ? chevronClasses.open : ''} ${chevronClasses.hover}`} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="9 18 15 12 9 6"></polyline>

@@ -116,7 +116,7 @@ export function ChatWrapper() {
   // 处理预设问题点击 - 通过 CopilotClearingInput 暴露的方法
   const handlePresetQuestion = (question: string) => {
     // 使用 CopilotClearingInput 暴露的全局方法
-    const copilotSend = (window as any).__copilotSend;
+    const copilotSend = window.__copilotSend;
     if (copilotSend) {
       copilotSend(question);
     } else {
@@ -816,4 +816,4 @@ export function ChatWrapper() {
       />
     </div>
   );
-} 
+}

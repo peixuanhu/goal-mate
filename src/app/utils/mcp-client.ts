@@ -1,7 +1,19 @@
 import { MCPTool, MCPClient as MCPClientInterface } from "@copilotkit/runtime";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { JSONRPCMessage, Tool } from "@modelcontextprotocol/sdk/types.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toCopilotToolSchema(
+  inputSchema: Tool["inputSchema"]
+): NonNullable<MCPTool["schema"]> & Tool["inputSchema"] {
+  // Keep the SDK schema fields used by the current runtime while satisfying
+  // CopilotKit's narrower adapter contract.
+  return { ...inputSchema, parameters: undefined };
+}
 
 export interface McpClientOptions {
   serverUrl: string;
@@ -132,7 +144,7 @@ export class MCPClient implements MCPClientInterface {
           "tools" in rawToolsResult &&
           Array.isArray(rawToolsResult.tools)
         ) {
-          rawToolsResult.tools.forEach((tool: any) => {
+          rawToolsResult.tools.forEach((tool) => {
             if (tool && typeof tool === "object" && "name" in tool) {
               // Extract required parameters if available
               let requiredParams: string[] = [];
@@ -167,7 +179,7 @@ export class MCPClient implements MCPClientInterface {
 
               toolsMap[tool.name] = {
                 description: enhancedDescription,
-                schema: tool.inputSchema || {},
+                schema: toCopilotToolSchema(tool.inputSchema),
                 execute: async (args: Record<string, unknown>) => {
                   return this.callTool(tool.name, args);
                 },
@@ -177,7 +189,7 @@ export class MCPClient implements MCPClientInterface {
         }
         // If the result is an array directly
         else if (Array.isArray(rawToolsResult)) {
-          rawToolsResult.forEach((tool: any) => {
+          rawToolsResult.forEach((tool) => {
             if (tool && typeof tool === "object" && "name" in tool) {
               // Extract required parameters if available
               let requiredParams: string[] = [];
@@ -212,7 +224,7 @@ export class MCPClient implements MCPClientInterface {
 
               toolsMap[tool.name] = {
                 description: enhancedDescription,
-                schema: tool.inputSchema || {},
+                schema: toCopilotToolSchema(tool.inputSchema),
                 execute: async (args: Record<string, unknown>) => {
                   return this.callTool(tool.name, args);
                 },
@@ -269,7 +281,7 @@ export class MCPClient implements MCPClientInterface {
   public async callTool(
     name: string,
     args: Record<string, unknown>
-  ): Promise<any> {
+  ): Promise<unknown> {
     try {
       console.log(
         `Calling tool: ${name} with args:`,
@@ -337,7 +349,7 @@ export class MCPClient implements MCPClientInterface {
         try {
           const parsedValue = JSON.parse(value);
           result[key] = parsedValue;
-        } catch (e) {
+        } catch {
           // Not valid JSON, keep as string
           result[key] = value;
         }
@@ -367,10 +379,10 @@ export class MCPClient implements MCPClientInterface {
    * This helps the LLM understand how to format requests properly
    */
   private deriveExampleInput(
-    inputSchema: any,
+    inputSchema: unknown,
     toolName: string
   ): string | null {
-    if (!inputSchema) return null;
+    if (!isRecord(inputSchema)) return null;
 
     try {
       // Handle special cases for better guidance
@@ -378,22 +390,25 @@ export class MCPClient implements MCPClientInterface {
         return '{ "params": { "data": { "name": "Task name", "notes": "Task description" } } }';
       }
 
-      if (inputSchema.type === "object" && inputSchema.properties) {
+      if (inputSchema.type === "object" && isRecord(inputSchema.properties)) {
         // Build a minimal example object
-        const example: Record<string, any> = {};
+        const example: Record<string, unknown> = {};
         const props = inputSchema.properties;
 
         // Add required properties first
         if (Array.isArray(inputSchema.required)) {
-          inputSchema.required.forEach((key: string) => {
-            if (key in props) {
-              if (props[key].type === "object" && props[key].properties) {
-                example[key] = this.createExampleObject(props[key]);
-              } else if (props[key].type === "string") {
+          inputSchema.required.forEach((key: unknown) => {
+            if (typeof key === "string" && key in props) {
+              const property = props[key];
+              if (!isRecord(property)) {
+                example[key] = null;
+              } else if (property.type === "object" && property.properties) {
+                example[key] = this.createExampleObject(property);
+              } else if (property.type === "string") {
                 example[key] = `"Example ${key}"`;
-              } else if (props[key].type === "number") {
+              } else if (property.type === "number") {
                 example[key] = 123;
-              } else if (props[key].type === "boolean") {
+              } else if (property.type === "boolean") {
                 example[key] = true;
               } else {
                 example[key] = null;
@@ -415,10 +430,10 @@ export class MCPClient implements MCPClientInterface {
   /**
    * Creates an example object from an object schema
    */
-  private createExampleObject(schema: any): Record<string, any> {
-    const result: Record<string, any> = {};
+  private createExampleObject(schema: unknown): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
 
-    if (schema.type !== "object" || !schema.properties) {
+    if (!isRecord(schema) || schema.type !== "object" || !isRecord(schema.properties)) {
       return result;
     }
 
@@ -426,15 +441,18 @@ export class MCPClient implements MCPClientInterface {
 
     // Add required properties
     if (Array.isArray(schema.required)) {
-      schema.required.forEach((key: string) => {
-        if (key in props) {
-          if (props[key].type === "object" && props[key].properties) {
-            result[key] = this.createExampleObject(props[key]);
-          } else if (props[key].type === "string") {
+      schema.required.forEach((key: unknown) => {
+        if (typeof key === "string" && key in props) {
+          const property = props[key];
+          if (!isRecord(property)) {
+            result[key] = null;
+          } else if (property.type === "object" && property.properties) {
+            result[key] = this.createExampleObject(property);
+          } else if (property.type === "string") {
             result[key] = `Example ${key}`;
-          } else if (props[key].type === "number") {
+          } else if (property.type === "number") {
             result[key] = 123;
-          } else if (props[key].type === "boolean") {
+          } else if (property.type === "boolean") {
             result[key] = true;
           } else {
             result[key] = null;

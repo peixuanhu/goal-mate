@@ -17,6 +17,73 @@ import {
 const prisma = new PrismaClient();
 type PlanGoalDb = PrismaClient | Prisma.TransactionClient;
 
+interface RecommendTasksArgs {
+  userState: string;
+  filterCriteria?: string;
+}
+
+interface QueryPlansArgs {
+  difficulty?: string;
+  tag?: string;
+  keyword?: string;
+  includeCompleted?: boolean;
+  timeRange?: string;
+}
+
+interface CreateGoalArgs {
+  name: string;
+  tag: string;
+  description?: string;
+}
+
+interface CreatePlanArgs {
+  name: string;
+  description?: string;
+  difficulty: string;
+  tags: string;
+  goal_id?: string;
+}
+
+interface FindPlanArgs {
+  searchTerm: string;
+  includeCompleted?: boolean;
+  timeRange?: string;
+}
+
+interface UpdateProgressArgs {
+  plan_id: string;
+  progress?: number;
+  content?: string;
+  thinking?: string;
+  custom_time?: string;
+}
+
+interface AddProgressRecordArgs {
+  plan_identifier: string;
+  content: string;
+  thinking?: string;
+  record_time?: string;
+}
+
+interface AnalyzeProgressArgs {
+  user_report: string;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasNestedMessages(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const data = isRecord(value.data) ? value.data : null;
+  const input = isRecord(value.input) ? value.input : null;
+  return Boolean(value.messages || data?.messages || input?.messages);
+}
+
 async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
   await db.$executeRaw`SELECT pg_advisory_xact_lock(${GOAL_ROUTE_LOCK_NAMESPACE}::int, ${getGoalRouteLockKey(goal_id)}::int)`;
 }
@@ -417,7 +484,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: RecommendTasksArgs) => {
         console.log("🎯 recommendTasks called:", args);
         try {
           const { userState, filterCriteria } = args;
@@ -432,7 +499,7 @@ const runtime = new CopilotRuntime({
           });
 
           // 过滤出未完成的任务
-          const incompletePlans = allPlans.filter((plan: any) => {
+          const incompletePlans = allPlans.filter((plan) => {
             // 周期性任务：检查当前周期是否已完成
             if (plan.is_recurring) {
               return !isRecurringTaskCompleted(plan);
@@ -456,20 +523,20 @@ const runtime = new CopilotRuntime({
           let filteredPlans = incompletePlans;
           if (filterCriteria) {
             // 简单的筛选逻辑，可以根据难度或标签筛选
-            filteredPlans = incompletePlans.filter((plan: any) => 
+            filteredPlans = incompletePlans.filter((plan) =>
               (plan.difficulty && plan.difficulty.includes(filterCriteria)) ||
-              plan.tags.some((tag: any) => tag.tag.includes(filterCriteria))
+              plan.tags.some((tag) => tag.tag.includes(filterCriteria))
             );
           }
 
           // 默认推荐逻辑：根据进度和创建时间
           const recommendedTasks = filteredPlans
-            .sort((a: any, b: any) => a.progress - b.progress)
+            .sort((a, b) => a.progress - b.progress)
             .slice(0, 5);
 
-          const result = recommendedTasks.map((plan: any) => ({
+          const result = recommendedTasks.map((plan) => ({
             ...plan,
-            tags: plan.tags.map((t: any) => t.tag)
+            tags: plan.tags.map((t) => t.tag)
           }));
 
           console.log("✅ Found", result.length, "recommended tasks");
@@ -482,9 +549,9 @@ const runtime = new CopilotRuntime({
               totalAvailable: incompletePlans.length
             }
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -525,12 +592,12 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: QueryPlansArgs) => {
         console.log("🔍 queryPlans called:", args);
         try {
           const { difficulty, tag, keyword, includeCompleted, timeRange } = args;
           
-          let where: any = {};
+          const where: Prisma.PlanWhereInput = {};
           
           if (difficulty) {
             where.difficulty = difficulty;
@@ -554,14 +621,14 @@ const runtime = new CopilotRuntime({
           
           // 如果指定了标签，进一步筛选
           if (tag) {
-            plans = plans.filter((plan: any) => 
-              plan.tags.some((t: any) => t.tag.includes(tag))
+            plans = plans.filter((plan) =>
+              plan.tags.some((t) => t.tag.includes(tag))
             );
           }
           
           // 默认过滤掉已完成的任务，除非明确要求包含已完成
           if (!includeCompleted) {
-            plans = plans.filter((plan: any) => {
+            plans = plans.filter((plan) => {
               // 周期性任务：检查当前周期是否已完成
               if (plan.is_recurring) {
                 return !isRecurringTaskCompleted(plan);
@@ -628,13 +695,13 @@ const runtime = new CopilotRuntime({
 
           // 如果指定了时间范围，过滤进展记录
           if (startDate && endDate) {
-            plans = plans.map((plan: any) => ({
+            plans = plans.map((plan) => ({
               ...plan,
-              progressRecords: plan.progressRecords.filter((record: any) => {
+              progressRecords: plan.progressRecords.filter((record) => {
                 const recordDate = new Date(record.gmt_create);
                 return recordDate >= startDate! && recordDate <= endDate!;
               })
-            })).filter((plan: any) => {
+            })).filter(() => {
               // 如果只查询有进展的计划，可以过滤掉没有进展记录的计划
               // 但如果用户查询"今天有什么进展"，应该返回有进展的计划
               // 这里保留所有计划，但进展记录已按时间过滤
@@ -642,16 +709,16 @@ const runtime = new CopilotRuntime({
             });
           }
 
-          const result = plans.map((plan: any) => ({
+          const result = plans.map((plan) => ({
             ...plan,
-            tags: plan.tags.map((t: any) => t.tag)
+            tags: plan.tags.map((t) => t.tag)
           }));
 
           console.log("✅ Found", result.length, "plans", timeRange ? `(filtered by timeRange: ${timeRange})` : '');
           return { success: true, data: result };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -680,7 +747,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: CreateGoalArgs) => {
         console.log("➕ createGoal called:", args);
         try {
           const { name, tag, description } = args;
@@ -694,9 +761,9 @@ const runtime = new CopilotRuntime({
           });
           console.log("✅ Goal created:", goal);
           return { success: true, data: goal };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -720,7 +787,7 @@ const runtime = new CopilotRuntime({
             orderBy: { gmt_create: 'desc' }
           });
           
-          const tagList = existingTags.map((t: any) => t.tag);
+          const tagList = existingTags.map((t) => t.tag);
           const goalList = existingGoals.map((goal) => `- ${goal.name}（标签：${goal.tag || '无'}，goal_id：${goal.goal_id}）`);
           
           // 标准难度选项
@@ -739,9 +806,9 @@ const runtime = new CopilotRuntime({
               message: `系统信息：\n\n可用标签：${tagList.length > 0 ? tagList.join(', ') : '暂无标签'}\n\n已有目标：\n${goalList.length > 0 ? goalList.join('\n') : '暂无目标'}\n\n标准难度选项：${difficultyOptions.join(', ')}\n\n创建计划时请优先使用已有标签，难度必须使用标准选项。如果计划明显服务于某个已有目标，请使用对应 goal_id。`
             }
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -782,7 +849,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: CreatePlanArgs) => {
         console.log("📋 createPlan called:", args);
         try {
           const { name, description, difficulty, tags, goal_id } = args;
@@ -852,7 +919,7 @@ const runtime = new CopilotRuntime({
               plan,
               data: {
                 ...createdPlan,
-                tags: createdPlan?.tags.map((t: any) => t.tag) || []
+                tags: createdPlan?.tags.map((t) => t.tag) || []
               }
             };
           });
@@ -864,9 +931,9 @@ const runtime = new CopilotRuntime({
             data: result,
             message: `计划已成功创建。\n\nID: ${plan.id}\n创建时间: ${plan.gmt_create}\n修改时间: ${plan.gmt_modified}\n计划ID: ${plan.plan_id}\n标签: ${tagList.join(', ')}\n名称: ${name}\n描述: ${description || '无'}\n难度: ${difficulty}\n\n请记得按时完成这个计划！`
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -895,7 +962,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: FindPlanArgs) => {
         console.log("🔍 findPlan called:", args);
         try {
           const { searchTerm, includeCompleted, timeRange } = args;
@@ -933,7 +1000,7 @@ const runtime = new CopilotRuntime({
 
           // 默认过滤掉已完成的任务，除非明确要求包含已完成
           if (!includeCompleted) {
-            plans = plans.filter((plan: any) => {
+            plans = plans.filter((plan) => {
               // 周期性任务：检查当前周期是否已完成
               if (plan.is_recurring) {
                 return !isRecurringTaskCompleted(plan);
@@ -1000,9 +1067,9 @@ const runtime = new CopilotRuntime({
 
           // 如果指定了时间范围，过滤进展记录
           if (startDate && endDate) {
-            plans = plans.map((plan: any) => ({
+            plans = plans.map((plan) => ({
               ...plan,
-              progressRecords: plan.progressRecords.filter((record: any) => {
+              progressRecords: plan.progressRecords.filter((record) => {
                 const recordDate = new Date(record.gmt_create);
                 return recordDate >= startDate! && recordDate <= endDate!;
               })
@@ -1012,8 +1079,6 @@ const runtime = new CopilotRuntime({
           // 按匹配度排序：匹配更多关键词的计划排在前面
           const plansWithScore = plans.map(plan => {
             let score = 0;
-            const planText = `${plan.name} ${plan.description || ''} ${plan.tags.map(t => t.tag).join(' ')}`.toLowerCase();
-            
             keywords.forEach((keyword: string) => {
               const keywordLower = keyword.toLowerCase();
               // 名称匹配得分更高
@@ -1038,16 +1103,16 @@ const runtime = new CopilotRuntime({
             .filter(plan => plan.matchScore > 0)
             .sort((a, b) => b.matchScore - a.matchScore);
 
-          const result = sortedPlans.map((plan: any) => ({
+          const result = sortedPlans.map((plan) => ({
             ...plan,
-            tags: plan.tags.map((t: any) => t.tag)
+            tags: plan.tags.map((t) => t.tag)
           }));
 
           console.log("✅ Found", result.length, "plans with scores:", result.map(p => ({ name: p.name, score: p.matchScore })));
           return { success: true, data: result };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
-          return { success: false, error: error.message };
+          return { success: false, error: getErrorMessage(error) };
         }
       },
     },
@@ -1088,7 +1153,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: UpdateProgressArgs) => {
         console.log("📈 updateProgress called:", args);
         
         // 自然语言时间解析函数
@@ -1328,11 +1393,11 @@ const runtime = new CopilotRuntime({
               };
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
           return { 
             success: false, 
-            error: `更新进度失败: ${error.message}`
+            error: `更新进度失败: ${getErrorMessage(error)}`
           };
         }
       },
@@ -1368,7 +1433,7 @@ const runtime = new CopilotRuntime({
           required: false,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: AddProgressRecordArgs) => {
         console.log("📝 addProgressRecord called:", args);
         
         // 自然语言时间解析函数
@@ -1533,11 +1598,11 @@ const runtime = new CopilotRuntime({
               message: `已成功记录"${targetPlan.name}"的进展${thinking ? '，并记录了思考内容' : ''}`
             }
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
           return {
             success: false,
-            error: `添加进展记录失败: ${error.message}`
+            error: `添加进展记录失败: ${getErrorMessage(error)}`
           };
         }
       },
@@ -1555,7 +1620,7 @@ const runtime = new CopilotRuntime({
           required: true,
         }
       ],
-      handler: async (args: any) => {
+      handler: async (args: AnalyzeProgressArgs) => {
         console.log("🧠 analyzeAndRecordProgress called:", args);
         
         try {
@@ -1790,11 +1855,11 @@ const runtime = new CopilotRuntime({
             }
           };
           
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("❌ Error:", error);
           return {
             success: false,
-            error: `智能分析失败: ${error.message}`
+            error: `智能分析失败: ${getErrorMessage(error)}`
           };
         }
       },
@@ -1809,15 +1874,15 @@ export const POST = async (req: NextRequest) => {
   
   try {
     // 处理请求体，过滤不支持的角色
-    let body;
+    let body: Record<string, unknown>;
     try {
-      body = await req.json();
+      body = await req.json() as Record<string, unknown>;
       console.log("📨 Original request body keys:", Object.keys(body));
       
       // 添加详细日志来查看实际结构
-      if (body.variables) {
+      if (isRecord(body.variables)) {
         console.log("🔍 Variables keys:", Object.keys(body.variables));
-        if (body.variables.messages) {
+        if (Array.isArray(body.variables.messages)) {
           console.log("📝 Message count:", body.variables.messages.length);
           console.log("📝 First few messages:", JSON.stringify(body.variables.messages.slice(0, 2), null, 2));
         }
@@ -1832,13 +1897,13 @@ export const POST = async (req: NextRequest) => {
     const supportedRoles = ['system', 'assistant', 'user', 'tool', 'function'];
     
     // 消息过滤函数 - 简化但更全面的版本
-    const filterMessage = (message: any): any | null => {
+    const filterMessage = (message: unknown): unknown | null => {
       if (!message || typeof message !== 'object') {
         return null;
       }
       
       // 递归处理所有可能包含 role 的字段
-      const processRoles = (obj: any): any => {
+      const processRoles = (obj: unknown): unknown => {
         if (typeof obj !== 'object' || obj === null) {
           return obj;
         }
@@ -1847,10 +1912,10 @@ export const POST = async (req: NextRequest) => {
           return obj.map(processRoles);
         }
         
-        const result = { ...obj };
+        const result: Record<string, unknown> = { ...obj };
         
         // 处理 role 字段
-        if (result.role && !supportedRoles.includes(result.role)) {
+        if (result.role && !supportedRoles.some((role) => role === result.role)) {
           console.log(`⚠️ Converting role "${result.role}" to "user"`);
           result.role = 'user';
         }
@@ -1869,11 +1934,12 @@ export const POST = async (req: NextRequest) => {
     };
     
     // 处理GraphQL格式的消息过滤
-    if (body.variables && body.variables.messages && Array.isArray(body.variables.messages)) {
-      console.log("📝 Processing", body.variables.messages.length, "messages");
-      body.variables.messages = body.variables.messages
+    const variables = isRecord(body.variables) ? body.variables : null;
+    if (variables && Array.isArray(variables.messages)) {
+      console.log("📝 Processing", variables.messages.length, "messages");
+      variables.messages = variables.messages
         .map(filterMessage)
-        .filter((message: any) => message !== null);
+        .filter((message) => message !== null);
     }
     
     // 也处理直接的messages字段（兼容性）
@@ -1881,7 +1947,7 @@ export const POST = async (req: NextRequest) => {
       console.log("📝 Processing direct messages");
       body.messages = body.messages
         .map(filterMessage)
-        .filter((message: any) => message !== null);
+        .filter((message) => message !== null);
     }
     
     // 创建新的请求对象
@@ -1895,24 +1961,31 @@ export const POST = async (req: NextRequest) => {
     
     // 全局 fetch 拦截器 - 拦截所有请求
     const originalFetch = global.fetch;
-    global.fetch = async (input: any, init?: any) => {
-      const url = typeof input === 'string' ? input : input?.url || '';
+    global.fetch = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const url = typeof input === 'string'
+        ? input
+        : 'url' in input
+          ? input.url
+          : '';
       
       // 记录所有 fetch 请求
       console.log("🌐 Intercepting fetch request to:", url);
       
       if (init?.body) {
         try {
-          const requestBody = JSON.parse(init.body);
+          const requestBody: unknown = JSON.parse(init.body as string);
           
           // 检查是否包含消息
-          if (requestBody.messages || requestBody.data?.messages || requestBody.input?.messages) {
+          if (hasNestedMessages(requestBody) && isRecord(requestBody)) {
             console.log("📨 Found messages in fetch request!");
             console.log("🔍 Request URL:", url);
             console.log("🔍 Request body keys:", Object.keys(requestBody));
             
             // 递归查找和替换所有 developer 角色
-            const replaceDevRoles = (obj: any): any => {
+            const replaceDevRoles = (obj: unknown): unknown => {
               if (typeof obj !== 'object' || obj === null) {
                 return obj;
               }
@@ -1921,7 +1994,7 @@ export const POST = async (req: NextRequest) => {
                 return obj.map(replaceDevRoles);
               }
               
-              const result = { ...obj };
+              const result: Record<string, unknown> = { ...obj };
               
               if (result.role === 'developer') {
                 console.log("🚨 FOUND AND REPLACING DEVELOPER ROLE!");
@@ -1942,7 +2015,7 @@ export const POST = async (req: NextRequest) => {
             
             console.log("✅ Cleaned request body");
           }
-        } catch (e) {
+        } catch {
           // 如果不是 JSON，尝试文本处理
           if (typeof init.body === 'string' && init.body.includes('developer')) {
             console.log("🚨 Found 'developer' in text body!");

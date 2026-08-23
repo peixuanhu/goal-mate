@@ -6,8 +6,9 @@ export enum RecurrenceType {
 
 export interface RecurringPlan {
   is_recurring: boolean
-  recurrence_type?: string
-  recurrence_value?: string
+  recurrence_type?: string | null
+  recurrence_value?: string | null
+  name?: string | null
   progressRecords: Array<{
     gmt_create: Date
   }>
@@ -100,7 +101,7 @@ export function getTargetCount(plan: RecurringPlan): number {
   
   // 根据任务类型和名称推测合理的默认值
   const recurrenceType = plan.recurrence_type as RecurrenceType
-  const planName = (plan as any).name?.toLowerCase() || ''
+  const planName = plan.name?.toLowerCase() || ''
   
   // 根据计划名称智能推测目标次数
   if (planName.includes('2-3次') || planName.includes('2～3次')) {
@@ -215,4 +216,4 @@ export function getRecurrenceTypeDisplay(recurrenceType: string): string {
     default:
       return '未知'
   }
-} 
+}
