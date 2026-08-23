@@ -7,10 +7,8 @@ import { getGoalRouteLockKey } from "@/lib/plan-goal-utils"
 
 const prismaMock = vi.hoisted(() => ({
   $executeRaw: vi.fn(),
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
-  plan: {
-    findUnique: vi.fn(),
-  },
   actionItem: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -62,6 +60,11 @@ const baseAction = {
   energy_level: null,
   priority_quadrant: null,
   is_completed: false,
+}
+const lockedActionRow = {
+  action_id: baseAction.action_id,
+  is_completed: baseAction.is_completed,
+  completed_at: baseAction.completed_at,
 }
 
 describe("/api/action-item", () => {
@@ -148,7 +151,7 @@ describe("/api/action-item", () => {
   })
 
   it("POST rejects missing plans", async () => {
-    prismaMock.plan.findUnique.mockResolvedValue(null)
+    prismaMock.$queryRaw.mockResolvedValue([])
 
     const response = await POST(request("http://localhost/api/action-item", {
       method: "POST",
@@ -162,7 +165,7 @@ describe("/api/action-item", () => {
   })
 
   it("POST rejects actions under recurring plans", async () => {
-    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_run", is_recurring: true })
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_run", is_recurring: true }])
 
     const response = await POST(request("http://localhost/api/action-item", {
       method: "POST",
@@ -178,17 +181,27 @@ describe("/api/action-item", () => {
   it("POST creates the next action position idempotently for a non-recurring plan", async () => {
     const key = "action-copy-v1"
     const expectedId = actionIdFor(key)
-    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_launch", is_recurring: false })
+    const events: string[] = []
+    prismaMock.$executeRaw.mockImplementation(async () => {
+      events.push("advisory-lock")
+    })
+    prismaMock.$queryRaw.mockImplementation(async () => {
+      events.push("plan-row-lock")
+      return [{ plan_id: "plan_launch", is_recurring: false }]
+    })
     prismaMock.actionItem.findUnique.mockResolvedValue(null)
     prismaMock.actionItem.aggregate.mockResolvedValue({ _max: { position: 1000 } })
-    prismaMock.actionItem.create.mockResolvedValue({
-      ...baseAction,
-      action_id: expectedId,
-      description: "面向内测用户",
-      due_date: new Date("2026-09-01T00:00:00.000Z"),
-      estimated_minutes: 60,
-      energy_level: "medium",
-      priority_quadrant: "q1",
+    prismaMock.actionItem.create.mockImplementation(async () => {
+      events.push("create")
+      return {
+        ...baseAction,
+        action_id: expectedId,
+        description: "面向内测用户",
+        due_date: new Date("2026-09-01T00:00:00.000Z"),
+        estimated_minutes: 60,
+        energy_level: "medium",
+        priority_quadrant: "q1",
+      }
     })
 
     const response = await POST(request("http://localhost/api/action-item", {
@@ -210,6 +223,12 @@ describe("/api/action-item", () => {
     expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
     expect(getRawSqlTemplate(prismaMock.$executeRaw.mock.calls[0])).toBe("SELECT pg_advisory_xact_lock(?::int, ?::int)")
     expect(prismaMock.$executeRaw.mock.calls[0][2]).toBe(getGoalRouteLockKey("plan_launch"))
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[0])).toBe(
+      'SELECT "plan_id", "is_recurring" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
+    )
+    expect(prismaMock.$queryRaw.mock.calls[0][1]).toBe("plan_launch")
+    expect(events).toEqual(["advisory-lock", "plan-row-lock", "create"])
     expect(prismaMock.actionItem.aggregate).toHaveBeenCalledWith({
       where: { plan_id: "plan_launch" },
       _max: { position: true },
@@ -256,7 +275,7 @@ describe("/api/action-item", () => {
       energy_level: "medium",
       priority_quadrant: "q1",
     }
-    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_launch", is_recurring: false })
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_launch", is_recurring: false }])
     prismaMock.actionItem.findUnique.mockResolvedValue(existing)
 
     const response = await POST(request("http://localhost/api/action-item", {
@@ -281,7 +300,7 @@ describe("/api/action-item", () => {
 
   it("POST returns 409 when an idempotency key maps to a different immutable payload", async () => {
     const key = "action-copy-collision"
-    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_launch", is_recurring: false })
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_launch", is_recurring: false }])
     prismaMock.actionItem.findUnique.mockResolvedValue({
       ...baseAction,
       action_id: actionIdFor(key),
@@ -305,7 +324,7 @@ describe("/api/action-item", () => {
     const lockWaiters: Array<() => void> = []
     const rawCalls: unknown[][] = []
 
-    prismaMock.plan.findUnique.mockResolvedValue({ plan_id: "plan_launch", is_recurring: false })
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_launch", is_recurring: false }])
     prismaMock.actionItem.findUnique.mockResolvedValue(null)
     prismaMock.actionItem.aggregate.mockImplementation(async () => ({
       _max: { position: Math.max(...positions) },
@@ -361,6 +380,39 @@ describe("/api/action-item", () => {
     ])
   })
 
+  it("POST maps a Plan foreign-key race to 404", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_launch", is_recurring: false }])
+    prismaMock.actionItem.findUnique.mockResolvedValue(null)
+    prismaMock.actionItem.aggregate.mockResolvedValue({ _max: { position: 1000 } })
+    prismaMock.actionItem.create.mockRejectedValue({ code: "P2003" })
+
+    const response = await POST(request("http://localhost/api/action-item", {
+      method: "POST",
+      headers: { "Idempotency-Key": "action-plan-race" },
+      body: JSON.stringify({ plan_id: "plan_launch", name: "行动" }),
+    }))
+
+    expect(response.status).toBe(404)
+    expect(await json(response)).toEqual({ error: "计划不存在" })
+  })
+
+  it("POST returns 409 instead of overflowing the PostgreSQL Int position", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([{ plan_id: "plan_launch", is_recurring: false }])
+    prismaMock.actionItem.findUnique.mockResolvedValue(null)
+    prismaMock.actionItem.aggregate.mockResolvedValue({ _max: { position: 2_147_482_648 } })
+    prismaMock.actionItem.create.mockResolvedValue({ ...baseAction, position: 2_147_483_648 })
+
+    const response = await POST(request("http://localhost/api/action-item", {
+      method: "POST",
+      headers: { "Idempotency-Key": "action-position-overflow" },
+      body: JSON.stringify({ plan_id: "plan_launch", name: "行动" }),
+    }))
+
+    expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({ error: "行动项排序空间已用尽" })
+    expect(prismaMock.actionItem.create).not.toHaveBeenCalled()
+  })
+
   it("PUT requires action_id and rejects non-editable fields", async () => {
     const missingIdResponse = await PUT(request("http://localhost/api/action-item", {
       method: "PUT",
@@ -379,12 +431,19 @@ describe("/api/action-item", () => {
   it("PUT strictly normalizes editable fields and stamps completion", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-23T08:30:00.000Z"))
-    prismaMock.actionItem.findUnique.mockResolvedValue(baseAction)
-    prismaMock.actionItem.update.mockResolvedValue({
-      ...baseAction,
-      name: "更新发布说明",
-      is_completed: true,
-      completed_at: new Date("2026-08-23T08:30:00.000Z"),
+    const events: string[] = []
+    prismaMock.$queryRaw.mockImplementation(async () => {
+      events.push("action-row-lock")
+      return [{ action_id: "action_copy", is_completed: false, completed_at: null }]
+    })
+    prismaMock.actionItem.update.mockImplementationOnce(async () => {
+      events.push("update")
+      return {
+        ...baseAction,
+        name: "更新发布说明",
+        is_completed: true,
+        completed_at: new Date("2026-08-23T08:30:00.000Z"),
+      }
     })
 
     const response = await PUT(request("http://localhost/api/action-item", {
@@ -403,6 +462,9 @@ describe("/api/action-item", () => {
 
     expect(response.status).toBe(200)
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[0])).toBe(
+      'SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+    )
     expect(prismaMock.actionItem.update).toHaveBeenCalledWith({
       where: { action_id: "action_copy" },
       data: {
@@ -416,10 +478,15 @@ describe("/api/action-item", () => {
         completed_at: new Date("2026-08-23T08:30:00.000Z"),
       },
     })
+    expect(events).toEqual(["action-row-lock", "update"])
   })
 
   it("PUT clears completed_at when reopening", async () => {
-    prismaMock.actionItem.findUnique.mockResolvedValue({ ...baseAction, is_completed: true })
+    prismaMock.$queryRaw.mockResolvedValue([{
+      action_id: "action_copy",
+      is_completed: true,
+      completed_at: new Date("2026-08-22T08:30:00.000Z"),
+    }])
     prismaMock.actionItem.update.mockResolvedValue(baseAction)
 
     const response = await PUT(request("http://localhost/api/action-item", {
@@ -434,8 +501,35 @@ describe("/api/action-item", () => {
     })
   })
 
+  it("PUT preserves the original completion timestamp on repeated completion", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-08-23T08:30:00.000Z"))
+    const originalCompletedAt = new Date("2026-08-22T08:30:00.000Z")
+    prismaMock.$queryRaw.mockResolvedValue([{
+      action_id: "action_copy",
+      is_completed: true,
+      completed_at: originalCompletedAt,
+    }])
+    prismaMock.actionItem.update.mockResolvedValue({
+      ...baseAction,
+      is_completed: true,
+      completed_at: originalCompletedAt,
+    })
+
+    const response = await PUT(request("http://localhost/api/action-item", {
+      method: "PUT",
+      body: JSON.stringify({ action_id: "action_copy", is_completed: true }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.actionItem.update).toHaveBeenCalledWith({
+      where: { action_id: "action_copy" },
+      data: { is_completed: true },
+    })
+  })
+
   it("PUT returns 404 for a missing action", async () => {
-    prismaMock.actionItem.findUnique.mockResolvedValue(null)
+    prismaMock.$queryRaw.mockResolvedValue([])
 
     const response = await PUT(request("http://localhost/api/action-item", {
       method: "PUT",
@@ -455,7 +549,7 @@ describe("/api/action-item", () => {
   })
 
   it("DELETE returns 404 for a missing action", async () => {
-    prismaMock.actionItem.findUnique.mockResolvedValue(null)
+    prismaMock.$queryRaw.mockResolvedValueOnce([])
 
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_missing", { method: "DELETE" }))
 
@@ -467,12 +561,33 @@ describe("/api/action-item", () => {
   it("DELETE blocks deletion while a future scheduled block exists", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-23T08:30:00.000Z"))
-    prismaMock.actionItem.findUnique.mockResolvedValue(baseAction)
-    prismaMock.scheduleBlock.count.mockResolvedValue(1)
+    const events: string[] = []
+    prismaMock.$queryRaw
+      .mockImplementationOnce(async () => {
+        events.push("action-row-lock")
+        return [lockedActionRow]
+      })
+      .mockImplementationOnce(async () => {
+        events.push("block-row-locks")
+        return [{ block_id: "block_future" }]
+      })
+    prismaMock.scheduleBlock.count.mockImplementation(async () => {
+      events.push("count")
+      return 1
+    })
 
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
 
     expect(response.status).toBe(409)
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2)
+    expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[0])).toBe(
+      'SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+    )
+    expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[1])).toBe(
+      'SELECT "block_id" FROM "ScheduleBlock" WHERE "action_id" = ? FOR UPDATE',
+    )
+    expect(prismaMock.$queryRaw.mock.calls.map(call => call[1])).toEqual(["action_copy", "action_copy"])
+    expect(events).toEqual(["action-row-lock", "block-row-locks", "count"])
     expect(prismaMock.scheduleBlock.count).toHaveBeenCalledWith({
       where: {
         action_id: "action_copy",
@@ -484,9 +599,21 @@ describe("/api/action-item", () => {
   })
 
   it("DELETE removes an unprotected action in a transaction", async () => {
-    prismaMock.actionItem.findUnique.mockResolvedValue(baseAction)
+    const events: string[] = []
+    prismaMock.$queryRaw
+      .mockImplementationOnce(async () => {
+        events.push("action-row-lock")
+        return [lockedActionRow]
+      })
+      .mockImplementationOnce(async () => {
+        events.push("block-row-locks")
+        return []
+      })
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
-    prismaMock.actionItem.delete.mockResolvedValue(baseAction)
+    prismaMock.actionItem.delete.mockImplementation(async () => {
+      events.push("delete")
+      return baseAction
+    })
 
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
 
@@ -494,10 +621,13 @@ describe("/api/action-item", () => {
     expect(await json(response)).toEqual({ success: true })
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
     expect(prismaMock.actionItem.delete).toHaveBeenCalledWith({ where: { action_id: "action_copy" } })
+    expect(events).toEqual(["action-row-lock", "block-row-locks", "delete"])
   })
 
   it("DELETE maps a raced record-not-found result to 404", async () => {
-    prismaMock.actionItem.findUnique.mockResolvedValue(baseAction)
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([lockedActionRow])
+      .mockResolvedValueOnce([])
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
     prismaMock.actionItem.delete.mockRejectedValue({ code: "P2025" })
 
@@ -505,5 +635,83 @@ describe("/api/action-item", () => {
 
     expect(response.status).toBe(404)
     expect(await json(response)).toEqual({ error: "行动项不存在" })
+  })
+
+  it("DELETE holds the ActionItem row lock so a new block cannot race the protected-block count", async () => {
+    let releaseInsert: (() => void) | undefined
+    let insertFinished = false
+    let insertAttempt: Promise<void> | undefined
+    const txQueryRaw = vi.fn(async (...args: unknown[]) => {
+      const sql = getRawSqlTemplate(args)
+      if (sql.includes('FROM "ActionItem"')) {
+        insertAttempt = new Promise<void>(resolve => {
+          releaseInsert = () => {
+            insertFinished = true
+            resolve()
+          }
+        })
+        return [lockedActionRow]
+      }
+      return []
+    })
+    prismaMock.scheduleBlock.count.mockResolvedValue(0)
+    prismaMock.actionItem.delete.mockImplementation(async () => {
+      expect(insertAttempt).toBeDefined()
+      expect(insertFinished).toBe(false)
+      return baseAction
+    })
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) => {
+      try {
+        return await callback({ ...prismaMock, $queryRaw: txQueryRaw })
+      } finally {
+        releaseInsert?.()
+        await insertAttempt
+      }
+    })
+
+    const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
+
+    expect(response.status).toBe(200)
+    expect(insertFinished).toBe(true)
+    expect(txQueryRaw).toHaveBeenCalledTimes(2)
+  })
+
+  it("DELETE holds associated block rows so a status update cannot race the protected-block count", async () => {
+    let releaseUpdate: (() => void) | undefined
+    let updateFinished = false
+    let updateAttempt: Promise<void> | undefined
+    const txQueryRaw = vi.fn(async (...args: unknown[]) => {
+      const sql = getRawSqlTemplate(args)
+      if (sql.includes('FROM "ActionItem"')) {
+        return [lockedActionRow]
+      }
+      updateAttempt = new Promise<void>(resolve => {
+        releaseUpdate = () => {
+          updateFinished = true
+          resolve()
+        }
+      })
+      return [{ block_id: "block_cancelled" }]
+    })
+    prismaMock.scheduleBlock.count.mockResolvedValue(0)
+    prismaMock.actionItem.delete.mockImplementation(async () => {
+      expect(updateAttempt).toBeDefined()
+      expect(updateFinished).toBe(false)
+      return baseAction
+    })
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) => {
+      try {
+        return await callback({ ...prismaMock, $queryRaw: txQueryRaw })
+      } finally {
+        releaseUpdate?.()
+        await updateAttempt
+      }
+    })
+
+    const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
+
+    expect(response.status).toBe(200)
+    expect(updateFinished).toBe(true)
+    expect(txQueryRaw).toHaveBeenCalledTimes(2)
   })
 })

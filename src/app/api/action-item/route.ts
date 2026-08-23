@@ -9,6 +9,7 @@ import { parseActionItemInput, parsePlanningFields } from "@/lib/today/validatio
 const prisma = new PrismaClient()
 const ACTION_POSITION_LOCK_NAMESPACE = 48_232
 const POSITION_STEP = 1000
+const POSTGRESQL_INT_MAX = 2_147_483_647
 const POST_FIELDS = new Set([
   "plan_id",
   "name",
@@ -30,6 +31,18 @@ const PUT_FIELDS = new Set([
 ])
 
 type ActionItemDb = PrismaClient | Prisma.TransactionClient
+type LockedPlanRow = {
+  plan_id: string
+  is_recurring: boolean
+}
+type LockedActionItemRow = {
+  action_id: string
+  is_completed: boolean
+  completed_at: Date | null
+}
+type LockedScheduleBlockRow = {
+  block_id: string
+}
 type NormalizedCreatePayload = {
   plan_id: string
   name: string
@@ -56,6 +69,7 @@ class ActionItemNotFoundError extends Error {}
 class RecurringPlanError extends Error {}
 class IdempotencyCollisionError extends Error {}
 class ProtectedActionItemError extends Error {}
+class ActionPositionExhaustedError extends Error {}
 
 function validationError(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -144,7 +158,6 @@ function normalizeEditableData(data: Record<string, unknown>): { actionId: strin
       throw new ActionItemValidationError("is_completed must be a boolean")
     }
     updateData.is_completed = data.is_completed
-    updateData.completed_at = data.is_completed ? new Date() : null
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -160,6 +173,20 @@ function actionIdFromKey(key: string): string {
 
 async function lockActionPositions(db: ActionItemDb, planId: string) {
   await db.$executeRaw`SELECT pg_advisory_xact_lock(${ACTION_POSITION_LOCK_NAMESPACE}::int, ${getGoalRouteLockKey(planId)}::int)`
+}
+
+async function lockPlan(db: ActionItemDb, planId: string): Promise<LockedPlanRow | null> {
+  const rows = await db.$queryRaw<LockedPlanRow[]>`SELECT "plan_id", "is_recurring" FROM "Plan" WHERE "plan_id" = ${planId} FOR UPDATE`
+  return rows[0] ?? null
+}
+
+async function lockActionItem(db: ActionItemDb, actionId: string): Promise<LockedActionItemRow | null> {
+  const rows = await db.$queryRaw<LockedActionItemRow[]>`SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ${actionId} FOR UPDATE`
+  return rows[0] ?? null
+}
+
+async function lockActionScheduleBlocks(db: ActionItemDb, actionId: string): Promise<void> {
+  await db.$queryRaw<LockedScheduleBlockRow[]>`SELECT "block_id" FROM "ScheduleBlock" WHERE "action_id" = ${actionId} FOR UPDATE`
 }
 
 function sameDate(left: Date | null, right: Date | null): boolean {
@@ -216,6 +243,9 @@ function mapMutationError(error: unknown): NextResponse | null {
   if (error instanceof ProtectedActionItemError) {
     return NextResponse.json({ error: "行动项存在未来已排期时间块" }, { status: 409 })
   }
+  if (error instanceof ActionPositionExhaustedError) {
+    return NextResponse.json({ error: "行动项排序空间已用尽" }, { status: 409 })
+  }
   return null
 }
 
@@ -248,10 +278,7 @@ export async function POST(req: NextRequest) {
     const action = await prisma.$transaction(async tx => {
       await lockActionPositions(tx, payload.plan_id)
 
-      const plan = await tx.plan.findUnique({
-        where: { plan_id: payload.plan_id },
-        select: { plan_id: true, is_recurring: true },
-      })
+      const plan = await lockPlan(tx, payload.plan_id)
       if (!plan) {
         throw new PlanNotFoundError()
       }
@@ -271,7 +298,11 @@ export async function POST(req: NextRequest) {
         where: { plan_id: payload.plan_id },
         _max: { position: true },
       })
-      const position = (result._max.position ?? 0) + POSITION_STEP
+      const maxPosition = result._max.position ?? 0
+      if (maxPosition > POSTGRESQL_INT_MAX - POSITION_STEP) {
+        throw new ActionPositionExhaustedError()
+      }
+      const position = maxPosition + POSITION_STEP
 
       return tx.actionItem.create({
         data: {
@@ -284,6 +315,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(action)
   } catch (error) {
+    if (isPrismaError(error, "P2003")) {
+      return NextResponse.json({ error: "计划不存在" }, { status: 404 })
+    }
     const response = mapMutationError(error)
     if (response) return response
     throw error
@@ -296,17 +330,21 @@ export async function PUT(req: NextRequest) {
     const { actionId, updateData } = parseValidated(() => normalizeEditableData(data))
 
     const action = await prisma.$transaction(async tx => {
-      const existing = await tx.actionItem.findUnique({
-        where: { action_id: actionId },
-        select: { action_id: true },
-      })
+      const existing = await lockActionItem(tx, actionId)
       if (!existing) {
         throw new ActionItemNotFoundError()
       }
 
+      const mutationData = { ...updateData }
+      if (updateData.is_completed === true && !existing.is_completed) {
+        mutationData.completed_at = new Date()
+      } else if (updateData.is_completed === false) {
+        mutationData.completed_at = null
+      }
+
       return tx.actionItem.update({
         where: { action_id: actionId },
-        data: updateData,
+        data: mutationData,
       })
     })
 
@@ -326,14 +364,12 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await prisma.$transaction(async tx => {
-      const existing = await tx.actionItem.findUnique({
-        where: { action_id: actionId },
-        select: { action_id: true },
-      })
+      const existing = await lockActionItem(tx, actionId)
       if (!existing) {
         throw new ActionItemNotFoundError()
       }
 
+      await lockActionScheduleBlocks(tx, actionId)
       const futureScheduledBlocks = await tx.scheduleBlock.count({
         where: {
           action_id: actionId,
