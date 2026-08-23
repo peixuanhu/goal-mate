@@ -195,7 +195,8 @@ participant Health as "Health Endpoint"
 Admin->>Compose : "up -d"
 Compose->>App : "Start container"
 App->>App : "Initialize npm registry mirrors"
-App->>App : "Run Prisma db push"
+App->>App : "Run npm run db:deploy"
+App->>App : "Synchronize schema, then apply integrity overlay"
 App->>App : "Start server"
 loop Every 30s
 Compose->>Health : "GET /api/health"
@@ -260,7 +261,7 @@ Health --> Ready(["Ready"])
 
 #### Direct Deployment Script (deploy-direct.sh)
 - Installs Node.js 18 and system dependencies, configures npm mirrors, installs dependencies, generates Prisma client, and builds the app.
-- Initializes the database via Prisma, creates a systemd unit, enables and starts the service, and prints management commands.
+- Initializes the database schema and integrity overlay through the safe deployment script, creates a systemd unit, enables and starts the service, and prints management commands.
 
 ```mermaid
 flowchart TD
@@ -270,8 +271,10 @@ Deps --> NPM["Configure npm Mirrors"]
 NPM --> InstallD["Install Dependencies"]
 InstallD --> Gen["Prisma Generate"]
 Gen --> BuildD["Next.js Build"]
-BuildD --> DBInit["Prisma db push"]
-DBInit --> Systemd["Create systemd Unit"]
+BuildD --> DBDeploy["npm run db:deploy"]
+DBDeploy --> SchemaSync["Synchronize Prisma schema"]
+SchemaSync --> Integrity["Apply integrity overlay"]
+Integrity --> Systemd["Create systemd Unit"]
 Systemd --> Enable["Enable & Start Service"]
 Enable --> Logs["Show Status & Logs"]
 Logs --> EndD(["Done"])

@@ -131,6 +131,8 @@ const expectExactDatabaseOnlyInvariantParity = (formalSql: string, overlaySql: s
   )
 }
 
+const rawPrismaDbPushPattern = /\b(?:npx\s+)?prisma\s+db\s+push\b/i
+
 const findUnapprovedTrackedRawPushes = () => {
   const result = spawnSync(
     "git",
@@ -138,6 +140,7 @@ const findUnapprovedTrackedRawPushes = () => {
       "grep",
       "-n",
       "-I",
+      "-i",
       "-E",
       "(npx[[:space:]]+)?prisma[[:space:]]+db[[:space:]]+push",
       "--",
@@ -167,6 +170,13 @@ const findUnapprovedTrackedRawPushes = () => {
       if (filePath === "src/lib/today/schema-contract.test.ts") return false
       if (filePath.startsWith("docs/superpowers/plans/")) return false
       if (filePath === "package.json" && allowedPackageInternals.has(content.trim())) return false
+      if (
+        filePath === "prisma/today-workspace-integrity.sql" &&
+        content.trim() ===
+          "-- Idempotent database-only integrity overlay for Prisma db push deployments."
+      ) {
+        return false
+      }
       return true
     })
 }
@@ -431,5 +441,10 @@ describe("today workspace Prisma contract", () => {
 
   it("rejects unapproved raw Prisma schema pushes in every tracked file", () => {
     expect(findUnapprovedTrackedRawPushes()).toEqual([])
+  })
+
+  it("recognizes uppercase and mixed-case raw schema push commands", () => {
+    expect(rawPrismaDbPushPattern.test("PRISMA DB PUSH")).toBe(true)
+    expect(rawPrismaDbPushPattern.test("nPx\tPrIsMa   dB\tPuSh")).toBe(true)
   })
 })
