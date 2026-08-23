@@ -548,8 +548,61 @@ describe("/api/action-item", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it("DELETE reads plan_id then locks Plan, ScheduleBlocks, and ActionItem in order", async () => {
+    const events: string[] = []
+    prismaMock.actionItem.findUnique.mockImplementation(async () => {
+      events.push("read-plan-id")
+      return { plan_id: "plan_launch" }
+    })
+    prismaMock.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = getRawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) {
+        events.push("plan-row-lock")
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
+      if (sql.includes('FROM "ScheduleBlock"')) {
+        events.push("block-row-locks")
+        return []
+      }
+      events.push("action-row-lock")
+      return [lockedActionRow]
+    })
+    prismaMock.scheduleBlock.count.mockImplementation(async () => {
+      events.push("count")
+      return 0
+    })
+    prismaMock.actionItem.delete.mockImplementation(async () => {
+      events.push("delete")
+      return baseAction
+    })
+
+    const response = await DELETE(request(
+      "http://localhost/api/action-item?action_id=action_copy",
+      { method: "DELETE" },
+    ))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.actionItem.findUnique).toHaveBeenCalledWith({
+      where: { action_id: "action_copy" },
+      select: { plan_id: true },
+    })
+    expect(events).toEqual([
+      "read-plan-id",
+      "plan-row-lock",
+      "block-row-locks",
+      "action-row-lock",
+      "count",
+      "delete",
+    ])
+    expect(prismaMock.$queryRaw.mock.calls.map(getRawSqlTemplate)).toEqual([
+      'SELECT "plan_id", "is_recurring" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
+      'SELECT "block_id" FROM "ScheduleBlock" WHERE "action_id" = ? FOR UPDATE',
+      'SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+    ])
+  })
+
   it("DELETE returns 404 for a missing action", async () => {
-    prismaMock.$queryRaw.mockResolvedValueOnce([])
+    prismaMock.actionItem.findUnique.mockResolvedValue(null)
 
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_missing", { method: "DELETE" }))
 
@@ -562,15 +615,20 @@ describe("/api/action-item", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-23T08:30:00.000Z"))
     const events: string[] = []
-    prismaMock.$queryRaw
-      .mockImplementationOnce(async () => {
-        events.push("action-row-lock")
-        return [lockedActionRow]
-      })
-      .mockImplementationOnce(async () => {
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
+    prismaMock.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = getRawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) {
+        events.push("plan-row-lock")
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
+      if (sql.includes('FROM "ScheduleBlock"')) {
         events.push("block-row-locks")
         return [{ block_id: "block_future" }]
-      })
+      }
+      events.push("action-row-lock")
+      return [lockedActionRow]
+    })
     prismaMock.scheduleBlock.count.mockImplementation(async () => {
       events.push("count")
       return 1
@@ -579,15 +637,22 @@ describe("/api/action-item", () => {
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
 
     expect(response.status).toBe(409)
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2)
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(3)
     expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[0])).toBe(
-      'SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+      'SELECT "plan_id", "is_recurring" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
     )
     expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[1])).toBe(
       'SELECT "block_id" FROM "ScheduleBlock" WHERE "action_id" = ? FOR UPDATE',
     )
-    expect(prismaMock.$queryRaw.mock.calls.map(call => call[1])).toEqual(["action_copy", "action_copy"])
-    expect(events).toEqual(["action-row-lock", "block-row-locks", "count"])
+    expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[2])).toBe(
+      'SELECT "action_id", "is_completed", "completed_at" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+    )
+    expect(prismaMock.$queryRaw.mock.calls.map(call => call[1])).toEqual([
+      "plan_launch",
+      "action_copy",
+      "action_copy",
+    ])
+    expect(events).toEqual(["plan-row-lock", "block-row-locks", "action-row-lock", "count"])
     expect(prismaMock.scheduleBlock.count).toHaveBeenCalledWith({
       where: {
         action_id: "action_copy",
@@ -600,15 +665,20 @@ describe("/api/action-item", () => {
 
   it("DELETE removes an unprotected action in a transaction", async () => {
     const events: string[] = []
-    prismaMock.$queryRaw
-      .mockImplementationOnce(async () => {
-        events.push("action-row-lock")
-        return [lockedActionRow]
-      })
-      .mockImplementationOnce(async () => {
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
+    prismaMock.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = getRawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) {
+        events.push("plan-row-lock")
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
+      if (sql.includes('FROM "ScheduleBlock"')) {
         events.push("block-row-locks")
         return []
-      })
+      }
+      events.push("action-row-lock")
+      return [lockedActionRow]
+    })
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
     prismaMock.actionItem.delete.mockImplementation(async () => {
       events.push("delete")
@@ -621,13 +691,15 @@ describe("/api/action-item", () => {
     expect(await json(response)).toEqual({ success: true })
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
     expect(prismaMock.actionItem.delete).toHaveBeenCalledWith({ where: { action_id: "action_copy" } })
-    expect(events).toEqual(["action-row-lock", "block-row-locks", "delete"])
+    expect(events).toEqual(["plan-row-lock", "block-row-locks", "action-row-lock", "delete"])
   })
 
   it("DELETE maps a raced record-not-found result to 404", async () => {
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
     prismaMock.$queryRaw
-      .mockResolvedValueOnce([lockedActionRow])
+      .mockResolvedValueOnce([{ plan_id: "plan_launch", is_recurring: false }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([lockedActionRow])
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
     prismaMock.actionItem.delete.mockRejectedValue({ code: "P2025" })
 
@@ -637,12 +709,15 @@ describe("/api/action-item", () => {
     expect(await json(response)).toEqual({ error: "行动项不存在" })
   })
 
-  it("DELETE holds the ActionItem row lock so a new block cannot race the protected-block count", async () => {
+  it("DELETE requests ActionItem FOR UPDATE before counting and keeps the transaction open through delete", async () => {
     let releaseInsert: (() => void) | undefined
     let insertFinished = false
     let insertAttempt: Promise<void> | undefined
     const txQueryRaw = vi.fn(async (...args: unknown[]) => {
       const sql = getRawSqlTemplate(args)
+      if (sql.includes('FROM "Plan"')) {
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
       if (sql.includes('FROM "ActionItem"')) {
         insertAttempt = new Promise<void>(resolve => {
           releaseInsert = () => {
@@ -654,6 +729,7 @@ describe("/api/action-item", () => {
       }
       return []
     })
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
     prismaMock.actionItem.delete.mockImplementation(async () => {
       expect(insertAttempt).toBeDefined()
@@ -673,15 +749,18 @@ describe("/api/action-item", () => {
 
     expect(response.status).toBe(200)
     expect(insertFinished).toBe(true)
-    expect(txQueryRaw).toHaveBeenCalledTimes(2)
+    expect(txQueryRaw).toHaveBeenCalledTimes(3)
   })
 
-  it("DELETE holds associated block rows so a status update cannot race the protected-block count", async () => {
+  it("DELETE requests ScheduleBlock FOR UPDATE before counting and keeps the transaction open through delete", async () => {
     let releaseUpdate: (() => void) | undefined
     let updateFinished = false
     let updateAttempt: Promise<void> | undefined
     const txQueryRaw = vi.fn(async (...args: unknown[]) => {
       const sql = getRawSqlTemplate(args)
+      if (sql.includes('FROM "Plan"')) {
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
       if (sql.includes('FROM "ActionItem"')) {
         return [lockedActionRow]
       }
@@ -693,6 +772,7 @@ describe("/api/action-item", () => {
       })
       return [{ block_id: "block_cancelled" }]
     })
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
     prismaMock.scheduleBlock.count.mockResolvedValue(0)
     prismaMock.actionItem.delete.mockImplementation(async () => {
       expect(updateAttempt).toBeDefined()
@@ -712,6 +792,6 @@ describe("/api/action-item", () => {
 
     expect(response.status).toBe(200)
     expect(updateFinished).toBe(true)
-    expect(txQueryRaw).toHaveBeenCalledTimes(2)
+    expect(txQueryRaw).toHaveBeenCalledTimes(3)
   })
 })

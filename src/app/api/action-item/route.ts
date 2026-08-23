@@ -364,12 +364,25 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await prisma.$transaction(async tx => {
+      const snapshot = await tx.actionItem.findUnique({
+        where: { action_id: actionId },
+        select: { plan_id: true },
+      })
+      if (!snapshot) {
+        throw new ActionItemNotFoundError()
+      }
+
+      const plan = await lockPlan(tx, snapshot.plan_id)
+      if (!plan) {
+        throw new ActionItemNotFoundError()
+      }
+
+      await lockActionScheduleBlocks(tx, actionId)
       const existing = await lockActionItem(tx, actionId)
       if (!existing) {
         throw new ActionItemNotFoundError()
       }
 
-      await lockActionScheduleBlocks(tx, actionId)
       const futureScheduledBlocks = await tx.scheduleBlock.count({
         where: {
           action_id: actionId,

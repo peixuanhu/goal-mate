@@ -82,7 +82,12 @@ function blockIdFor(key: string): string {
 function makeTxDb() {
   const db = {
     $executeRaw: vi.fn().mockResolvedValue(0),
-    $queryRaw: vi.fn().mockResolvedValue([action]),
+    $queryRaw: vi.fn(async (...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) return [{ plan_id: "plan_launch" }]
+      if (sql.includes('FROM "ScheduleBlock"')) return [baseBlock]
+      return [action]
+    }),
     planningPreference: {
       findUnique: vi.fn().mockResolvedValue(preference),
     },
@@ -154,6 +159,13 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+function prismaError(code: string, target?: string | string[]) {
+  return {
+    code,
+    ...(target === undefined ? {} : { meta: { target } }),
+  }
+}
+
 describe("ScheduleBlock service", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -197,19 +209,56 @@ describe("ScheduleBlock service", () => {
     })
   })
 
-  it("waits for the ActionItem row lock and rejects a completion committed before create", async () => {
+  it("waits for the Plan FOR UPDATE query before requesting an Action lock or creating", async () => {
     const db = makeDb()
-    const rowLock = deferred<Array<typeof action>>()
-    db.$queryRaw.mockImplementation(() => rowLock.promise)
+    const planLock = deferred<Array<{ plan_id: string }>>()
+    let actionLockRequested = false
+    db.$queryRaw.mockImplementation((...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) return planLock.promise
+      actionLockRequested = true
+      return Promise.resolve([action])
+    })
     db.scheduleBlock.create.mockResolvedValue(createdBlock())
 
     const pending = createScheduleBlock(db, validCreate)
-    await vi.waitFor(() => expect(db.$queryRaw).toHaveBeenCalledOnce())
+    await vi.waitFor(() => {
+      expect(db.$queryRaw.mock.calls.some(call => rawSqlTemplate(call).includes('FROM "Plan"'))).toBe(true)
+    })
 
-    expect(rawSqlTemplate(db.$queryRaw.mock.calls[0])).toBe(
+    const planCall = db.$queryRaw.mock.calls.find(call => rawSqlTemplate(call).includes('FROM "Plan"'))
+    expect(rawSqlTemplate(planCall ?? [])).toBe(
+      'SELECT "plan_id" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
+    )
+    expect(actionLockRequested).toBe(false)
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+
+    planLock.resolve([])
+    await expect(pending).rejects.toMatchObject({ code: "NOT_FOUND" })
+    expect(actionLockRequested).toBe(false)
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+  })
+
+  it("waits for the ActionItem FOR UPDATE query and rejects a completion observed before create", async () => {
+    const db = makeDb()
+    const rowLock = deferred<Array<typeof action>>()
+    db.$queryRaw.mockImplementation((...call: unknown[]) => (
+      rawSqlTemplate(call).includes('FROM "Plan"')
+        ? Promise.resolve([{ plan_id: "plan_launch" }])
+        : rowLock.promise
+    ))
+    db.scheduleBlock.create.mockResolvedValue(createdBlock())
+
+    const pending = createScheduleBlock(db, validCreate)
+    await vi.waitFor(() => {
+      expect(db.$queryRaw.mock.calls.some(call => rawSqlTemplate(call).includes('FROM "ActionItem"'))).toBe(true)
+    })
+
+    const actionCall = db.$queryRaw.mock.calls.find(call => rawSqlTemplate(call).includes('FROM "ActionItem"'))
+    expect(rawSqlTemplate(actionCall ?? [])).toBe(
       'SELECT "action_id", "plan_id", "is_completed" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
     )
-    expect(db.$queryRaw.mock.calls[0][1]).toBe("action_copy")
+    expect(actionCall?.[1]).toBe("action_copy")
     expect(db.scheduleBlock.create).not.toHaveBeenCalled()
 
     rowLock.resolve([{ ...action, is_completed: true }])
@@ -217,13 +266,17 @@ describe("ScheduleBlock service", () => {
     expect(db.scheduleBlock.create).not.toHaveBeenCalled()
   })
 
-  it("holds the ActionItem row lock before update re-read and write", async () => {
+  it("waits for the ActionItem FOR UPDATE query after the block re-read and before update", async () => {
     const db = makeDb()
     const rowLock = deferred<Array<typeof action>>()
     const current = { ...baseBlock, block_id: "block_1" }
-    db.$queryRaw.mockImplementation(() => rowLock.promise)
+    db.$queryRaw.mockImplementation((...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) return Promise.resolve([{ plan_id: "plan_launch" }])
+      if (sql.includes('FROM "ScheduleBlock"')) return Promise.resolve([current])
+      return rowLock.promise
+    })
     db.scheduleBlock.findUnique
-      .mockResolvedValueOnce(current)
       .mockResolvedValueOnce(current)
       .mockResolvedValueOnce({
         ...current,
@@ -238,15 +291,93 @@ describe("ScheduleBlock service", () => {
       start_at: "2026-08-23T03:00:00.000Z",
       end_at: "2026-08-23T04:00:00.000Z",
     })
-    await vi.waitFor(() => expect(db.$queryRaw).toHaveBeenCalledOnce())
+    await vi.waitFor(() => {
+      expect(db.$queryRaw.mock.calls.some(call => rawSqlTemplate(call).includes('FROM "ActionItem"'))).toBe(true)
+    })
 
     expect(db.scheduleBlock.findUnique).toHaveBeenCalledTimes(1)
     expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
     rowLock.resolve([action])
 
     await expect(pending).resolves.toEqual(expect.objectContaining({ version: 2 }))
-    expect(db.scheduleBlock.findUnique).toHaveBeenCalledTimes(3)
+    expect(db.scheduleBlock.findUnique).toHaveBeenCalledTimes(2)
     expect(db.scheduleBlock.updateMany).toHaveBeenCalledOnce()
+  })
+
+  it("locks date, Plan, ScheduleBlock, then ActionItem before overlap and update", async () => {
+    const db = makeDb()
+    const events: string[] = []
+    const current = { ...baseBlock, block_id: "block_1" }
+    db.scheduleBlock.findUnique.mockResolvedValue(current)
+    db.$executeRaw.mockImplementation(async (...call: unknown[]) => {
+      if (call[1] === 48_241) events.push(`date:${String(call[2])}`)
+      return 0
+    })
+    db.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) {
+        events.push("plan")
+        return [{ plan_id: "plan_launch" }]
+      }
+      if (sql.includes('FROM "ScheduleBlock"')) {
+        events.push("schedule")
+        return [current]
+      }
+      events.push("action")
+      return [action]
+    })
+    db.scheduleBlock.findMany.mockImplementation(async () => {
+      events.push("overlap")
+      return []
+    })
+    db.scheduleBlock.updateMany.mockImplementation(async () => {
+      events.push("update")
+      return { count: 1 }
+    })
+
+    await updateScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: 1,
+      start_at: "2026-08-23T03:00:00.000Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    })
+
+    expect(events).toEqual([
+      "date:2026-08-23",
+      "plan",
+      "schedule",
+      "action",
+      "overlap",
+      "update",
+    ])
+    expect(db.$queryRaw.mock.calls.map(rawSqlTemplate)).toEqual([
+      'SELECT "plan_id" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
+      'SELECT "block_id", "plan_id", "action_id", "start_at", "end_at", "status", "version" FROM "ScheduleBlock" WHERE "block_id" = ? FOR UPDATE',
+      'SELECT "action_id", "plan_id", "is_completed" FROM "ActionItem" WHERE "action_id" = ? FOR UPDATE',
+    ])
+  })
+
+  it("returns STALE_VERSION before locking a completed Action on update", async () => {
+    const db = makeDb()
+    const snapshot = { ...baseBlock, block_id: "block_1" }
+    let actionLockRequested = false
+    db.scheduleBlock.findUnique.mockResolvedValue(snapshot)
+    db.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) return [{ plan_id: "plan_launch" }]
+      if (sql.includes('FROM "ScheduleBlock"')) return [{ ...snapshot, version: 2 }]
+      actionLockRequested = true
+      return [{ ...action, is_completed: true }]
+    })
+
+    await expect(updateScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: 1,
+      start_at: "2026-08-23T03:00:00.000Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    })).rejects.toMatchObject({ code: "STALE_VERSION" })
+    expect(actionLockRequested).toBe(false)
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -364,6 +495,54 @@ describe("ScheduleBlock service", () => {
     expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
   })
 
+  it("maps a root-client action partial-unique race and loads its conflict id after rollback", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(
+      prismaError("P2002", "ScheduleBlock_one_scheduled_per_action_idx"),
+    )
+    db.scheduleBlock.findFirst.mockResolvedValue({ block_id: "block_action_busy" })
+
+    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
+      code: "ACTION_ALREADY_SCHEDULED",
+      conflictIds: ["block_action_busy"],
+    })
+    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
+      where: { action_id: "action_copy", status: "scheduled" },
+      select: { block_id: true },
+    })
+  })
+
+  it("maps a transaction-client action unique race without querying an aborted transaction", async () => {
+    const db = makeDb({ root: false })
+    db.scheduleBlock.create.mockRejectedValue(prismaError("P2002", ["action_id"]))
+
+    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
+      code: "ACTION_ALREADY_SCHEDULED",
+      conflictIds: undefined,
+    })
+    expect(db.scheduleBlock.findFirst).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a block_id unique collision mapped to SCHEDULE_CONFLICT", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2002", ["block_id"]))
+
+    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
+      code: "SCHEDULE_CONFLICT",
+      conflictIds: [blockIdFor(validCreate.idempotency_key)],
+    })
+    expect(db.scheduleBlock.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("maps a deadlock or serialization retry to SCHEDULE_CONFLICT", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2034"))
+
+    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
+      code: "SCHEDULE_CONFLICT",
+    })
+  })
+
   it("allows a direct parent-Plan block even when the Plan has open Actions", async () => {
     const db = makeDb()
     db.scheduleBlock.create.mockResolvedValue({
@@ -374,7 +553,10 @@ describe("ScheduleBlock service", () => {
 
     await createScheduleBlock(db, { ...validCreate, action_id: null })
 
-    expect(db.$queryRaw).not.toHaveBeenCalled()
+    expect(db.$queryRaw).toHaveBeenCalledOnce()
+    expect(rawSqlTemplate(db.$queryRaw.mock.calls[0])).toBe(
+      'SELECT "plan_id" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
+    )
     expect(db.scheduleBlock.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ action_id: null }),
     }))
@@ -382,7 +564,7 @@ describe("ScheduleBlock service", () => {
 
   it("rejects a missing Plan, mismatched Action, and completed Action", async () => {
     const missingPlanDb = makeDb()
-    missingPlanDb.plan.findUnique.mockResolvedValue(null)
+    missingPlanDb.$queryRaw.mockResolvedValue([])
     await expect(createScheduleBlock(missingPlanDb, validCreate)).rejects.toMatchObject({ code: "NOT_FOUND" })
 
     const mismatchedDb = makeDb()
@@ -581,7 +763,6 @@ describe("ScheduleBlock service", () => {
     }
     dbA.scheduleBlock.findUnique
       .mockResolvedValueOnce(currentA)
-      .mockResolvedValueOnce(currentA)
       .mockResolvedValueOnce({
         ...currentA,
         start_at: new Date("2026-08-24T01:00:00.000Z"),
@@ -589,7 +770,6 @@ describe("ScheduleBlock service", () => {
         version: 2,
       })
     dbB.scheduleBlock.findUnique
-      .mockResolvedValueOnce(currentB)
       .mockResolvedValueOnce(currentB)
       .mockResolvedValueOnce({
         ...currentB,

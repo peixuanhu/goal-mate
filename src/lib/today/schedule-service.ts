@@ -90,6 +90,20 @@ type LockedActionRow = {
   is_completed: boolean
 }
 
+type LockedPlanRow = {
+  plan_id: string
+}
+
+type LockedScheduleBlockRow = {
+  block_id: string
+  plan_id: string
+  action_id: string | null
+  start_at: Date
+  end_at: Date
+  status: string
+  version: number
+}
+
 type ScheduleBlockRow = {
   block_id: string
   plan_id: string
@@ -346,6 +360,22 @@ async function lockActionItem(
   return rows[0] ?? null
 }
 
+async function lockPlan(
+  db: Prisma.TransactionClient,
+  planId: string,
+): Promise<LockedPlanRow | null> {
+  const rows = await db.$queryRaw<LockedPlanRow[]>`SELECT "plan_id" FROM "Plan" WHERE "plan_id" = ${planId} FOR UPDATE`
+  return rows[0] ?? null
+}
+
+async function lockScheduleBlock(
+  db: Prisma.TransactionClient,
+  blockId: string,
+): Promise<LockedScheduleBlockRow | null> {
+  const rows = await db.$queryRaw<LockedScheduleBlockRow[]>`SELECT "block_id", "plan_id", "action_id", "start_at", "end_at", "status", "version" FROM "ScheduleBlock" WHERE "block_id" = ${blockId} FOR UPDATE`
+  return rows[0] ?? null
+}
+
 async function loadPreference(db: Prisma.TransactionClient): Promise<PlanningPreferenceView> {
   const row = await db.planningPreference.findUnique({
     where: { preference_id: DEFAULT_PREFERENCE_ID },
@@ -485,10 +515,7 @@ async function assertPlanAndAction(
   planId: string,
   actionId: string | null,
 ): Promise<void> {
-  const planRow = await db.plan.findUnique({
-    where: { plan_id: planId },
-    select: { plan_id: true },
-  })
+  const planRow = await lockPlan(db, planId)
   if (!planRow) {
     throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
   }
@@ -553,6 +580,28 @@ function isPrismaError(error: unknown, code: string): boolean {
     && (error as { code?: unknown }).code === code
 }
 
+function prismaErrorTargets(error: unknown): string[] {
+  if (typeof error !== "object" || error === null || !("meta" in error)) {
+    return []
+  }
+  const target = (error as { meta?: { target?: unknown } }).meta?.target
+  if (typeof target === "string") {
+    return [target]
+  }
+  return Array.isArray(target)
+    ? target.filter((value): value is string => typeof value === "string")
+    : []
+}
+
+function isActionScheduleUniqueError(error: unknown): boolean {
+  if (!isPrismaError(error, "P2002")) {
+    return false
+  }
+  return prismaErrorTargets(error).some(target => (
+    target === "action_id" || target.includes("ScheduleBlock_one_scheduled_per_action_idx")
+  ))
+}
+
 export async function createScheduleBlock(
   db: ScheduleDb,
   rawInput: CreateScheduleBlockInput,
@@ -593,8 +642,26 @@ export async function createScheduleBlock(
     if (isPrismaError(error, "P2003")) {
       throw new ScheduleServiceError("NOT_FOUND", "计划或行动项不存在")
     }
+    if (isActionScheduleUniqueError(error)) {
+      let conflictIds: string[] | undefined
+      if (input.actionId !== null && isPrismaClient(db)) {
+        const existing = await db.scheduleBlock.findFirst({
+          where: { action_id: input.actionId, status: "scheduled" },
+          select: { block_id: true },
+        })
+        conflictIds = existing ? [existing.block_id] : undefined
+      }
+      throw new ScheduleServiceError(
+        "ACTION_ALREADY_SCHEDULED",
+        "行动项已有活动排期",
+        conflictIds,
+      )
+    }
     if (isPrismaError(error, "P2002")) {
       throw new ScheduleServiceError("SCHEDULE_CONFLICT", "时间块幂等键冲突", [input.blockId])
+    }
+    if (isPrismaError(error, "P2034")) {
+      throw new ScheduleServiceError("SCHEDULE_CONFLICT", "排期并发冲突，请重试")
     }
     throw error
   }
@@ -615,20 +682,12 @@ export async function updateScheduleBlock(
     }
     const oldLocalDate = formatUtcInTimeZone(snapshot.start_at, preference.timezone).date
     await lockLocalDates(tx, [oldLocalDate, newLocalDate])
-    if (snapshot.action_id) {
-      const lockedAction = await lockActionItem(tx, snapshot.action_id)
-      if (!lockedAction) {
-        throw new ScheduleServiceError("NOT_FOUND", "行动项不存在")
-      }
-      if (lockedAction.plan_id !== snapshot.plan_id) {
-        validation("行动项不属于时间块计划")
-      }
-      if (lockedAction.is_completed) {
-        validation("已完成行动项不能排期")
-      }
+    const planRow = await lockPlan(tx, snapshot.plan_id)
+    if (!planRow) {
+      throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
     }
 
-    const current = await findBlock(tx, input.blockId)
+    const current = await lockScheduleBlock(tx, input.blockId)
     if (!current) {
       throw new ScheduleServiceError("NOT_FOUND", "时间块不存在")
     }
@@ -637,6 +696,19 @@ export async function updateScheduleBlock(
     }
     if (current.plan_id !== snapshot.plan_id || current.action_id !== snapshot.action_id) {
       throw new ScheduleServiceError("STALE_VERSION", "时间块归属已变化")
+    }
+
+    if (current.action_id) {
+      const lockedAction = await lockActionItem(tx, current.action_id)
+      if (!lockedAction) {
+        throw new ScheduleServiceError("NOT_FOUND", "行动项不存在")
+      }
+      if (lockedAction.plan_id !== current.plan_id) {
+        validation("行动项不属于时间块计划")
+      }
+      if (lockedAction.is_completed) {
+        validation("已完成行动项不能排期")
+      }
     }
 
     throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt, input.blockId))
