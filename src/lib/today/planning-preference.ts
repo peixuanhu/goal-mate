@@ -55,9 +55,9 @@ function parseVersion(value: unknown): string | null {
 export function getDefaultPlanningPreference(
   timezone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 ): PlanningPreferenceView {
-  return {
+  return normalizePlanningPreference({
     preference_id: "default",
-    timezone: parseTimezone(timezone),
+    timezone,
     day_start_minutes: 480,
     day_end_minutes: 1320,
     high_energy_start_minutes: null,
@@ -66,7 +66,7 @@ export function getDefaultPlanningPreference(
     default_block_minutes: 60,
     capacity_warning_minutes: 480,
     version: null,
-  }
+  })
 }
 
 export function normalizePlanningPreference(value: unknown): PlanningPreferenceView {

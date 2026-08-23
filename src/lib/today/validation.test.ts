@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest"
 
 import { parseActionItemInput, parseDateKey, parsePlanningFields } from "./validation"
 
+function captureError(callback: () => unknown): Error {
+  try {
+    callback()
+  } catch (error) {
+    if (error instanceof Error) {
+      return error
+    }
+    throw error
+  }
+
+  throw new Error("expected callback to throw")
+}
+
 describe("today validation", () => {
   describe("parseDateKey", () => {
     it("accepts a valid date key", () => {
@@ -9,13 +22,15 @@ describe("today validation", () => {
     })
 
     it("uses a stable message for a missing date", () => {
-      expect(() => parseDateKey(null)).toThrow("date required")
+      expect(captureError(() => parseDateKey(null)).message).toBe("date is required")
     })
 
     it.each(["2026-02-30", "23-08-2026", "2026-8-23", "", undefined, 20260823, false])(
       "uses a stable message for invalid date value %j",
       value => {
-        expect(() => parseDateKey(value)).toThrow("date must be a valid yyyy-mm-dd value")
+        expect(captureError(() => parseDateKey(value)).message).toBe(
+          "date must be a valid calendar date in YYYY-MM-DD format",
+        )
       },
     )
   })
@@ -47,13 +62,13 @@ describe("today validation", () => {
       }
     })
 
-    it("supports explicit clearing of optional planning fields", () => {
+    it.each([null, ""])("supports clearing every optional planning field with %j", clearValue => {
       expect(
         parsePlanningFields({
-          due_date: "",
-          estimated_minutes: null,
-          energy_level: null,
-          priority_quadrant: null,
+          due_date: clearValue,
+          estimated_minutes: clearValue,
+          energy_level: clearValue,
+          priority_quadrant: clearValue,
         }),
       ).toEqual({
         due_date: null,
@@ -92,6 +107,15 @@ describe("today validation", () => {
         estimated_minutes: 30,
       })
     })
+
+    it.each([[], new Date(), new (class PlanningFieldsInput {})()])(
+      "rejects non-plain input %j",
+      input => {
+        expect(captureError(() => parsePlanningFields(input)).message).toBe(
+          "planning fields must be a plain object",
+        )
+      },
+    )
   })
 
   describe("parseActionItemInput", () => {
@@ -136,7 +160,7 @@ describe("today validation", () => {
       ).toEqual({ name: "Task", description: null, priority_quadrant: null })
     })
 
-    it.each(["", "q0", "Q1", 1, false])("rejects invalid quadrant %j", priority_quadrant => {
+    it.each(["q0", "Q1", 1, false])("rejects invalid quadrant %j", priority_quadrant => {
       expect(() => parseActionItemInput({ name: "Task", priority_quadrant })).toThrow(
         "priority_quadrant must be q1, q2, q3, q4, or null",
       )

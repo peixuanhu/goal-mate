@@ -32,17 +32,17 @@ function hasOwn(input: Record<string, unknown>, key: string): boolean {
 
 export function parseDateKey(value: unknown): string {
   if (value === null) {
-    throw new Error("date required")
+    throw new Error("date is required")
   }
 
   if (typeof value !== "string") {
-    throw new Error("date must be a valid yyyy-mm-dd value")
+    throw new Error("date must be a valid calendar date in YYYY-MM-DD format")
   }
 
   try {
     return parseDateOnly(value).toISOString().slice(0, 10)
   } catch {
-    throw new Error("date must be a valid yyyy-mm-dd value")
+    throw new Error("date must be a valid calendar date in YYYY-MM-DD format")
   }
 }
 
@@ -70,7 +70,7 @@ export function parsePlanningFields(value: unknown): PlanningFields {
 
   if (hasOwn(value, "estimated_minutes")) {
     const estimatedMinutes = value.estimated_minutes
-    if (estimatedMinutes === null) {
+    if (estimatedMinutes === null || estimatedMinutes === "") {
       result.estimated_minutes = null
     } else if (typeof estimatedMinutes === "number" && Number.isInteger(estimatedMinutes) && estimatedMinutes > 0) {
       result.estimated_minutes = estimatedMinutes
@@ -81,7 +81,7 @@ export function parsePlanningFields(value: unknown): PlanningFields {
 
   if (hasOwn(value, "energy_level")) {
     const energyLevel = value.energy_level
-    if (energyLevel === null) {
+    if (energyLevel === null || energyLevel === "") {
       result.energy_level = null
     } else if (typeof energyLevel === "string" && ENERGY_LEVELS.has(energyLevel as EnergyLevel)) {
       result.energy_level = energyLevel as EnergyLevel
@@ -92,7 +92,7 @@ export function parsePlanningFields(value: unknown): PlanningFields {
 
   if (hasOwn(value, "priority_quadrant")) {
     const priorityQuadrant = value.priority_quadrant
-    if (priorityQuadrant === null) {
+    if (priorityQuadrant === null || priorityQuadrant === "") {
       result.priority_quadrant = null
     } else if (typeof priorityQuadrant === "string" && QUADRANT_IDS.has(priorityQuadrant as QuadrantId)) {
       result.priority_quadrant = priorityQuadrant as QuadrantId
