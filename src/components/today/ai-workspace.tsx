@@ -9,7 +9,11 @@ import { cn } from "@/lib/utils"
 
 type AiWorkspaceTab = "check" | "chat"
 
-export function AiWorkspace() {
+interface AiWorkspaceProps {
+  className?: string
+}
+
+export function AiWorkspace({ className }: AiWorkspaceProps = {}) {
   const [activeTab, setActiveTab] = useState<AiWorkspaceTab>("check")
 
   function changeTab(value: string) {
@@ -21,16 +25,19 @@ export function AiWorkspace() {
   return (
     <aside
       aria-labelledby="ai-workspace-heading"
-      className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+      className={cn(
+        "flex h-full min-h-[560px] flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]",
+        className,
+      )}
     >
-      <div className="border-b border-gray-100 px-5 py-4">
+      <div className="border-b border-stone-100 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-100 bg-violet-50 text-violet-600">
             <Bot aria-hidden="true" className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Goal Mate AI</p>
-            <h2 id="ai-workspace-heading" className="text-base font-semibold text-gray-900">今日助手</h2>
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-stone-400">Goal Mate AI</p>
+            <h2 id="ai-workspace-heading" className="text-base font-semibold text-stone-950">今日助手</h2>
           </div>
         </div>
       </div>
@@ -40,8 +47,8 @@ export function AiWorkspace() {
         onValueChange={changeTab}
         value={activeTab}
       >
-        <div className="border-b border-gray-100 px-4 py-3">
-          <TabsList aria-label="AI 工作模式" className="grid w-full grid-cols-2 bg-gray-100">
+        <div className="border-b border-stone-100 px-4 py-3">
+          <TabsList aria-label="AI 工作模式" className="grid w-full grid-cols-2 rounded-xl bg-stone-100 p-1">
             <TabsTrigger value="check">
               <ScanSearch aria-hidden="true" />
               AI 检查
@@ -56,7 +63,7 @@ export function AiWorkspace() {
         <TabsContent
           aria-hidden={activeTab !== "check"}
           className={cn(
-            "m-0 flex min-h-0 flex-1 items-center justify-center p-6",
+            "m-0 flex min-h-0 flex-1 items-center justify-center bg-stone-50/70 p-6",
             activeTab === "check" ? "visible relative" : "invisible absolute inset-0 pointer-events-none",
           )}
           forceMount
@@ -64,20 +71,20 @@ export function AiWorkspace() {
           inert={activeTab !== "check"}
           value="check"
         >
-          <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/60 p-6 text-center">
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-violet-600 shadow-sm">
+          <div className="max-w-xs rounded-2xl border border-violet-100 bg-white p-6 text-center shadow-[0_8px_30px_rgba(109,40,217,0.06)]">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
               <ScanSearch aria-hidden="true" className="h-5 w-5" />
             </div>
-            <h3 className="mt-4 font-semibold text-gray-900">AI 检查</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600">今日检查将在排程阶段启用</p>
-            <p className="mt-1 text-xs text-gray-400">之后会根据目标、精力与时间容量提出调整建议。</p>
+            <h3 className="mt-4 font-semibold text-stone-950">准备好检查今天的安排</h3>
+            <p className="mt-2 text-sm leading-6 text-stone-500">今日检查将在排程阶段启用</p>
+            <p className="mt-1 text-xs leading-5 text-stone-400">之后会根据目标优先级、精力与时间容量提出调整建议。</p>
           </div>
         </TabsContent>
 
         <TabsContent
           aria-hidden={activeTab !== "chat"}
           className={cn(
-            "m-0 min-h-0 flex-1 overflow-hidden bg-gray-50",
+            "m-0 min-h-0 flex-1 overflow-hidden bg-stone-50",
             activeTab === "chat" ? "visible relative" : "invisible absolute inset-0 pointer-events-none",
           )}
           forceMount

@@ -31,7 +31,7 @@ const STATUS_LABELS: Record<ScheduleBlockStatus, string> = {
 }
 
 const STATUS_CLASSES: Record<ScheduleBlockStatus, string> = {
-  scheduled: "border-indigo-200 bg-indigo-100/95 text-indigo-950",
+  scheduled: "border-violet-200 bg-violet-100/95 text-violet-950",
   completed: "border-emerald-200 bg-emerald-100/95 text-emerald-950",
   partial: "border-amber-200 bg-amber-100/95 text-amber-950",
   skipped: "border-gray-200 bg-gray-100/95 text-gray-600",
@@ -85,26 +85,26 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
     && currentMinute < preference.day_end_minutes
 
   return (
-    <section aria-labelledby="today-timeline-heading" className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <header className="flex min-h-14 items-center justify-between border-b border-gray-100 px-5 py-3">
+    <section aria-labelledby="today-timeline-heading" className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+      <header className="flex min-h-14 items-center justify-between border-b border-stone-100 px-5 py-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">今日时间线</p>
-          <h2 id="today-timeline-heading" className="mt-0.5 text-base font-semibold text-gray-900">{date}</h2>
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-stone-400">今日时间线</p>
+          <h2 id="today-timeline-heading" className="mt-0.5 text-base font-semibold text-stone-950">{date}</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-600">
           <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
           {formatMinutes(preference.day_start_minutes)}–{formatMinutes(preference.day_end_minutes)}
         </span>
       </header>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto bg-gray-50/40">
-        <div className={`relative transition-colors ${isOver ? "bg-indigo-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
+      <div className="relative min-h-0 flex-1 overflow-y-auto bg-stone-50/50">
+        <div className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
           {markers.map((minutes, index) => {
             const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
             return (
               <div className="absolute inset-x-0 flex items-start" key={minutes} style={{ top: `${top}%` }}>
-                <time className="w-16 -translate-y-1/2 pr-3 text-right text-xs tabular-nums text-gray-400">{formatMinutes(minutes)}</time>
-                <div className={`flex-1 border-t ${index === 0 || index === markers.length - 1 ? "border-gray-200" : "border-dashed border-gray-200/80"}`} />
+                <time className="w-16 -translate-y-1/2 pr-3 text-right text-xs tabular-nums text-stone-400">{formatMinutes(minutes)}</time>
+                <div className={`flex-1 border-t ${index === 0 || index === markers.length - 1 ? "border-stone-200" : "border-dashed border-stone-200/80"}`} />
               </div>
             )
           })}
@@ -136,10 +136,10 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
                   </div>
                   {editable ? (
                     <div className="flex shrink-0 items-center gap-1">
-                      <button aria-label={`编辑 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={() => onEditBlock(block)} type="button">
+                      <button aria-label={`编辑 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" onClick={() => onEditBlock(block)} type="button">
                         <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
                       </button>
-                      <button aria-label={`完成 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={() => onCompleteBlock(block)} type="button">
+                      <button aria-label={`完成 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" onClick={() => onCompleteBlock(block)} type="button">
                         <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -164,11 +164,11 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
               <div className="max-w-sm text-center"><p className="font-medium text-red-700">时间线加载失败</p><p className="mt-1 text-sm text-red-600">{error}</p></div>
             </div>
           ) : blocks.length === 0 ? (
-            <div className="pointer-events-none absolute inset-y-8 left-20 right-5 flex items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white/65 px-6 text-center">
+            <div className="pointer-events-none absolute inset-y-8 left-20 right-5 flex items-center justify-center rounded-xl border border-dashed border-stone-300 bg-white/65 px-6 text-center">
               <div className="max-w-sm">
-                <Clock3 aria-hidden="true" className="mx-auto mb-3 h-9 w-9 text-gray-400" />
-                <p className="text-sm font-medium text-gray-700">把左侧计划或行动项拖到这里安排时间</p>
-                <p className="mt-1 text-xs text-gray-400">也可以用候选事项上的“安排到今天”按钮</p>
+                <Clock3 aria-hidden="true" className="mx-auto mb-3 h-9 w-9 text-stone-400" />
+                <p className="text-sm font-medium text-stone-700">把左侧计划或行动项拖到这里安排时间</p>
+                <p className="mt-1 text-xs text-stone-400">也可以用候选事项上的“安排到今天”按钮</p>
               </div>
             </div>
           ) : null}

@@ -2,10 +2,9 @@
 
 import { DndContext, type DragEndEvent } from "@dnd-kit/core"
 import { Bot, CalendarDays, ChevronLeft, ChevronRight, ListTree } from "lucide-react"
-import Link from "next/link"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import UserMenu from "@/components/UserMenu"
+import { AppHeader } from "@/components/app-header"
 import { Button } from "@/components/ui/button"
 import { addDays, normalizeLocalDateInput, parseDateOnly } from "@/lib/focus-period-utils"
 import { getDefaultPlanningPreference } from "@/lib/today/planning-preference"
@@ -370,33 +369,14 @@ export function TodayWorkspace() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#f5f5f4] text-gray-900">
-      <header className="border-b border-gray-200/80 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[1720px] items-center gap-5 px-4 sm:px-6">
-          <Link aria-label="Goal Mate 今日首页" className="flex shrink-0 items-center gap-2" href="/">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gray-950 text-sm font-bold text-white">G</span>
-            <span className="hidden font-semibold tracking-tight sm:inline">Goal Mate</span>
-          </Link>
-
-          <nav aria-label="主导航" className="hidden items-center gap-1 md:flex">
-            <Link className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900" href="/">今天</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/goals">目标</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/plans">计划</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/progress">进展</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/reports">回顾</Link>
-          </nav>
-
-          <div className="ml-auto">
-            <UserMenu />
-          </div>
-        </div>
-      </header>
+    <main className="min-h-dvh bg-stone-50 text-stone-900">
+      <AppHeader />
 
       <div className="mx-auto max-w-[1720px] px-3 py-4 sm:px-5 sm:py-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(28,25,23,0.04)] sm:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Today workspace</p>
-            <h1 className="truncate text-lg font-semibold text-gray-900">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-stone-400">Today workspace</p>
+            <h1 className="mt-0.5 truncate text-xl font-semibold tracking-tight text-stone-950">
               {date === null ? "正在准备本地日期…" : formatHeadingDate(date)}
             </h1>
           </div>
@@ -459,7 +439,7 @@ export function TodayWorkspace() {
         ) : null}
 
         {date === null ? (
-          <div className="grid min-h-[620px] place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500 shadow-sm" role="status">
+          <div className="grid min-h-[620px] place-items-center rounded-2xl border border-stone-200/80 bg-white text-sm text-stone-500 shadow-sm" role="status">
             正在准备本地日期…
           </div>
         ) : (

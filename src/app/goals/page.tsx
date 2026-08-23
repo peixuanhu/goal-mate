@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
-import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
+import { AppPage, PageHeader } from "@/components/app-page"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
@@ -106,15 +106,15 @@ export default function GoalsPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <div className="mb-2 sm:mb-4">
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/">返回首页</Link>
-            </Button>
-          </div>
-          <Card className="min-w-0 overflow-hidden">
+        <AppPage contentClassName="max-w-7xl space-y-6 sm:space-y-8">
+          <PageHeader
+            description="整理长期方向，把每个目标连接到可以执行和复盘的计划。"
+            eyebrow="Goal workspace"
+            title="目标管理"
+          />
+          <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
             <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">目标管理</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">目标清单与编辑</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 px-4 sm:px-6">
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -173,7 +173,7 @@ export default function GoalsPage() {
               </form>
 
               {/* 筛选器 */}
-              <div className="mb-6 mt-8 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
+              <div className="mb-6 mt-8 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">搜索名称</Label>
@@ -295,7 +295,7 @@ export default function GoalsPage() {
                             </TableRow>
                             {expanded ? (
                               <TableRow>
-                                <TableCell colSpan={5} className="bg-gray-50 p-3 dark:bg-gray-900">
+                                <TableCell colSpan={5} className="bg-stone-50 p-3">
                                   <GoalPlanList goalId={goal.goal_id} />
                                 </TableCell>
                               </TableRow>
@@ -309,8 +309,8 @@ export default function GoalsPage() {
               </div>
 
               {/* 分页 */}
-              <div className="mt-6 flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:bg-gray-800">
-                <div className="text-center text-sm text-gray-600 sm:text-left dark:text-gray-400">
+              <div className="mt-6 flex flex-col gap-4 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                <div className="text-center text-sm text-stone-600 sm:text-left">
                   共 {total} 条记录，第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页
                 </div>
                 <div className="flex w-full gap-2 sm:w-auto">
@@ -334,7 +334,7 @@ export default function GoalsPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </AppPage>
       </MainLayout>
     </AuthGuard>
   )
