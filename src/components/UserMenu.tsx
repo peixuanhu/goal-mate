@@ -67,17 +67,22 @@ export default function UserMenu() {
   return (
     <div className="relative" ref={menuRef}>
       <button
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label="用户菜单"
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-1.5 text-stone-700 shadow-sm transition-colors hover:bg-stone-50"
       >
-        <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-sm font-medium text-white">
           {user.username.charAt(0).toUpperCase()}
         </div>
-        <span className="hidden max-w-[120px] truncate text-sm font-medium text-gray-700 sm:inline">
+        <span className="hidden max-w-[120px] truncate text-sm font-medium text-stone-700 sm:inline">
           {user.username}
         </span>
         <svg 
-          className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+          className={`h-4 w-4 text-stone-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -87,13 +92,15 @@ export default function UserMenu() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-          <div className="px-4 py-2 text-sm text-gray-500 border-b">
+        <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-stone-200 bg-white py-1 shadow-xl" role="menu">
+          <div className="border-b border-stone-100 px-4 py-2 text-sm text-stone-500">
             登录为: {user.username}
           </div>
           <button
+            type="button"
             onClick={handleLogout}
-            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+            role="menuitem"
           >
             退出登录
           </button>
@@ -101,4 +108,4 @@ export default function UserMenu() {
       )}
     </div>
   );
-} 
+}

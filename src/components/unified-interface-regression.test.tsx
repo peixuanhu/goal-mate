@@ -87,4 +87,24 @@ describe("unified interface foundations", () => {
       expect(source).not.toContain("返回首页")
     }
   })
+
+  it("targets the custom Copilot composer DOM instead of unused default classes", () => {
+    const source = readFileSync(path.join(process.cwd(), "src", "components", "chat-wrapper.module.css"), "utf8")
+
+    expect(source).toContain(":global(.copilotKitInput > textarea)")
+    expect(source).toContain(":global(.copilotKitInputControlButton)")
+    expect(source).not.toContain(":global(.copilotKitInputTextarea)")
+    expect(source).not.toContain(":global(.copilotKitInputButton)")
+  })
+
+  it("keeps authentication and account controls in the shared violet-stone palette", () => {
+    const loginSource = readFileSync(path.join(process.cwd(), "src", "components", "LoginForm.tsx"), "utf8")
+    const menuSource = readFileSync(path.join(process.cwd(), "src", "components", "UserMenu.tsx"), "utf8")
+
+    expect(loginSource).toContain("bg-stone-50")
+    expect(loginSource).toContain("bg-violet-600")
+    expect(loginSource).not.toContain("from-blue-50")
+    expect(menuSource).toContain("bg-violet-600")
+    expect(menuSource).not.toContain("bg-blue-500")
+  })
 })

@@ -229,7 +229,7 @@
   box-shadow: 0 -8px 24px rgb(28 25 23 / 0.03) !important;
 }
 
-.root :global(.copilotKitInputTextarea) {
+.root :global(.copilotKitInput > textarea) {
   min-height: 2.75rem !important;
   max-height: 8rem !important;
   resize: none !important;
@@ -243,34 +243,43 @@
   transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease !important;
 }
 
-.root :global(.copilotKitInputTextarea:focus) {
+.root :global(.copilotKitInput > textarea:focus) {
   border-color: #8b5cf6 !important;
   outline: none !important;
   background: #ffffff !important;
   box-shadow: 0 0 0 3px rgb(139 92 246 / 0.12) !important;
 }
 
-.root :global(.copilotKitInputButton) {
-  margin-left: 0.5rem !important;
+.root :global(.copilotKitInputControlButton) {
   border: 0 !important;
   border-radius: 0.75rem !important;
+  color: #78716c !important;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease !important;
+}
+
+.root :global(.copilotKitInputControlButton[data-test-id]) {
   background: #7c3aed !important;
   color: #ffffff !important;
   box-shadow: 0 2px 6px rgb(109 40 217 / 0.2) !important;
-  transition: background 150ms ease, transform 150ms ease !important;
 }
 
-.root :global(.copilotKitInputButton:hover) {
+.root :global(.copilotKitInputControlButton:hover) {
+  background: #f5f3ff !important;
+  color: #6d28d9 !important;
+}
+
+.root :global(.copilotKitInputControlButton[data-test-id]:hover) {
   background: #6d28d9 !important;
+  color: #ffffff !important;
   transform: translateY(-1px);
 }
 
-.root :global(.copilotKitInputButton:focus-visible) {
+.root :global(.copilotKitInputControlButton:focus-visible) {
   outline: 2px solid #8b5cf6 !important;
   outline-offset: 2px !important;
 }
 
-.root :global(.copilotKitInputButton:disabled) {
+.root :global(.copilotKitInputControlButton:disabled) {
   cursor: not-allowed !important;
   opacity: 0.45 !important;
   transform: none !important;
