@@ -1,6 +1,7 @@
 "use client"
 
 import { CalendarClock, CircleDot, Flag, Layers3 } from "lucide-react"
+import React, { useId } from "react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { QuadrantId, SchedulableCandidate, TodayView } from "@/lib/today/types"
@@ -130,16 +131,41 @@ function EmptyCandidates() {
 }
 
 function PlanGroups({ candidates }: { candidates: SchedulableCandidate[] }) {
+  const idPrefix = useId().replace(/[^A-Za-z0-9_-]/g, "") || "plan-group"
+
   if (candidates.length === 0) return <EmptyCandidates />
 
   return (
     <div className="space-y-3">
-      {groupByPlan(candidates).map(group => (
-        <div className="space-y-2" key={group.planId}>
-          {group.actions.map(action => <CandidateCard candidate={action} key={action.id} />)}
-          {group.plan ? <CandidateCard candidate={group.plan} /> : null}
-        </div>
-      ))}
+      {groupByPlan(candidates).map((group, index) => {
+        const planName = group.plan?.name ?? `计划 ${group.planId}`
+        const headingId = `${idPrefix}-plan-${index}`
+
+        return (
+          <section
+            aria-labelledby={headingId}
+            className="rounded-xl border border-gray-100 bg-gray-50/60 p-2"
+            key={group.planId}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              <h4 className="truncate text-xs font-semibold text-gray-600" id={headingId}>{planName}</h4>
+              {group.actions.length > 0 ? (
+                <span className="shrink-0 text-[10px] text-gray-400">{group.actions.length} 个行动项</span>
+              ) : null}
+            </div>
+            <ul aria-label={`${planName}的行动项`} className="space-y-2">
+              {group.actions.map(action => (
+                <li key={action.id}><CandidateCard candidate={action} /></li>
+              ))}
+            </ul>
+            {group.plan ? (
+              <div className={group.actions.length > 0 ? "mt-2" : undefined}>
+                <CandidateCard candidate={group.plan} />
+              </div>
+            ) : null}
+          </section>
+        )
+      })}
     </div>
   )
 }

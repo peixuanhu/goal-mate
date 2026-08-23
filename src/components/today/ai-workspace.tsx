@@ -1,7 +1,7 @@
 "use client"
 
 import { Bot, MessageCircle, ScanSearch } from "lucide-react"
-import { useState } from "react"
+import React, { useState } from "react"
 
 import { ChatWrapper } from "@/components/chat-wrapper"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"

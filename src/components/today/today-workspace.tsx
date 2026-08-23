@@ -2,7 +2,7 @@
 
 import { Bot, CalendarDays, ChevronLeft, ChevronRight, ListTree } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useMemo, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 
 import UserMenu from "@/components/UserMenu"
 import { Button } from "@/components/ui/button"
@@ -95,8 +95,7 @@ function formatHeadingDate(date: string): string {
 }
 
 export function TodayWorkspace() {
-  const todayKey = normalizeLocalDateInput(new Date())
-  const [date, setDate] = useState(todayKey)
+  const [date, setDate] = useState<string | null>(null)
   const [view, setView] = useState<TodayView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +105,13 @@ export function TodayWorkspace() {
   const defaultPreference = useMemo(() => getDefaultPlanningPreference(), [])
 
   useEffect(() => {
+    setDate(normalizeLocalDateInput(new Date()))
+  }, [])
+
+  useEffect(() => {
+    if (date === null) return
+
+    const requestedDate = date
     const requestId = ++requestIdRef.current
     const controller = new AbortController()
 
@@ -115,7 +121,7 @@ export function TodayWorkspace() {
 
     async function loadToday() {
       try {
-        const response = await fetch(`/api/today?date=${encodeURIComponent(date)}`, {
+        const response = await fetch(`/api/today?date=${encodeURIComponent(requestedDate)}`, {
           signal: controller.signal,
         })
         const payload: unknown = await response.json().catch(() => null)
@@ -126,6 +132,9 @@ export function TodayWorkspace() {
         }
         if (!isTodayView(payload)) {
           throw new Error("今日数据格式无效")
+        }
+        if (payload.date !== requestedDate) {
+          throw new Error("返回数据日期与请求日期不一致")
         }
 
         setView(payload)
@@ -144,9 +153,10 @@ export function TodayWorkspace() {
     return () => controller.abort()
   }, [date])
 
-  const preference = view?.preference ?? defaultPreference
-  const candidates = view?.candidates ?? []
-  const focus = view?.focus ?? null
+  const visibleView = date !== null && view?.date === date ? view : null
+  const preference = visibleView?.preference ?? defaultPreference
+  const candidates = visibleView?.candidates ?? []
+  const focus = visibleView?.focus ?? null
 
   return (
     <main className="min-h-dvh bg-[#f5f5f4] text-gray-900">
@@ -175,18 +185,34 @@ export function TodayWorkspace() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Today workspace</p>
-            <h1 className="truncate text-lg font-semibold text-gray-900">{formatHeadingDate(date)}</h1>
+            <h1 className="truncate text-lg font-semibold text-gray-900">
+              {date === null ? "正在准备本地日期…" : formatHeadingDate(date)}
+            </h1>
           </div>
 
           <div className="flex items-center gap-1.5" aria-label="日期导航">
-            <Button aria-label="前一天" onClick={() => setDate(current => addDays(current, -1))} size="icon" type="button" variant="outline">
+            <Button
+              aria-label="前一天"
+              disabled={date === null}
+              onClick={() => setDate(current => current === null ? current : addDays(current, -1))}
+              size="icon"
+              type="button"
+              variant="outline"
+            >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <Button onClick={() => setDate(normalizeLocalDateInput(new Date()))} type="button" variant="outline">
+            <Button disabled={date === null} onClick={() => setDate(normalizeLocalDateInput(new Date()))} type="button" variant="outline">
               <CalendarDays aria-hidden="true" />
               回到今天
             </Button>
-            <Button aria-label="后一天" onClick={() => setDate(current => addDays(current, 1))} size="icon" type="button" variant="outline">
+            <Button
+              aria-label="后一天"
+              disabled={date === null}
+              onClick={() => setDate(current => current === null ? current : addDays(current, 1))}
+              size="icon"
+              type="button"
+              variant="outline"
+            >
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
@@ -215,27 +241,33 @@ export function TodayWorkspace() {
           </Button>
         </div>
 
-        <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-9.75rem)] lg:grid-cols-[300px_minmax(0,1fr)_340px] lg:grid-rows-1">
-          <section
-            className="order-1 min-h-0 lg:col-start-2 lg:row-start-1"
-          >
-            <DayTimeline date={date} error={error} loading={loading} preference={preference} />
-          </section>
+        {date === null ? (
+          <div className="grid min-h-[620px] place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500 shadow-sm" role="status">
+            正在准备本地日期…
+          </div>
+        ) : (
+          <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-9.75rem)] lg:grid-cols-[300px_minmax(0,1fr)_340px] lg:grid-rows-1">
+            <section
+              className="order-1 min-h-0 lg:col-start-2 lg:row-start-1"
+            >
+              <DayTimeline date={date} error={error} loading={loading} preference={preference} />
+            </section>
 
-          <section
-            className={cn("order-2 hidden min-h-0 lg:col-start-1 lg:row-start-1 lg:block", showCandidates && "max-lg:block")}
-            id="today-candidates"
-          >
-            <GoalCandidatePanel candidates={candidates} error={error} focus={focus} loading={loading} />
-          </section>
+            <section
+              className={cn("order-2 hidden min-h-0 lg:col-start-1 lg:row-start-1 lg:block", showCandidates && "max-lg:block")}
+              id="today-candidates"
+            >
+              <GoalCandidatePanel candidates={candidates} error={error} focus={focus} loading={loading} />
+            </section>
 
-          <section
-            className={cn("order-3 hidden min-h-0 lg:col-start-3 lg:row-start-1 lg:block", showAi && "max-lg:block")}
-            id="today-ai"
-          >
-            <AiWorkspace />
-          </section>
-        </div>
+            <section
+              className={cn("order-3 hidden min-h-0 lg:col-start-3 lg:row-start-1 lg:block", showAi && "max-lg:block")}
+              id="today-ai"
+            >
+              <AiWorkspace />
+            </section>
+          </div>
+        )}
       </div>
     </main>
   )
