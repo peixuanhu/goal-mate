@@ -1,0 +1,307 @@
+.root {
+  --copilot-kit-primary-color: #7c3aed;
+  --copilot-kit-contrast-color: #ffffff;
+  --copilot-kit-secondary-contrast-color: #292524;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fafaf9;
+  color: #292524;
+}
+
+.loading {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  color: #78716c;
+  font-size: 0.875rem;
+}
+
+.prompts {
+  flex: none;
+  border-bottom: 1px solid #e7e5e4;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 0.875rem 1rem 1rem;
+}
+
+.promptHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.625rem;
+}
+
+.promptTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #57534e;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.promptToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.5rem;
+  color: #78716c;
+  font-size: 0.75rem;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.promptToggle:hover {
+  color: #6d28d9;
+}
+
+.promptToggle:focus-visible,
+.promptChip:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+.promptScroller {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.125rem 0.125rem 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+.promptChip {
+  flex: none;
+  max-width: 17rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 9999px;
+  background: #ffffff;
+  padding: 0.5rem 0.75rem;
+  color: #57534e;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  box-shadow: 0 1px 2px rgb(28 25 23 / 0.04);
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  white-space: nowrap;
+}
+
+.promptChip:hover {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.collapsedPrompts {
+  display: flex;
+  flex: none;
+  justify-content: flex-start;
+  border-bottom: 1px solid #e7e5e4;
+  background: #ffffff;
+  padding: 0.5rem 1rem;
+}
+
+.chat {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
+.root :global(.copilotKitChat) {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #292524 !important;
+  font-family: inherit !important;
+}
+
+.root :global(.copilotKitMessages) {
+  min-height: 0 !important;
+  flex: 1 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: #fafaf9 !important;
+  padding: 1.25rem 1rem 1.5rem !important;
+  scrollbar-color: #d6d3d1 transparent;
+  scrollbar-width: thin;
+}
+
+.root :global(.copilotKitMessagesContainer) {
+  display: flex !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  gap: 1.25rem !important;
+  color: #292524 !important;
+}
+
+.root :global(.copilotKitMessage) {
+  max-width: 100% !important;
+  font-family: inherit !important;
+  font-size: 0.9rem !important;
+  line-height: 1.65 !important;
+}
+
+.root :global(.copilotKitAssistantMessage) {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  align-self: stretch !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 0 0 2.5rem !important;
+  color: #292524 !important;
+  box-shadow: none !important;
+}
+
+.root :global(.copilotKitAssistantMessage)::before {
+  position: absolute;
+  top: 0.05rem;
+  left: 0;
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid #ddd6fe;
+  border-radius: 0.625rem;
+  background: #f5f3ff;
+  color: #7c3aed;
+  content: "✦";
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.root :global(.copilotKitUserMessage) {
+  max-width: 86% !important;
+  align-self: flex-end !important;
+  border: 0 !important;
+  border-radius: 1rem 1rem 0.3rem 1rem !important;
+  background: #7c3aed !important;
+  padding: 0.7rem 0.9rem !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgb(109 40 217 / 0.14) !important;
+}
+
+.root :global(.copilotKitAssistantMessage p),
+.root :global(.copilotKitUserMessage p) {
+  margin: 0 0 0.65rem !important;
+}
+
+.root :global(.copilotKitAssistantMessage p:last-child),
+.root :global(.copilotKitUserMessage p:last-child) {
+  margin-bottom: 0 !important;
+}
+
+.root :global(.copilotKitAssistantMessage ul),
+.root :global(.copilotKitAssistantMessage ol) {
+  margin: 0.5rem 0 !important;
+  padding-left: 1.25rem !important;
+}
+
+.root :global(.copilotKitAssistantMessage code) {
+  border-radius: 0.35rem !important;
+  background: #f0eeeb !important;
+  padding: 0.1rem 0.3rem !important;
+  color: #44403c !important;
+}
+
+.root :global(.copilotKitUserMessage code) {
+  background: rgb(255 255 255 / 0.16) !important;
+  color: #ffffff !important;
+}
+
+.root :global(.copilotKitInput) {
+  flex: none !important;
+  border-top: 1px solid #e7e5e4 !important;
+  background: #ffffff !important;
+  padding: 0.875rem 1rem 1rem !important;
+  box-shadow: 0 -8px 24px rgb(28 25 23 / 0.03) !important;
+}
+
+.root :global(.copilotKitInputTextarea) {
+  min-height: 2.75rem !important;
+  max-height: 8rem !important;
+  resize: none !important;
+  border: 1px solid #d6d3d1 !important;
+  border-radius: 0.875rem !important;
+  background: #fafaf9 !important;
+  padding: 0.75rem 0.875rem !important;
+  color: #292524 !important;
+  font: inherit !important;
+  font-size: 0.875rem !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease !important;
+}
+
+.root :global(.copilotKitInputTextarea:focus) {
+  border-color: #8b5cf6 !important;
+  outline: none !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.12) !important;
+}
+
+.root :global(.copilotKitInputButton) {
+  margin-left: 0.5rem !important;
+  border: 0 !important;
+  border-radius: 0.75rem !important;
+  background: #7c3aed !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgb(109 40 217 / 0.2) !important;
+  transition: background 150ms ease, transform 150ms ease !important;
+}
+
+.root :global(.copilotKitInputButton:hover) {
+  background: #6d28d9 !important;
+  transform: translateY(-1px);
+}
+
+.root :global(.copilotKitInputButton:focus-visible) {
+  outline: 2px solid #8b5cf6 !important;
+  outline-offset: 2px !important;
+}
+
+.root :global(.copilotKitInputButton:disabled) {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+  transform: none !important;
+}
+
+.root :global(.poweredBy) {
+  border: 0 !important;
+  background: #ffffff !important;
+  color: #a8a29e !important;
+  font-size: 0.6875rem !important;
+}
+
+@media (max-width: 640px) {
+  .prompts {
+    padding-inline: 0.75rem;
+  }
+
+  .root :global(.copilotKitMessages) {
+    padding-inline: 0.75rem !important;
+  }
+
+  .root :global(.copilotKitAssistantMessage) {
+    padding-left: 2.25rem !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
