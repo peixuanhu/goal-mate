@@ -17,6 +17,22 @@ export type PlanningPreferenceView = {
   version: string | null
 }
 
+export type ScheduleBlockView = {
+  block_id: string
+  plan_id: string
+  action_id: string | null
+  title: string
+  goal_id: string | null
+  goal_name: string | null
+  energy_level: EnergyLevel | null
+  start_at: string
+  end_at: string
+  status: ScheduleBlockStatus
+  source: ScheduleBlockSource
+  result_note: string | null
+  version: number
+}
+
 export type SchedulableCandidate = {
   kind: CandidateKind
   id: string
