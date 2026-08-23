@@ -543,6 +543,32 @@ describe("ScheduleBlock service", () => {
     })
   })
 
+  it("maps an update transaction deadlock or serialization failure to SCHEDULE_CONFLICT", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2034"))
+
+    await expect(updateScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: 1,
+      start_at: "2026-08-23T03:00:00.000Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_CONFLICT",
+    })
+  })
+
+  it("maps a cancel transaction deadlock or serialization failure to SCHEDULE_CONFLICT", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2034"))
+
+    await expect(cancelScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: 1,
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_CONFLICT",
+    })
+  })
+
   it("allows a direct parent-Plan block even when the Plan has open Actions", async () => {
     const db = makeDb()
     db.scheduleBlock.create.mockResolvedValue({

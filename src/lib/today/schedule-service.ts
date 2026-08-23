@@ -341,6 +341,20 @@ async function inTransaction<T>(db: ScheduleDb, callback: (tx: Prisma.Transactio
   return callback(db)
 }
 
+async function runScheduleMutation<T>(
+  db: ScheduleDb,
+  callback: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  try {
+    return await inTransaction(db, callback)
+  } catch (error) {
+    if (isPrismaError(error, "P2034")) {
+      throw new ScheduleServiceError("SCHEDULE_CONFLICT", "排期并发冲突，请重试")
+    }
+    throw error
+  }
+}
+
 async function lockValue(db: Prisma.TransactionClient, namespace: number, value: string): Promise<void> {
   await db.$executeRaw`SELECT pg_advisory_xact_lock(${namespace}::int, hashtext(${value})::int)`
 }
@@ -609,7 +623,7 @@ export async function createScheduleBlock(
   const input = normalizeCreateInput(rawInput)
 
   try {
-    return await inTransaction(db, async tx => {
+    return await runScheduleMutation(db, async tx => {
       await lockValue(tx, SCHEDULE_KEY_LOCK_NAMESPACE, input.blockId)
       const existing = await findBlock(tx, input.blockId)
       if (existing) {
@@ -660,9 +674,6 @@ export async function createScheduleBlock(
     if (isPrismaError(error, "P2002")) {
       throw new ScheduleServiceError("SCHEDULE_CONFLICT", "时间块幂等键冲突", [input.blockId])
     }
-    if (isPrismaError(error, "P2034")) {
-      throw new ScheduleServiceError("SCHEDULE_CONFLICT", "排期并发冲突，请重试")
-    }
     throw error
   }
 }
@@ -673,7 +684,7 @@ export async function updateScheduleBlock(
 ): Promise<ScheduleBlockView> {
   const input = normalizeUpdateInput(rawInput)
 
-  return inTransaction(db, async tx => {
+  return runScheduleMutation(db, async tx => {
     const preference = await loadPreference(tx)
     const newLocalDate = localDateAndAssertBounds(input.startAt, input.endAt, preference)
     const snapshot = await findBlock(tx, input.blockId)
@@ -747,7 +758,7 @@ export async function cancelScheduleBlock(
     validation("now must be a valid date")
   }
 
-  return inTransaction(db, async tx => {
+  return runScheduleMutation(db, async tx => {
     const preference = await loadPreference(tx)
     const snapshot = await findBlock(tx, input.blockId)
     if (!snapshot) {
