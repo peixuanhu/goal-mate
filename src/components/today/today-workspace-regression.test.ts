@@ -22,6 +22,8 @@ describe("read-only Today workspace", () => {
   it("uses a desktop three-column workspace with the timeline first on mobile", () => {
     const source = readProjectFile("src/components/today/today-workspace.tsx")
 
+    expect(source).toContain('import { AppHeader } from "@/components/app-header"')
+    expect(source).toContain("<AppHeader />")
     expect(source).toContain("lg:grid-cols-[300px_minmax(0,1fr)_340px]")
     expect(source).toContain("<GoalCandidatePanel")
     expect(source).toContain("<DayTimeline")
@@ -29,6 +31,19 @@ describe("read-only Today workspace", () => {
     expect(source).toMatch(/order-1[^\"]*lg:col-start-2/)
     expect(source).toMatch(/order-2[^\"]*lg:col-start-1/)
     expect(source).toMatch(/order-3[^\"]*lg:col-start-3/)
+  })
+
+  it("preserves the approved candidate-panel contract", () => {
+    const source = readProjectFile("src/components/today/goal-candidate-panel.tsx")
+
+    expect(source).toContain('value="goal-tree"')
+    expect(source).toContain('value="quadrant"')
+    expect(source).toContain('value="inbox"')
+    expect(source).toContain("目标树")
+    expect(source).toContain("四象限")
+    expect(source).toContain("收集箱")
+    expect(source).toContain("安排到今天")
+    expect(source).toContain("useDraggable")
   })
 
   it("offers accessible mobile panel toggles and date navigation", () => {

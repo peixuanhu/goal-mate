@@ -23,7 +23,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ className, showUserMenu = true }: AppHeaderProps) {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? "/"
 
   return (
     <header className={cn("shrink-0 border-b border-stone-200/80 bg-white/95 backdrop-blur", className)}>
