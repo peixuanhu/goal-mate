@@ -130,7 +130,13 @@ function EmptyCandidates() {
   )
 }
 
-function PlanGroups({ candidates }: { candidates: SchedulableCandidate[] }) {
+function PlanGroups({
+  candidates,
+  planNamesById,
+}: {
+  candidates: SchedulableCandidate[]
+  planNamesById: ReadonlyMap<string, string>
+}) {
   const idPrefix = useId().replace(/[^A-Za-z0-9_-]/g, "") || "plan-group"
 
   if (candidates.length === 0) return <EmptyCandidates />
@@ -138,7 +144,7 @@ function PlanGroups({ candidates }: { candidates: SchedulableCandidate[] }) {
   return (
     <div className="space-y-3">
       {groupByPlan(candidates).map((group, index) => {
-        const planName = group.plan?.name ?? `计划 ${group.planId}`
+        const planName = group.plan?.name ?? planNamesById.get(group.planId) ?? `计划 ${group.planId}`
         const headingId = `${idPrefix}-plan-${index}`
 
         return (
@@ -170,7 +176,13 @@ function PlanGroups({ candidates }: { candidates: SchedulableCandidate[] }) {
   )
 }
 
-function GoalTree({ candidates, focus }: Pick<GoalCandidatePanelProps, "candidates" | "focus">) {
+function GoalTree({
+  candidates,
+  focus,
+  planNamesById,
+}: Pick<GoalCandidatePanelProps, "candidates" | "focus"> & {
+  planNamesById: ReadonlyMap<string, string>
+}) {
   const groups = buildGoalGroups(candidates, focus)
   if (groups.length === 0) return <EmptyCandidates />
 
@@ -194,7 +206,7 @@ function GoalTree({ candidates, focus }: Pick<GoalCandidatePanelProps, "candidat
               </span>
             ) : null}
           </div>
-          <PlanGroups candidates={group.candidates} />
+          <PlanGroups candidates={group.candidates} planNamesById={planNamesById} />
         </section>
       ))}
     </div>
@@ -202,6 +214,11 @@ function GoalTree({ candidates, focus }: Pick<GoalCandidatePanelProps, "candidat
 }
 
 export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCandidatePanelProps) {
+  const planNamesById = new Map(
+    candidates
+      .filter(candidate => candidate.kind === "plan")
+      .map(candidate => [candidate.plan_id, candidate.name] as const),
+  )
   const inboxCandidates = candidates.filter(
     candidate => candidate.goal_id === null && candidate.effective_quadrant === null,
   )
@@ -236,7 +253,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
           </div>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="goal-tree">
-            <GoalTree candidates={candidates} focus={focus} />
+            <GoalTree candidates={candidates} focus={focus} planNamesById={planNamesById} />
           </TabsContent>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="quadrant">
@@ -248,7 +265,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
                     <h3 id={`quadrant-${quadrant}`} className="mb-2 text-sm font-semibold text-gray-700">
                       {QUADRANT_LABELS[quadrant]}
                     </h3>
-                    <PlanGroups candidates={quadrantCandidates} />
+                    <PlanGroups candidates={quadrantCandidates} planNamesById={planNamesById} />
                   </section>
                 )
               })}
@@ -256,7 +273,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
           </TabsContent>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="inbox">
-            <PlanGroups candidates={inboxCandidates} />
+            <PlanGroups candidates={inboxCandidates} planNamesById={planNamesById} />
           </TabsContent>
         </Tabs>
       )}

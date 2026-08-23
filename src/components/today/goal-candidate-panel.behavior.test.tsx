@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import React from "react"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -99,5 +99,38 @@ describe("GoalCandidatePanel hierarchy", () => {
     const labelledHeadingId = focusPlan.getAttribute("aria-labelledby")
     expect(labelledHeadingId).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(document.getElementById(labelledHeadingId ?? "")?.textContent).toBe("聚焦计划")
+  })
+
+  it("uses the full candidate list to name an action-only quadrant plan group", () => {
+    const candidates: SchedulableCandidate[] = [
+      candidate({
+        id: "plan-cross",
+        kind: "plan",
+        name: "跨象限父计划",
+        plan_id: "plan-cross",
+        effective_quadrant: "q2",
+      }),
+      candidate({
+        id: "action-cross",
+        kind: "action",
+        name: "重要紧急行动",
+        plan_id: "plan-cross",
+        effective_quadrant: "q1",
+      }),
+    ]
+
+    render(
+      <GoalCandidatePanel candidates={candidates} error={null} focus={null} loading={false} />,
+    )
+
+    const quadrantTab = screen.getByRole("tab", { name: "四象限" })
+    fireEvent.mouseDown(quadrantTab, { button: 0, ctrlKey: false })
+    fireEvent.mouseUp(quadrantTab, { button: 0, ctrlKey: false })
+    fireEvent.click(quadrantTab)
+
+    const q1 = screen.getByRole("region", { name: "重要且紧急" })
+    const parentPlanGroup = within(q1).getByRole("region", { name: "跨象限父计划" })
+    expect(within(parentPlanGroup).getByText("重要紧急行动")).toBeTruthy()
+    expect(within(q1).queryByRole("region", { name: "计划 plan-cross" })).toBeNull()
   })
 })

@@ -54,11 +54,14 @@ export function AiWorkspace() {
         </div>
 
         <TabsContent
+          aria-hidden={activeTab !== "check"}
           className={cn(
             "m-0 flex min-h-0 flex-1 items-center justify-center p-6",
             activeTab === "check" ? "visible relative" : "invisible absolute inset-0 pointer-events-none",
           )}
           forceMount
+          hidden={activeTab !== "check"}
+          inert={activeTab !== "check"}
           value="check"
         >
           <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/60 p-6 text-center">
@@ -78,6 +81,8 @@ export function AiWorkspace() {
             activeTab === "chat" ? "visible relative" : "invisible absolute inset-0 pointer-events-none",
           )}
           forceMount
+          hidden={activeTab !== "chat"}
+          inert={activeTab !== "chat"}
           value="chat"
         >
           <ChatWrapper />

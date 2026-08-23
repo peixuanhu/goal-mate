@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import React from "react"
+import { hydrateRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -107,7 +108,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe("TodayWorkspace behavior", () => {
-  it("uses a date-neutral server snapshot before resolving the browser-local date on mount", () => {
+  it("hydrates its date-neutral server snapshot before resolving the browser-local date", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date("2026-08-23T23:30:00.000Z"))
     const serverHtml = renderToString(<TodayWorkspace />)
@@ -117,10 +118,24 @@ describe("TodayWorkspace behavior", () => {
 
     const expectedLocalDate = normalizeLocalDateInput(new Date())
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)))
-    render(<TodayWorkspace />)
+    const container = document.createElement("div")
+    container.innerHTML = serverHtml
+    document.body.append(container)
+    const recoverableErrors: unknown[] = []
+    let root: ReturnType<typeof hydrateRoot> | null = null
+
+    await act(async () => {
+      root = hydrateRoot(container, <TodayWorkspace />, {
+        onRecoverableError: error => recoverableErrors.push(error),
+      })
+    })
 
     const timeline = screen.getByRole("region", { name: "时间线状态" })
     expect(timeline.getAttribute("data-date")).toBe(expectedLocalDate)
+    expect(recoverableErrors).toEqual([])
+
+    await act(async () => root?.unmount())
+    container.remove()
   })
 
   it("keeps a newer success when an older request resolves last", async () => {
