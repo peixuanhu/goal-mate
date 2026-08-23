@@ -96,17 +96,17 @@ describe("POST /api/schedule-block/complete", () => {
     })
   })
 
-  it("accepts the PostgreSQL integer upper version boundary", async () => {
+  it("accepts the terminal max-1 version boundary", async () => {
     const response = await POST(request(JSON.stringify({
       block_id: "block_copy",
-      expected_version: 2_147_483_647,
+      expected_version: 2_147_483_646,
       outcome: "completed",
     })))
 
     expect(response.status).toBe(200)
     expect(mocks.completeScheduleBlock).toHaveBeenCalledWith(mocks.prisma, {
       block_id: "block_copy",
-      expected_version: 2_147_483_647,
+      expected_version: 2_147_483_646,
       outcome: "completed",
     })
   })
@@ -122,6 +122,7 @@ describe("POST /api/schedule-block/complete", () => {
     })],
     ["missing block id", JSON.stringify({ expected_version: 1, outcome: "completed" })],
     ["zero version", JSON.stringify({ block_id: "block_copy", expected_version: 0, outcome: "completed" })],
+    ["terminal overflow version", JSON.stringify({ block_id: "block_copy", expected_version: 2_147_483_647, outcome: "completed" })],
     ["PostgreSQL integer overflow version", JSON.stringify({ block_id: "block_copy", expected_version: 2_147_483_648, outcome: "completed" })],
     ["unsafe version", JSON.stringify({ block_id: "block_copy", expected_version: Number.MAX_SAFE_INTEGER + 1, outcome: "completed" })],
     ["unknown outcome", JSON.stringify({ block_id: "block_copy", expected_version: 1, outcome: "cancelled" })],
@@ -130,6 +131,16 @@ describe("POST /api/schedule-block/complete", () => {
     ["overflow progress", JSON.stringify({ block_id: "block_copy", expected_version: 1, outcome: "completed", plan_progress: 1.01 })],
   ])("rejects %s before delegation", async (_label, body) => {
     const response = await POST(request(body))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual(expect.objectContaining({ code: "VALIDATION" }))
+    expect(mocks.completeScheduleBlock).not.toHaveBeenCalled()
+  })
+
+  it("rejects an infinite JSON number before delegation", async () => {
+    const response = await POST(request(
+      '{"block_id":"block_copy","expected_version":1e400,"outcome":"completed"}',
+    ))
 
     expect(response.status).toBe(400)
     expect(await json(response)).toEqual(expect.objectContaining({ code: "VALIDATION" }))

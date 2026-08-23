@@ -298,8 +298,10 @@ describe("ScheduleBlock completion service", () => {
     ["blank id", { ...validInput, block_id: "  " }],
     ["zero version", { ...validInput, expected_version: 0 }],
     ["fractional version", { ...validInput, expected_version: 1.5 }],
+    ["terminal overflow version", { ...validInput, expected_version: 2_147_483_647 }],
     ["PostgreSQL integer overflow version", { ...validInput, expected_version: 2_147_483_648 }],
     ["unsafe version", { ...validInput, expected_version: Number.MAX_SAFE_INTEGER + 1 }],
+    ["infinite version", { ...validInput, expected_version: Number.POSITIVE_INFINITY }],
     ["unknown outcome", { ...validInput, outcome: "cancelled" }],
     ["nullable text", { ...validInput, content: null }],
     ["NaN progress", { ...validInput, plan_progress: Number.NaN }],
@@ -313,17 +315,24 @@ describe("ScheduleBlock completion service", () => {
       input as unknown as CompleteScheduleBlockInput,
     )).rejects.toMatchObject({ code: "VALIDATION" })
     expect(db.$transaction).not.toHaveBeenCalled()
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+    expect(db.progressRecord.create).not.toHaveBeenCalled()
   })
 
-  it("accepts the PostgreSQL integer upper version boundary", async () => {
-    const db = makeDb()
-    db.$transaction.mockRejectedValue(prismaError("P2034"))
+  it("completes at max-1 and writes a terminal max version", async () => {
+    const db = makeDb({ refreshed: completedBlock({ version: 2_147_483_647 }) })
 
-    await expect(completeScheduleBlock(db, {
+    const result = await completeScheduleBlock(db, {
       ...validInput,
-      expected_version: 2_147_483_647,
-    })).rejects.toMatchObject({ code: "SCHEDULE_CONFLICT" })
-    expect(db.$transaction).toHaveBeenCalledOnce()
+      expected_version: 2_147_483_646,
+    })
+
+    expect(db.scheduleBlock.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ version: 2_147_483_646, status: "scheduled" }),
+      data: expect.objectContaining({ version: { increment: 1 } }),
+    }))
+    expect(db.progressRecord.create).toHaveBeenCalledOnce()
+    expect(result.version).toBe(2_147_483_647)
   })
 
   it("rejects plan_progress for recurring Plans before any mutation", async () => {

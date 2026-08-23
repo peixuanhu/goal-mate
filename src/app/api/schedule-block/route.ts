@@ -8,7 +8,8 @@ import {
 import {
   cancelScheduleBlock,
   createScheduleBlock,
-  parseScheduleBlockVersion,
+  parseScheduleTerminalVersion,
+  parseScheduleUpdateVersion,
   ScheduleServiceError,
   toScheduleBlockView,
   updateScheduleBlock,
@@ -178,7 +179,7 @@ export async function PUT(req: NextRequest) {
       assertOnlyFields(body, UPDATE_FIELDS)
       return NextResponse.json(await updateScheduleBlock(prisma, {
         block_id: requiredString(body.block_id, "block_id"),
-        expected_version: parseScheduleBlockVersion(body.expected_version),
+        expected_version: parseScheduleUpdateVersion(body.expected_version),
         start_at: requiredString(body.start_at, "start_at"),
         end_at: requiredString(body.end_at, "end_at"),
       }))
@@ -187,7 +188,7 @@ export async function PUT(req: NextRequest) {
       assertOnlyFields(body, CANCEL_FIELDS)
       return NextResponse.json(await cancelScheduleBlock(prisma, {
         block_id: requiredString(body.block_id, "block_id"),
-        expected_version: parseScheduleBlockVersion(body.expected_version),
+        expected_version: parseScheduleTerminalVersion(body.expected_version),
       }))
     }
     routeValidation("operation must be update or cancel")

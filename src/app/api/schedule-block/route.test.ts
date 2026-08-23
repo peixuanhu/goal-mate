@@ -265,22 +265,40 @@ describe("/api/schedule-block", () => {
     })
   })
 
-  it("PUT accepts the PostgreSQL integer upper version boundary", async () => {
+  it("PUT applies operation-aware version boundaries", async () => {
+    mocks.updateScheduleBlock.mockResolvedValue({ ...blockView, version: 2_147_483_646 })
     mocks.cancelScheduleBlock.mockResolvedValue({ ...blockView, status: "cancelled", version: 2 })
 
-    const response = await PUT(request("http://localhost/api/schedule-block", {
+    const updateResponse = await PUT(request("http://localhost/api/schedule-block", {
+      method: "PUT",
+      body: JSON.stringify({
+        operation: "update",
+        block_id: "block_copy",
+        expected_version: 2_147_483_645,
+        start_at: "2026-08-23T02:00:00.000Z",
+        end_at: "2026-08-23T03:00:00.000Z",
+      }),
+    }))
+    const cancelResponse = await PUT(request("http://localhost/api/schedule-block", {
       method: "PUT",
       body: JSON.stringify({
         operation: "cancel",
         block_id: "block_copy",
-        expected_version: 2_147_483_647,
+        expected_version: 2_147_483_646,
       }),
     }))
 
-    expect(response.status).toBe(200)
+    expect(updateResponse.status).toBe(200)
+    expect(cancelResponse.status).toBe(200)
+    expect(mocks.updateScheduleBlock).toHaveBeenCalledWith(mocks.prisma, {
+      block_id: "block_copy",
+      expected_version: 2_147_483_645,
+      start_at: "2026-08-23T02:00:00.000Z",
+      end_at: "2026-08-23T03:00:00.000Z",
+    })
     expect(mocks.cancelScheduleBlock).toHaveBeenCalledWith(mocks.prisma, {
       block_id: "block_copy",
-      expected_version: 2_147_483_647,
+      expected_version: 2_147_483_646,
     })
   })
 
@@ -288,6 +306,9 @@ describe("/api/schedule-block", () => {
     ["missing operation", { block_id: "block_copy", expected_version: 1 }],
     ["unknown operation", { operation: "delete", block_id: "block_copy", expected_version: 1 }],
     ["missing update version", { operation: "update", block_id: "block_copy", start_at: "x", end_at: "y" }],
+    ["reserved terminal update version", { operation: "update", block_id: "block_copy", expected_version: 2_147_483_646, start_at: "x", end_at: "y" }],
+    ["maximum update version", { operation: "update", block_id: "block_copy", expected_version: 2_147_483_647, start_at: "x", end_at: "y" }],
+    ["terminal overflow version", { operation: "cancel", block_id: "block_copy", expected_version: 2_147_483_647 }],
     ["PostgreSQL integer overflow version", { operation: "cancel", block_id: "block_copy", expected_version: 2_147_483_648 }],
     ["unsafe version", { operation: "cancel", block_id: "block_copy", expected_version: Number.MAX_SAFE_INTEGER + 1 }],
     ["cancel extras", { operation: "cancel", block_id: "block_copy", expected_version: 1, now: "2020-01-01" }],
@@ -300,6 +321,17 @@ describe("/api/schedule-block", () => {
     expect(response.status).toBe(400)
     expect(await json(response)).toEqual(expect.objectContaining({ code: "VALIDATION" }))
     expect(mocks.updateScheduleBlock).not.toHaveBeenCalled()
+    expect(mocks.cancelScheduleBlock).not.toHaveBeenCalled()
+  })
+
+  it("PUT rejects an infinite JSON number before delegation", async () => {
+    const response = await PUT(request("http://localhost/api/schedule-block", {
+      method: "PUT",
+      body: '{"operation":"cancel","block_id":"block_copy","expected_version":1e400}',
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual(expect.objectContaining({ code: "VALIDATION" }))
     expect(mocks.cancelScheduleBlock).not.toHaveBeenCalled()
   })
 

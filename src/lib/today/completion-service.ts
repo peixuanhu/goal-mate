@@ -7,7 +7,7 @@ import {
 } from "./planning-preference"
 import {
   lockScheduleLocalDates,
-  parseScheduleBlockVersion,
+  parseScheduleTerminalVersion,
   ScheduleServiceError,
   toScheduleBlockView,
 } from "./schedule-service"
@@ -117,7 +117,7 @@ function normalizeInput(value: CompleteScheduleBlockInput): NormalizedCompletion
     validation(`unexpected field: ${unexpected}`)
   }
 
-  const expectedVersion = parseScheduleBlockVersion(value.expected_version)
+  const expectedVersion = parseScheduleTerminalVersion(value.expected_version)
   const outcome = value.outcome
   if (outcome !== "completed" && outcome !== "partial" && outcome !== "skipped") {
     validation("outcome must be completed, partial, or skipped")

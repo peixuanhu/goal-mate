@@ -166,6 +166,8 @@ const STATUSES = new Set<ScheduleBlockStatus>([
 ])
 const ENERGY_LEVELS = new Set<EnergyLevel>(["low", "medium", "high"])
 const POSTGRESQL_INT_MAX = 2_147_483_647
+export const MAX_SCHEDULE_UPDATE_EXPECTED_VERSION = POSTGRESQL_INT_MAX - 2
+export const MAX_SCHEDULE_TERMINAL_EXPECTED_VERSION = POSTGRESQL_INT_MAX - 1
 const ISO_INSTANT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/
 const SCHEDULE_RELATIONS = {
   plan: {
@@ -220,14 +222,36 @@ function optionalId(value: unknown, field: string): string | null {
   return requiredString(value, field)
 }
 
-export function parseScheduleBlockVersion(value: unknown): number {
+function parseIncrementSafeScheduleVersion(
+  value: unknown,
+  maxExpectedVersion: number,
+  operation: "update" | "terminal mutation",
+): number {
   if (typeof value !== "number"
     || !Number.isSafeInteger(value)
     || value < 1
-    || value > POSTGRESQL_INT_MAX) {
-    validation(`expected_version must be an integer between 1 and ${POSTGRESQL_INT_MAX}`)
+    || value > maxExpectedVersion) {
+    validation(
+      `expected_version must be an integer between 1 and ${maxExpectedVersion} so ${operation} can increment safely`,
+    )
   }
   return value
+}
+
+export function parseScheduleUpdateVersion(value: unknown): number {
+  return parseIncrementSafeScheduleVersion(
+    value,
+    MAX_SCHEDULE_UPDATE_EXPECTED_VERSION,
+    "update",
+  )
+}
+
+export function parseScheduleTerminalVersion(value: unknown): number {
+  return parseIncrementSafeScheduleVersion(
+    value,
+    MAX_SCHEDULE_TERMINAL_EXPECTED_VERSION,
+    "terminal mutation",
+  )
 }
 
 function parseIsoInstant(value: unknown, field: string): Date {
@@ -317,7 +341,7 @@ function normalizeUpdateInput(input: UpdateScheduleBlockInput): NormalizedUpdate
   assertOnlyFields(input, UPDATE_FIELDS)
   return {
     blockId: requiredString(input.block_id, "block_id"),
-    expectedVersion: parseScheduleBlockVersion(input.expected_version),
+    expectedVersion: parseScheduleUpdateVersion(input.expected_version),
     startAt: parseIsoInstant(input.start_at, "start_at"),
     endAt: parseIsoInstant(input.end_at, "end_at"),
   }
@@ -330,7 +354,7 @@ function normalizeCancelInput(input: CancelScheduleBlockInput): NormalizedCancel
   assertOnlyFields(input, CANCEL_FIELDS)
   return {
     blockId: requiredString(input.block_id, "block_id"),
-    expectedVersion: parseScheduleBlockVersion(input.expected_version),
+    expectedVersion: parseScheduleTerminalVersion(input.expected_version),
   }
 }
 

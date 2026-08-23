@@ -6,7 +6,7 @@ import {
   type CompleteScheduleBlockInput,
 } from "@/lib/today/completion-service"
 import {
-  parseScheduleBlockVersion,
+  parseScheduleTerminalVersion,
   ScheduleServiceError,
 } from "@/lib/today/schedule-service"
 
@@ -71,7 +71,7 @@ function parseBody(body: Record<string, unknown>): CompleteScheduleBlockInput {
     routeValidation(`unexpected field: ${unexpected}`)
   }
 
-  const expectedVersion = parseScheduleBlockVersion(body.expected_version)
+  const expectedVersion = parseScheduleTerminalVersion(body.expected_version)
   if (body.outcome !== "completed" && body.outcome !== "partial" && body.outcome !== "skipped") {
     routeValidation("outcome must be completed, partial, or skipped")
   }

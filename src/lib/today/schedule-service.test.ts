@@ -392,44 +392,93 @@ describe("ScheduleBlock service", () => {
     expect(db.$transaction).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ["update", (db: MockRootDb, version: number) => updateScheduleBlock(db, {
+  it("updates at max-2 and leaves one terminal mutation version", async () => {
+    const db = makeDb()
+    const current = { ...baseBlock, block_id: "block_1", version: 2_147_483_645 }
+    const refreshed = {
+      ...current,
+      start_at: new Date("2026-08-23T03:00:00.000Z"),
+      end_at: new Date("2026-08-23T04:00:00.000Z"),
+      version: 2_147_483_646,
+    }
+    db.scheduleBlock.findUnique
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(refreshed)
+    db.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = rawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) return [{ plan_id: "plan_launch" }]
+      if (sql.includes('FROM "ScheduleBlock"')) return [current]
+      return [action]
+    })
+
+    const result = await updateScheduleBlock(db, {
       block_id: "block_1",
-      expected_version: version,
+      expected_version: 2_147_483_645,
       start_at: "2026-08-23T03:00:00.000Z",
       end_at: "2026-08-23T04:00:00.000Z",
-    })],
-    ["cancel", (db: MockRootDb, version: number) => cancelScheduleBlock(db, {
-      block_id: "block_1",
-      expected_version: version,
-    })],
-  ] as const)("accepts the PostgreSQL integer upper version boundary for %s", async (_label, operation) => {
-    const db = makeDb()
-    db.$transaction.mockRejectedValue(prismaError("P2034"))
+    })
 
-    await expect(operation(db, 2_147_483_647)).rejects.toMatchObject({ code: "SCHEDULE_CONFLICT" })
-    expect(db.$transaction).toHaveBeenCalledOnce()
+    expect(db.scheduleBlock.updateMany).toHaveBeenCalledWith({
+      where: { block_id: "block_1", version: 2_147_483_645, status: "scheduled" },
+      data: {
+        start_at: new Date("2026-08-23T03:00:00.000Z"),
+        end_at: new Date("2026-08-23T04:00:00.000Z"),
+        version: { increment: 1 },
+      },
+    })
+    expect(result.version).toBe(2_147_483_646)
   })
 
-  it.each([
-    ["update", (db: MockRootDb, version: number) => updateScheduleBlock(db, {
-      block_id: "block_1",
-      expected_version: version,
-      start_at: "2026-08-23T03:00:00.000Z",
-      end_at: "2026-08-23T04:00:00.000Z",
-    })],
-    ["cancel", (db: MockRootDb, version: number) => cancelScheduleBlock(db, {
-      block_id: "block_1",
-      expected_version: version,
-    })],
-  ] as const)("rejects out-of-range and unsafe versions for %s", async (_label, operation) => {
-    for (const version of [2_147_483_648, Number.MAX_SAFE_INTEGER + 1]) {
+  it.each([2_147_483_646, 2_147_483_647, Number.MAX_SAFE_INTEGER + 1, Number.POSITIVE_INFINITY])(
+    "rejects update version %s before opening a transaction",
+    async version => {
       const db = makeDb()
 
-      await expect(operation(db, version)).rejects.toMatchObject({ code: "VALIDATION" })
+      await expect(updateScheduleBlock(db, {
+        block_id: "block_1",
+        expected_version: version,
+        start_at: "2026-08-23T03:00:00.000Z",
+        end_at: "2026-08-23T04:00:00.000Z",
+      })).rejects.toMatchObject({ code: "VALIDATION" })
       expect(db.$transaction).not.toHaveBeenCalled()
-    }
+      expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+    },
+  )
+
+  it("cancels at max-1 and writes a terminal max version", async () => {
+    const db = makeDb()
+    const current = { ...baseBlock, block_id: "block_1", version: 2_147_483_646 }
+    db.scheduleBlock.findUnique
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce({ ...current, status: "cancelled", version: 2_147_483_647 })
+
+    const result = await cancelScheduleBlock(
+      db,
+      { block_id: "block_1", expected_version: 2_147_483_646 },
+      { now: new Date("2026-08-23T00:59:59.999Z") },
+    )
+
+    expect(db.scheduleBlock.updateMany).toHaveBeenCalledWith({
+      where: { block_id: "block_1", version: 2_147_483_646, status: "scheduled" },
+      data: { status: "cancelled", version: { increment: 1 } },
+    })
+    expect(result.version).toBe(2_147_483_647)
   })
+
+  it.each([2_147_483_647, Number.MAX_SAFE_INTEGER + 1, Number.POSITIVE_INFINITY])(
+    "rejects terminal version %s before opening a transaction",
+    async version => {
+      const db = makeDb()
+
+      await expect(cancelScheduleBlock(db, {
+        block_id: "block_1",
+        expected_version: version,
+      })).rejects.toMatchObject({ code: "VALIDATION" })
+      expect(db.$transaction).not.toHaveBeenCalled()
+      expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+    },
+  )
 
   it("returns an identical retry and rejects a key collision with different immutable content", async () => {
     const identicalDb = makeDb()
