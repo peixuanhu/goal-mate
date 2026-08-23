@@ -19,7 +19,7 @@ vi.mock("@dnd-kit/core", () => {
         <button onClick={() => onDragEnd?.({
           active: {
             data: { current: activeData },
-            rect: { current: { translated: { top: 250, height: 20 } } },
+            rect: { current: { translated: { top: 240, height: 20 } } },
           },
           over: { id: "today-timeline", rect: { top: 100, height: 600 } },
         })} type="button">模拟拖放候选</button>
@@ -36,6 +36,7 @@ vi.mock("@dnd-kit/core", () => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -56,7 +57,11 @@ const candidate: SchedulableCandidate = {
   version: "2026-08-23T00:00:00.000Z",
 }
 
-function response(date: string, dayEndMinutes = 610): Response {
+function response(
+  date: string,
+  dayEndMinutes = 610,
+  preferenceOverrides: Partial<TodayView["preference"]> = {},
+): Response {
   const view: TodayView = {
     date,
     preference: {
@@ -70,6 +75,7 @@ function response(date: string, dayEndMinutes = 610): Response {
       default_block_minutes: 60,
       capacity_warning_minutes: 480,
       version: null,
+      ...preferenceOverrides,
     },
     focus: null,
     candidates: [candidate],
@@ -118,6 +124,54 @@ describe("TodayWorkspace drop orchestration", () => {
     fireEvent.click(screen.getByRole("button", { name: "安排到今天" }))
     expect(screen.getByRole("alert").textContent).toContain("没有足够的无冲突时间")
     expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("moves a New York spring-gap drop to the next elapsed-time-safe slot without writing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-03-08T12:00:00.000Z"))
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "spring-drop-key") })
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBeUndefined()
+      const date = new URL(String(url), "http://localhost").searchParams.get("date")
+      if (!date) throw new Error("missing date")
+      return Promise.resolve(response(date, 600, {
+        timezone: "America/New_York",
+        day_start_minutes: 0,
+        day_end_minutes: 600,
+      }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findAllByText("拖放计划")).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: "模拟拖放候选" }))
+    expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("03:00")
+    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("04:00")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("moves a New York fall ambiguous drop to the next unambiguous slot without writing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-01T12:00:00.000Z"))
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "fall-drop-key") })
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBeUndefined()
+      const date = new URL(String(url), "http://localhost").searchParams.get("date")
+      if (!date) throw new Error("missing date")
+      return Promise.resolve(response(date, 240, {
+        timezone: "America/New_York",
+        day_start_minutes: 0,
+        day_end_minutes: 240,
+      }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findAllByText("拖放计划")).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: "模拟拖放候选" }))
+    expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("02:00")
+    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("03:00")
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

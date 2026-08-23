@@ -30,6 +30,10 @@ function floorMinuteToSlot(minutes: number, origin: number): number {
   return origin + Math.floor((minutes - origin) / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
 }
 
+function ceilMinuteToSlot(minutes: number, origin: number): number {
+  return origin + Math.ceil((minutes - origin) / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
+}
+
 function ceilToSlot(minutes: number): number {
   return Math.ceil(minutes / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
 }
@@ -143,6 +147,36 @@ export function findNextFreeStart(
   return null
 }
 
+export function findValidStartAtOrAfter(
+  date: string,
+  preferredStart: number,
+  durationMinutes: number,
+  preference: PlanningPreferenceView,
+): number | null {
+  const firstStart = Math.max(
+    preference.day_start_minutes,
+    ceilMinuteToSlot(preferredStart, preference.day_start_minutes),
+  )
+  for (
+    let start = firstStart;
+    start + durationMinutes <= preference.day_end_minutes;
+    start += SCHEDULE_SLOT_MINUTES
+  ) {
+    try {
+      localTimeRangeToUtc(
+        date,
+        minuteToTimeInput(start),
+        minuteToTimeInput(start + durationMinutes),
+        preference,
+      )
+      return start
+    } catch {
+      // Keep scanning: a wall-clock slot can be missing, ambiguous, or cross a DST offset change.
+    }
+  }
+  return null
+}
+
 export function minuteToTimeInput(minutes: number): string {
   const hours = Math.floor(minutes / 60)
   const remainder = minutes % 60
@@ -183,6 +217,11 @@ export function localTimeRangeToUtc(
   const end = endMinutes === 1440
     ? nextExistingLocalDateStartToUtc(date, preference.timezone)
     : zonedMinuteToUtc(date, endMinutes, preference.timezone)
+  const wallClockDurationMinutes = endMinutes - startMinutes
+  const elapsedDurationMinutes = (end.getTime() - start.getTime()) / 60_000
+  if (elapsedDurationMinutes !== wallClockDurationMinutes) {
+    throw new Error("时间块跨夏令时转换，实际时长不一致")
+  }
   return {
     start_at: start.toISOString(),
     end_at: end.toISOString(),

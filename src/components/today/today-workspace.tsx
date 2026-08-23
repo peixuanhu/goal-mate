@@ -22,7 +22,12 @@ import { DayTimeline } from "./day-timeline"
 import { GoalCandidatePanel } from "./goal-candidate-panel"
 import { ScheduleBlockEditor, type ScheduleEditorSubmit } from "./schedule-block-editor"
 import { ScheduleCompletionSheet, type ScheduleCompletionPayload } from "./schedule-completion-sheet"
-import { durationForCandidate, findNextFreeStart, minuteFromTimelinePoint } from "./scheduling-ui"
+import {
+  durationForCandidate,
+  findNextFreeStart,
+  findValidStartAtOrAfter,
+  minuteFromTimelinePoint,
+} from "./scheduling-ui"
 
 type EditorIntent = {
   block: ScheduleBlockView | null
@@ -233,11 +238,10 @@ export function TodayWorkspace() {
   const blocks = visibleView?.blocks ?? EMPTY_BLOCKS
 
   const openCandidateAt = useCallback((candidate: SchedulableCandidate, startMinutes: number) => {
+    if (date === null) return
     const duration = durationForCandidate(candidate.estimated_minutes, preference)
-    if (
-      startMinutes < preference.day_start_minutes
-      || startMinutes + duration > preference.day_end_minutes
-    ) {
+    const validStart = findValidStartAtOrAfter(date, startMinutes, duration, preference)
+    if (validStart === null) {
       setScheduleError("当天规划范围内没有足够的无冲突时间")
       return
     }
@@ -246,11 +250,11 @@ export function TodayWorkspace() {
     setEditorIntent({
       block: null,
       candidate,
-      initialStartMinutes: startMinutes,
-      initialEndMinutes: startMinutes + duration,
+      initialStartMinutes: validStart,
+      initialEndMinutes: validStart + duration,
       idempotencyKey: crypto.randomUUID(),
     })
-  }, [preference])
+  }, [date, preference])
 
   const scheduleCandidate = useCallback((candidate: SchedulableCandidate) => {
     if (date === null) return

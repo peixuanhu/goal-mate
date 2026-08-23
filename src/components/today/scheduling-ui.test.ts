@@ -5,6 +5,7 @@ import type { PlanningPreferenceView, ScheduleBlockView } from "@/lib/today/type
 import {
   durationForCandidate,
   findNextFreeStart,
+  findValidStartAtOrAfter,
   localTimeRangeToUtc,
   minuteFromTimelinePoint,
   toLocalBlockRange,
@@ -108,6 +109,35 @@ describe("manual scheduling UI helpers", () => {
     }, [])).toBe(120)
   })
 
+  it("moves a preferred drop forward to a fully valid DST-safe interval", () => {
+    const newYorkPreference = {
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 0,
+      day_end_minutes: 600,
+    }
+    expect(findValidStartAtOrAfter("2026-03-08", 150, 60, newYorkPreference)).toBe(180)
+    expect(findValidStartAtOrAfter("2026-11-01", 60, 60, newYorkPreference)).toBe(120)
+    expect(findValidStartAtOrAfter("2026-03-08", 105, 75, newYorkPreference)).toBe(180)
+    expect(findValidStartAtOrAfter("2026-03-08", 150, 30, {
+      ...newYorkPreference,
+      day_end_minutes: 180,
+    })).toBeNull()
+  })
+
+  it("keeps checking conflicts after DST-invalid candidate slots", () => {
+    const springPreference = {
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 105,
+      day_end_minutes: 360,
+    }
+    expect(findNextFreeStart("2026-03-08", 75, springPreference, [block(
+      "2026-03-08T07:00:00.000Z",
+      "2026-03-08T08:15:00.000Z",
+    )])).toBe(255)
+  })
+
   it("rejects invalid or DST-nonexistent local intervals", () => {
     expect(() => toLocalBlockRange("bad", "2026-08-23T01:00:00.000Z", "Asia/Shanghai", "2026-08-23")).toThrow()
     expect(() => localTimeRangeToUtc("2026-03-08", "02:30", "03:00", {
@@ -122,6 +152,27 @@ describe("manual scheduling UI helpers", () => {
       "Mars/Olympus",
       "2026-08-23",
     )).toThrow("timezone")
+  })
+
+  it("rejects intervals whose elapsed UTC duration changes across DST", () => {
+    const newYorkPreference = {
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 0,
+      day_end_minutes: 600,
+    }
+    expect(() => localTimeRangeToUtc(
+      "2026-03-08",
+      "01:45",
+      "03:00",
+      newYorkPreference,
+    )).toThrow("跨夏令时转换，实际时长不一致")
+    expect(() => localTimeRangeToUtc(
+      "2026-11-01",
+      "00:45",
+      "02:00",
+      newYorkPreference,
+    )).toThrow("跨夏令时转换，实际时长不一致")
   })
 
   it("maps the next existing local-date start to minute 1440 even when DST skips midnight", () => {
@@ -158,5 +209,24 @@ describe("manual scheduling UI helpers", () => {
       day_start_minutes: 490,
       day_end_minutes: 603,
     })).toThrow("15 分钟刻度")
+  })
+
+  it("keeps ordinary and midnight-skipping 24:00 intervals at their wall-clock duration", () => {
+    expect(localTimeRangeToUtc("2026-08-23", "23:45", "24:00", {
+      ...preference,
+      day_end_minutes: 1440,
+    })).toEqual(expect.objectContaining({
+      start_at: "2026-08-23T15:45:00.000Z",
+      end_at: "2026-08-23T16:00:00.000Z",
+    }))
+    expect(localTimeRangeToUtc("2026-03-07", "23:45", "24:00", {
+      ...preference,
+      timezone: "America/Havana",
+      day_start_minutes: 0,
+      day_end_minutes: 1440,
+    })).toEqual(expect.objectContaining({
+      start_at: "2026-03-08T04:45:00.000Z",
+      end_at: "2026-03-08T05:00:00.000Z",
+    }))
   })
 })

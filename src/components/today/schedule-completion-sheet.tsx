@@ -34,7 +34,7 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
   const [planProgress, setPlanProgress] = useState(50)
   const [updatePlanProgress, setUpdatePlanProgress] = useState(false)
   const firstOutcomeRef = useRef<HTMLInputElement>(null)
-  const { modalRef, onModalKeyDown } = useModalAccessibility({
+  const { modalRef } = useModalAccessibility({
     initialFocusRef: firstOutcomeRef,
     loading,
     onClose,
@@ -55,10 +55,10 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/35 p-0 sm:items-center sm:p-4" onKeyDown={onModalKeyDown} onMouseDown={event => {
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/35 p-0 sm:items-center sm:p-4" onMouseDown={event => {
       if (event.currentTarget === event.target && !loading) onClose()
-    }} ref={modalRef}>
-      <section aria-labelledby="completion-sheet-title" aria-modal="true" className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gray-200 bg-white p-5 shadow-2xl sm:rounded-2xl" role="dialog">
+    }}>
+      <section aria-labelledby="completion-sheet-title" aria-modal="true" className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gray-200 bg-white p-5 shadow-2xl sm:rounded-2xl" ref={modalRef} role="dialog" tabIndex={-1}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-600">记录结果</p>

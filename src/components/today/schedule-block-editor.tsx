@@ -73,7 +73,7 @@ export function ScheduleBlockEditor({
   const [localError, setLocalError] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const startInputRef = useRef<HTMLInputElement>(null)
-  const { modalRef, onModalKeyDown } = useModalAccessibility({
+  const { modalRef } = useModalAccessibility({
     initialFocusRef: startInputRef,
     loading,
     onClose,
@@ -111,10 +111,10 @@ export function ScheduleBlockEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-gray-950/35 p-4" onKeyDown={onModalKeyDown} onMouseDown={event => {
+    <div className="fixed inset-0 z-50 grid place-items-center bg-gray-950/35 p-4" onMouseDown={event => {
       if (event.currentTarget === event.target && !loading) onClose()
-    }} ref={modalRef}>
-      <section aria-labelledby="schedule-editor-title" aria-modal="true" className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl" role="dialog">
+    }}>
+      <section aria-labelledby="schedule-editor-title" aria-modal="true" className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl" ref={modalRef} role="dialog" tabIndex={-1}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-indigo-500">{isEdit ? "调整安排" : "新建安排"}</p>

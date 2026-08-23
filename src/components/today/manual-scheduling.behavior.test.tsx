@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { DndContext } from "@dnd-kit/core"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -38,6 +38,7 @@ vi.mock("./ai-workspace", async () => {
 
 afterEach(() => {
   cleanup()
+  document.body.removeAttribute("tabindex")
   vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -482,6 +483,83 @@ describe("TodayWorkspace manual scheduling orchestration", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "记录时间块结果" })).toBeNull())
     expect(document.activeElement).toBe(trigger)
     expect(hasInertAncestor(trigger)).toBe(false)
+  })
+
+  it("recaptures editor focus after a deferred 409 and handles Escape at document capture", async () => {
+    let resolveMutation: ((response: Response) => void) | undefined
+    const mutationResponse = new Promise<Response>((resolve) => {
+      resolveMutation = resolve
+    })
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "deferred-editor-key") })
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method) return mutationResponse
+      return jsonResponse(todayView(getRequestedDate(url), [], [planCandidate]))
+    }))
+    render(<TodayWorkspace />)
+
+    const trigger = await screen.findByRole("button", { name: "安排到今天" })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole("dialog", { name: "安排时间块" })
+    const submit = within(dialog).getByRole("button", { name: "确认安排" }) as HTMLButtonElement
+    submit.focus()
+    fireEvent.click(submit)
+    await waitFor(() => expect(submit.disabled).toBe(true))
+
+    document.body.tabIndex = -1
+    document.body.focus()
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(screen.getByRole("dialog", { name: "安排时间块" })).toBe(dialog)
+
+    await act(async () => {
+      resolveMutation?.(jsonResponse({ error: "版本已过期", code: "STALE_VERSION" }, 409))
+      await mutationResponse
+    })
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("版本已过期")
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    fireEvent.keyDown(document, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it("recaptures completion-sheet focus after a deferred 409 and restores its trigger", async () => {
+    let resolveMutation: ((response: Response) => void) | undefined
+    const mutationResponse = new Promise<Response>((resolve) => {
+      resolveMutation = resolve
+    })
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method) return mutationResponse
+      return jsonResponse(todayView(getRequestedDate(url), [scheduledBlock()], [planCandidate]))
+    }))
+    render(<TodayWorkspace />)
+
+    const trigger = await screen.findByRole("button", { name: "完成 写发布说明" })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole("dialog", { name: "记录时间块结果" })
+    const submit = within(dialog).getByRole("button", { name: "保存结果" }) as HTMLButtonElement
+    submit.focus()
+    fireEvent.click(submit)
+    await waitFor(() => expect(submit.disabled).toBe(true))
+
+    document.body.tabIndex = -1
+    document.body.focus()
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(screen.getByRole("dialog", { name: "记录时间块结果" })).toBe(dialog)
+
+    await act(async () => {
+      resolveMutation?.(jsonResponse({ error: "版本已过期", code: "STALE_VERSION" }, 409))
+      await mutationResponse
+    })
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("版本已过期")
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    fireEvent.keyDown(document, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "记录时间块结果" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
   })
 
   it("shows a scoped error instead of opening an editor when the configured day is full", async () => {
