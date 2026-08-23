@@ -38,11 +38,16 @@ model Plan {
   recurrence_value  String?
   goal_id           String?
   goal_position     Int?
+  due_date          DateTime?            @db.Date
+  estimated_minutes Int?
+  energy_level      String?
   priority_quadrant String? // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
   is_scheduled      Boolean              @default(false) // 是否被安排到四象限中显示
   goal              Goal?                @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
   tags              PlanTagAssociation[]
   progressRecords   ProgressRecord[]
+  actionItems       ActionItem[]
+  scheduleBlocks    ScheduleBlock[]
 
   @@index([goal_id, goal_position])
 }
@@ -57,13 +62,75 @@ model PlanTagAssociation {
 }
 
 model ProgressRecord {
-  id           Int      @id @default(autoincrement())
-  gmt_create   DateTime @default(now())
-  gmt_modified DateTime @updatedAt
-  plan_id      String
-  content      String?
-  thinking     String?
-  plan         Plan     @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  id                       Int            @id @default(autoincrement())
+  gmt_create               DateTime       @default(now())
+  gmt_modified             DateTime       @updatedAt
+  plan_id                  String
+  schedule_block_id        String?        @unique
+  content                  String?
+  thinking                 String?
+  outcome                  String?
+  counts_toward_recurrence Boolean        @default(true)
+  plan                     Plan           @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  scheduleBlock            ScheduleBlock? @relation(fields: [schedule_block_id], references: [block_id], onDelete: SetNull)
+}
+
+model ActionItem {
+  id                Int             @id @default(autoincrement())
+  gmt_create        DateTime        @default(now())
+  gmt_modified      DateTime        @updatedAt
+  action_id         String          @unique
+  plan_id           String
+  position          Int
+  name              String
+  description       String?
+  completed_at      DateTime?
+  due_date          DateTime?       @db.Date
+  estimated_minutes Int?
+  energy_level      String?
+  priority_quadrant String?
+  is_completed      Boolean         @default(false)
+  plan              Plan            @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  scheduleBlocks    ScheduleBlock[]
+
+  @@index([plan_id, position])
+}
+
+model ScheduleBlock {
+  id             Int             @id @default(autoincrement())
+  gmt_create     DateTime        @default(now())
+  gmt_modified   DateTime        @updatedAt
+  block_id       String          @unique
+  plan_id        String
+  action_id      String?
+  start_at       DateTime
+  end_at         DateTime
+  status         String          @default("scheduled")
+  source         String          @default("manual")
+  result_note    String?
+  version        Int             @default(1)
+  plan           Plan            @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  action         ActionItem?     @relation(fields: [action_id], references: [action_id], onDelete: SetNull)
+  progressRecord ProgressRecord?
+
+  @@index([start_at, end_at])
+  @@index([plan_id, start_at])
+  @@index([action_id, status])
+}
+
+model PlanningPreference {
+  id                        Int      @id @default(autoincrement())
+  gmt_create                DateTime @default(now())
+  gmt_modified              DateTime @updatedAt
+  preference_id             String   @unique
+  timezone                  String
+  day_start_minutes         Int
+  day_end_minutes           Int
+  high_energy_start_minutes Int?
+  high_energy_end_minutes   Int?
+  buffer_minutes            Int      @default(15)
+  default_block_minutes     Int      @default(60)
+  capacity_warning_minutes  Int      @default(480)
 }
 
 model Report {
