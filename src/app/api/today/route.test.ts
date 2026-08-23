@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +19,10 @@ import { GET } from "./route"
 describe("GET /api/today", () => {
   beforeEach(() => {
     vi.resetAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it("returns the exact missing-date validation error", async () => {
@@ -67,12 +71,27 @@ describe("GET /api/today", () => {
     expect(await response.json()).toEqual(todayView)
   })
 
-  it("uses the stable fallback message for non-Error failures", async () => {
-    mocks.loadTodayView.mockRejectedValue("database unavailable")
+  it("returns a stable 500 without exposing an internal Error message", async () => {
+    const failure = new Error("password authentication failed for user internal_admin")
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    mocks.loadTodayView.mockRejectedValue(failure)
 
     const response = await GET(new NextRequest("http://localhost/api/today?date=2026-08-23"))
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(500)
     expect(await response.json()).toEqual({ error: "今日数据加载失败" })
+    expect(consoleError).toHaveBeenCalledWith("[today] loadTodayView failed", failure)
+  })
+
+  it("returns the same stable 500 for non-Error query failures", async () => {
+    const failure = "database unavailable"
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    mocks.loadTodayView.mockRejectedValue(failure)
+
+    const response = await GET(new NextRequest("http://localhost/api/today?date=2026-08-23"))
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: "今日数据加载失败" })
+    expect(consoleError).toHaveBeenCalledWith("[today] loadTodayView failed", failure)
   })
 })
