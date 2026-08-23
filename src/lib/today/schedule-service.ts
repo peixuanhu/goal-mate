@@ -84,6 +84,12 @@ type ScheduleAction = {
   is_completed: boolean
 }
 
+type LockedActionRow = {
+  action_id: string
+  plan_id: string
+  is_completed: boolean
+}
+
 type ScheduleBlockRow = {
   block_id: string
   plan_id: string
@@ -93,6 +99,7 @@ type ScheduleBlockRow = {
   status: string
   source: string
   result_note: string | null
+  create_fingerprint: string | null
   version: number
   plan: SchedulePlan
   action: ScheduleAction | null
@@ -106,6 +113,7 @@ type NormalizedCreate = {
   endAt: Date
   status: "scheduled"
   source: ScheduleBlockSource
+  createFingerprint: string
 }
 
 type NormalizedUpdate = {
@@ -122,7 +130,6 @@ type NormalizedCancel = {
 
 const DEFAULT_PREFERENCE_ID = "default"
 const SCHEDULE_DATE_LOCK_NAMESPACE = 48_241
-const SCHEDULE_ACTION_LOCK_NAMESPACE = 48_242
 const SCHEDULE_KEY_LOCK_NAMESPACE = 48_243
 const CREATE_FIELDS = new Set([
   "idempotency_key",
@@ -260,14 +267,28 @@ function normalizeCreateInput(input: CreateScheduleBlockInput): NormalizedCreate
     validation("source must be manual, ai_check, or ai_chat")
   }
 
-  return {
-    blockId: `block_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 10)}`,
-    planId: requiredString(input.plan_id, "plan_id"),
-    actionId: optionalId(input.action_id, "action_id"),
-    startAt: parseIsoInstant(input.start_at, "start_at"),
-    endAt: parseIsoInstant(input.end_at, "end_at"),
+  const planId = requiredString(input.plan_id, "plan_id")
+  const actionId = optionalId(input.action_id, "action_id")
+  const startAt = parseIsoInstant(input.start_at, "start_at")
+  const endAt = parseIsoInstant(input.end_at, "end_at")
+  const canonicalPayload = JSON.stringify({
+    plan_id: planId,
+    action_id: actionId,
+    start_at: startAt.toISOString(),
+    end_at: endAt.toISOString(),
     status,
     source,
+  })
+
+  return {
+    blockId: `block_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 10)}`,
+    planId,
+    actionId,
+    startAt,
+    endAt,
+    status,
+    source,
+    createFingerprint: createHash("sha256").update(canonicalPayload).digest("hex"),
   }
 }
 
@@ -315,6 +336,14 @@ async function lockLocalDates(db: Prisma.TransactionClient, dates: readonly stri
   for (const date of sortedDates) {
     await lockValue(db, SCHEDULE_DATE_LOCK_NAMESPACE, date)
   }
+}
+
+async function lockActionItem(
+  db: Prisma.TransactionClient,
+  actionId: string,
+): Promise<LockedActionRow | null> {
+  const rows = await db.$queryRaw<LockedActionRow[]>`SELECT "action_id", "plan_id", "is_completed" FROM "ActionItem" WHERE "action_id" = ${actionId} FOR UPDATE`
+  return rows[0] ?? null
 }
 
 async function loadPreference(db: Prisma.TransactionClient): Promise<PlanningPreferenceView> {
@@ -384,13 +413,64 @@ export function toScheduleBlockView(row: ScheduleBlockRow): ScheduleBlockView {
   }
 }
 
-function immutableCreateMatches(row: ScheduleBlockRow, input: NormalizedCreate): boolean {
+function legacyCreateFieldsMatch(row: ScheduleBlockRow, input: NormalizedCreate): boolean {
   return row.plan_id === input.planId
     && row.action_id === input.actionId
     && row.start_at.getTime() === input.startAt.getTime()
     && row.end_at.getTime() === input.endAt.getTime()
     && row.status === input.status
     && row.source === input.source
+}
+
+function idempotencyConflict(blockId: string): ScheduleServiceError {
+  return new ScheduleServiceError(
+    "SCHEDULE_CONFLICT",
+    "幂等键已用于不同的时间块内容",
+    [blockId],
+  )
+}
+
+async function resolveExistingCreate(
+  db: Prisma.TransactionClient,
+  row: ScheduleBlockRow,
+  input: NormalizedCreate,
+): Promise<ScheduleBlockView> {
+  if (row.create_fingerprint !== null) {
+    if (row.create_fingerprint !== input.createFingerprint) {
+      throw idempotencyConflict(input.blockId)
+    }
+    return toScheduleBlockView(row)
+  }
+
+  if (!legacyCreateFieldsMatch(row, input)) {
+    throw idempotencyConflict(input.blockId)
+  }
+
+  // Legacy rows did not persist the original create payload. Backfill only when
+  // every current create field still matches, so a moved legacy row cannot be
+  // mistaken for an identical retry.
+  const backfilled = await db.scheduleBlock.updateMany({
+    where: {
+      block_id: input.blockId,
+      create_fingerprint: null,
+      plan_id: input.planId,
+      action_id: input.actionId,
+      start_at: input.startAt,
+      end_at: input.endAt,
+      status: input.status,
+      source: input.source,
+    },
+    data: { create_fingerprint: input.createFingerprint },
+  })
+  if (backfilled.count === 1) {
+    return toScheduleBlockView(row)
+  }
+
+  const current = await findBlock(db, input.blockId)
+  if (current?.create_fingerprint === input.createFingerprint) {
+    return toScheduleBlockView(current)
+  }
+  throw idempotencyConflict(input.blockId)
 }
 
 async function findBlock(db: Prisma.TransactionClient, blockId: string): Promise<ScheduleBlockRow | null> {
@@ -416,11 +496,7 @@ async function assertPlanAndAction(
     return
   }
 
-  await lockValue(db, SCHEDULE_ACTION_LOCK_NAMESPACE, actionId)
-  const actionRow = await db.actionItem.findUnique({
-    where: { action_id: actionId },
-    select: { action_id: true, plan_id: true, is_completed: true },
-  }) as ScheduleAction | null
+  const actionRow = await lockActionItem(db, actionId)
   if (!actionRow) {
     throw new ScheduleServiceError("NOT_FOUND", "行动项不存在")
   }
@@ -488,14 +564,7 @@ export async function createScheduleBlock(
       await lockValue(tx, SCHEDULE_KEY_LOCK_NAMESPACE, input.blockId)
       const existing = await findBlock(tx, input.blockId)
       if (existing) {
-        if (!immutableCreateMatches(existing, input)) {
-          throw new ScheduleServiceError(
-            "SCHEDULE_CONFLICT",
-            "幂等键已用于不同的时间块内容",
-            [input.blockId],
-          )
-        }
-        return toScheduleBlockView(existing)
+        return resolveExistingCreate(tx, existing, input)
       }
 
       const preference = await loadPreference(tx)
@@ -513,6 +582,7 @@ export async function createScheduleBlock(
           end_at: input.endAt,
           status: input.status,
           source: input.source,
+          create_fingerprint: input.createFingerprint,
         },
         include: SCHEDULE_RELATIONS,
       }) as ScheduleBlockRow
@@ -546,7 +616,16 @@ export async function updateScheduleBlock(
     const oldLocalDate = formatUtcInTimeZone(snapshot.start_at, preference.timezone).date
     await lockLocalDates(tx, [oldLocalDate, newLocalDate])
     if (snapshot.action_id) {
-      await lockValue(tx, SCHEDULE_ACTION_LOCK_NAMESPACE, snapshot.action_id)
+      const lockedAction = await lockActionItem(tx, snapshot.action_id)
+      if (!lockedAction) {
+        throw new ScheduleServiceError("NOT_FOUND", "行动项不存在")
+      }
+      if (lockedAction.plan_id !== snapshot.plan_id) {
+        validation("行动项不属于时间块计划")
+      }
+      if (lockedAction.is_completed) {
+        validation("已完成行动项不能排期")
+      }
     }
 
     const current = await findBlock(tx, input.blockId)
@@ -556,8 +635,8 @@ export async function updateScheduleBlock(
     if (current.version !== input.expectedVersion || current.status !== "scheduled") {
       throw new ScheduleServiceError("STALE_VERSION", "时间块版本或状态已变化")
     }
-    if (current.action?.is_completed) {
-      validation("已完成行动项不能排期")
+    if (current.plan_id !== snapshot.plan_id || current.action_id !== snapshot.action_id) {
+      throw new ScheduleServiceError("STALE_VERSION", "时间块归属已变化")
     }
 
     throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt, input.blockId))

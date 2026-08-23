@@ -97,21 +97,22 @@ model ActionItem {
 }
 
 model ScheduleBlock {
-  id             Int             @id @default(autoincrement())
-  gmt_create     DateTime        @default(now())
-  gmt_modified   DateTime        @updatedAt
-  block_id       String          @unique
-  plan_id        String
-  action_id      String?
-  start_at       DateTime
-  end_at         DateTime
-  status         String          @default("scheduled")
-  source         String          @default("manual")
-  result_note    String?
-  version        Int             @default(1)
-  plan           Plan            @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
-  action         ActionItem?     @relation(fields: [action_id], references: [action_id], onDelete: SetNull)
-  progressRecord ProgressRecord?
+  id                 Int             @id @default(autoincrement())
+  gmt_create         DateTime        @default(now())
+  gmt_modified       DateTime        @updatedAt
+  block_id           String          @unique
+  plan_id            String
+  action_id          String?
+  start_at           DateTime
+  end_at             DateTime
+  status             String          @default("scheduled")
+  source             String          @default("manual")
+  result_note        String?
+  create_fingerprint String?
+  version            Int             @default(1)
+  plan               Plan            @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  action             ActionItem?     @relation(fields: [action_id], references: [action_id], onDelete: SetNull)
+  progressRecord     ProgressRecord?
 
   @@index([start_at, end_at])
   @@index([plan_id, start_at])

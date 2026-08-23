@@ -51,6 +51,7 @@ const blockRow = {
   status: "scheduled",
   source: "manual",
   result_note: null,
+  create_fingerprint: "9930edd769cea86f31678beeceac2849b4ace6677e439077a668bd588b146620",
   version: 1,
   plan: {
     plan_id: "plan_launch",

@@ -283,6 +283,7 @@ describe("today workspace Prisma contract", () => {
     expect(schema).toContain("model ActionItem")
     expect(schema).toContain("model ScheduleBlock")
     expect(schema).toContain("model PlanningPreference")
+    expect(schema).toMatch(/create_fingerprint\s+String\?/)
   })
 
   it("links schedule-generated progress exactly once", () => {
