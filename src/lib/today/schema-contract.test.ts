@@ -9,10 +9,106 @@ const readRootFile = (relativePath: string) => {
 
 const normalizeSql = (sql: string) =>
   sql
+    .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/--.*$/gm, "")
     .replace(/\s+/g, " ")
     .replace(/\s*([(),;])\s*/g, "$1")
     .trim()
+
+type DatabaseOnlyInvariant = {
+  kind: "check" | "partial_unique_index"
+  name: string
+  definition: string
+}
+
+const findClosingParenthesis = (sql: string, expressionStart: number) => {
+  let depth = 1
+  let quote: "single" | "double" | null = null
+
+  for (let index = expressionStart; index < sql.length; index += 1) {
+    const character = sql[index]
+    const nextCharacter = sql[index + 1]
+
+    if (quote === "single") {
+      if (character === "'" && nextCharacter === "'") {
+        index += 1
+      } else if (character === "'") {
+        quote = null
+      }
+      continue
+    }
+
+    if (quote === "double") {
+      if (character === '"' && nextCharacter === '"') {
+        index += 1
+      } else if (character === '"') {
+        quote = null
+      }
+      continue
+    }
+
+    if (character === "'") {
+      quote = "single"
+    } else if (character === '"') {
+      quote = "double"
+    } else if (character === "(") {
+      depth += 1
+    } else if (character === ")") {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+
+  throw new Error("Unclosed CHECK expression")
+}
+
+const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => {
+  const uncommentedSql = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "")
+  const invariants: DatabaseOnlyInvariant[] = []
+  const checkPattern = /CONSTRAINT\s+"([^"]+)"\s+CHECK\s*\(/gi
+
+  for (let match = checkPattern.exec(uncommentedSql); match; match = checkPattern.exec(uncommentedSql)) {
+    const expressionEnd = findClosingParenthesis(uncommentedSql, checkPattern.lastIndex)
+    invariants.push({
+      kind: "check",
+      name: match[1],
+      definition: normalizeSql(uncommentedSql.slice(checkPattern.lastIndex, expressionEnd)),
+    })
+    checkPattern.lastIndex = expressionEnd + 1
+  }
+
+  const partialUniqueIndexPattern =
+    /CREATE\s+UNIQUE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+"([^"]+)"[\s\S]*?;/gi
+
+  for (
+    let match = partialUniqueIndexPattern.exec(uncommentedSql);
+    match;
+    match = partialUniqueIndexPattern.exec(uncommentedSql)
+  ) {
+    if (!/\bWHERE\b/i.test(match[0])) continue
+
+    invariants.push({
+      kind: "partial_unique_index",
+      name: match[1],
+      definition: normalizeSql(
+        match[0].replace(
+          /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS/i,
+          "CREATE UNIQUE INDEX",
+        ),
+      ),
+    })
+  }
+
+  return invariants.sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right)),
+  )
+}
+
+const expectExactDatabaseOnlyInvariantParity = (formalSql: string, overlaySql: string) => {
+  expect(extractDatabaseOnlyInvariants(overlaySql)).toEqual(
+    extractDatabaseOnlyInvariants(formalSql),
+  )
+}
 
 const schema = readRootFile("prisma/schema.prisma")
 const migration = readRootFile(
@@ -192,6 +288,26 @@ describe("today workspace Prisma contract", () => {
     expect(integrityOverlay).not.toMatch(/CREATE\s+TABLE|ADD\s+COLUMN|FOREIGN\s+KEY/i)
     expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(1)
     expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(1)
+  })
+
+  it("keeps the complete formal and deployed database-only invariant sets identical", () => {
+    expectExactDatabaseOnlyInvariantParity(migration, integrityOverlay)
+  })
+
+  it("rejects a migration-only invariant in synthetic SQL", () => {
+    const sharedSql = `
+      ALTER TABLE "Plan"
+      ADD CONSTRAINT "shared_check" CHECK ("estimated_minutes" > 0);
+    `
+    const migrationWithExtraInvariant = `
+      ${sharedSql}
+      ALTER TABLE "Plan"
+      ADD CONSTRAINT "migration_only_check" CHECK ("estimated_minutes" < 10000);
+    `
+
+    expect(() =>
+      expectExactDatabaseOnlyInvariantParity(migrationWithExtraInvariant, sharedSql),
+    ).toThrow()
   })
 
   it("routes every schema deployment path through the integrity overlay", () => {
