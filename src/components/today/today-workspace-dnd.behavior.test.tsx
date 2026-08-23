@@ -56,14 +56,14 @@ const candidate: SchedulableCandidate = {
   version: "2026-08-23T00:00:00.000Z",
 }
 
-function response(date: string): Response {
+function response(date: string, dayEndMinutes = 610): Response {
   const view: TodayView = {
     date,
     preference: {
       preference_id: "default",
       timezone: "Asia/Shanghai",
-      day_start_minutes: 480,
-      day_end_minutes: 1320,
+      day_start_minutes: 490,
+      day_end_minutes: dayEndMinutes,
       high_energy_start_minutes: null,
       high_energy_end_minutes: null,
       buffer_minutes: 15,
@@ -95,8 +95,29 @@ describe("TodayWorkspace drop orchestration", () => {
     fireEvent.click(screen.getByRole("button", { name: "模拟拖放候选" }))
 
     expect(screen.getByRole("dialog", { name: "安排时间块" })).toBeTruthy()
-    expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("11:45")
-    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("12:45")
+    expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("08:40")
+    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("09:40")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows a scoped no-space error instead of an invalid editor for a sub-slot window", async () => {
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "unused-key") })
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const date = new URL(String(url), "http://localhost").searchParams.get("date")
+      if (!date) throw new Error("missing date")
+      return Promise.resolve(response(date, 500))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findAllByText("拖放计划")).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: "模拟拖放候选" }))
+    expect(screen.getByRole("alert").textContent).toContain("没有足够的无冲突时间")
+    expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "安排到今天" }))
+    expect(screen.getByRole("alert").textContent).toContain("没有足够的无冲突时间")
+    expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

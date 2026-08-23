@@ -234,14 +234,20 @@ export function TodayWorkspace() {
 
   const openCandidateAt = useCallback((candidate: SchedulableCandidate, startMinutes: number) => {
     const duration = durationForCandidate(candidate.estimated_minutes, preference)
-    const clampedStart = Math.min(startMinutes, preference.day_end_minutes - duration)
+    if (
+      startMinutes < preference.day_start_minutes
+      || startMinutes + duration > preference.day_end_minutes
+    ) {
+      setScheduleError("当天规划范围内没有足够的无冲突时间")
+      return
+    }
     setScheduleError(null)
     setEditorError(null)
     setEditorIntent({
       block: null,
       candidate,
-      initialStartMinutes: clampedStart,
-      initialEndMinutes: clampedStart + duration,
+      initialStartMinutes: startMinutes,
+      initialEndMinutes: startMinutes + duration,
       idempotencyKey: crypto.randomUUID(),
     })
   }, [preference])

@@ -1,9 +1,11 @@
 "use client"
 
 import { X } from "lucide-react"
-import React, { useState } from "react"
+import React, { useRef, useState } from "react"
 
 import type { ScheduleBlockView } from "@/lib/today/types"
+
+import { useModalAccessibility } from "./use-modal-accessibility"
 
 export type ScheduleCompletionPayload = {
   block_id: string
@@ -31,6 +33,12 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
   const [resultNote, setResultNote] = useState("")
   const [planProgress, setPlanProgress] = useState(50)
   const [updatePlanProgress, setUpdatePlanProgress] = useState(false)
+  const firstOutcomeRef = useRef<HTMLInputElement>(null)
+  const { modalRef, onModalKeyDown } = useModalAccessibility({
+    initialFocusRef: firstOutcomeRef,
+    loading,
+    onClose,
+  })
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -39,17 +47,17 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
       block_id: block.block_id,
       expected_version: block.version,
       outcome,
-      ...(content ? { content } : {}),
-      ...(thinking ? { thinking } : {}),
+      ...(outcome !== "skipped" && content ? { content } : {}),
+      ...(outcome !== "skipped" && thinking ? { thinking } : {}),
       ...(resultNote ? { result_note: resultNote } : {}),
       ...(isOrdinaryPlan && updatePlanProgress ? { plan_progress: planProgress / 100 } : {}),
     })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/35 p-0 sm:items-center sm:p-4" onMouseDown={event => {
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/35 p-0 sm:items-center sm:p-4" onKeyDown={onModalKeyDown} onMouseDown={event => {
       if (event.currentTarget === event.target && !loading) onClose()
-    }}>
+    }} ref={modalRef}>
       <section aria-labelledby="completion-sheet-title" aria-modal="true" className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gray-200 bg-white p-5 shadow-2xl sm:rounded-2xl" role="dialog">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -65,7 +73,7 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
             <legend className="text-sm font-medium text-gray-700">结果</legend>
             <div className="mt-2 grid grid-cols-3 gap-2">
               <label className="rounded-xl border border-gray-200 p-3 text-center text-sm has-[:checked]:border-emerald-400 has-[:checked]:bg-emerald-50">
-                <input className="sr-only" checked={outcome === "completed"} disabled={loading} name="outcome" onChange={() => setOutcome("completed")} type="radio" value="completed" />
+                <input className="sr-only" checked={outcome === "completed"} disabled={loading} name="outcome" onChange={() => setOutcome("completed")} ref={firstOutcomeRef} type="radio" value="completed" />
                 完成
               </label>
               <label className="rounded-xl border border-gray-200 p-3 text-center text-sm has-[:checked]:border-amber-400 has-[:checked]:bg-amber-50">
@@ -79,12 +87,16 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
             </div>
           </fieldset>
 
-          <label className="block text-sm font-medium text-gray-700">完成内容
-            <textarea aria-label="完成内容" className="mt-1 min-h-20 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setContent(event.currentTarget.value)} value={content} />
-          </label>
-          <label className="block text-sm font-medium text-gray-700">过程思考
-            <textarea aria-label="过程思考" className="mt-1 min-h-20 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setThinking(event.currentTarget.value)} value={thinking} />
-          </label>
+          {outcome !== "skipped" ? (
+            <>
+              <label className="block text-sm font-medium text-gray-700">完成内容
+                <textarea aria-label="完成内容" className="mt-1 min-h-20 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setContent(event.currentTarget.value)} value={content} />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">过程思考
+                <textarea aria-label="过程思考" className="mt-1 min-h-20 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setThinking(event.currentTarget.value)} value={thinking} />
+              </label>
+            </>
+          ) : null}
           <label className="block text-sm font-medium text-gray-700">结果备注
             <textarea aria-label="结果备注" className="mt-1 min-h-16 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setResultNote(event.currentTarget.value)} value={resultNote} />
           </label>

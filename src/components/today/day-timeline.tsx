@@ -20,6 +20,7 @@ interface DayTimelineProps {
 }
 
 export const MAX_TIMELINE_MARKERS = 26
+export const TIMELINE_PIXELS_PER_MINUTE = 3.2
 
 const STATUS_LABELS: Record<ScheduleBlockStatus, string> = {
   scheduled: "已安排",
@@ -77,7 +78,7 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
     [preference.day_end_minutes, preference.day_start_minutes],
   )
   const durationMinutes = preference.day_end_minutes - preference.day_start_minutes
-  const timelineHeight = Math.max(520, Math.round(durationMinutes * 1.1))
+  const timelineHeight = Math.max(520, Math.ceil(durationMinutes * TIMELINE_PIXELS_PER_MINUTE))
   const currentMinute = useCurrentLocalMinute(date, preference.timezone)
   const showCurrentTime = currentMinute !== null
     && currentMinute >= preference.day_start_minutes

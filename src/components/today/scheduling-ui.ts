@@ -22,8 +22,12 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
 }
 
-function roundToSlot(minutes: number): number {
-  return Math.round(minutes / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
+function roundMinuteToSlot(minutes: number, origin: number): number {
+  return origin + Math.round((minutes - origin) / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
+}
+
+function floorMinuteToSlot(minutes: number, origin: number): number {
+  return origin + Math.floor((minutes - origin) / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
 }
 
 function ceilToSlot(minutes: number): number {
@@ -34,14 +38,16 @@ export function durationForCandidate(
   estimatedMinutes: number | null,
   preference: PlanningPreferenceView,
 ): number {
-  const available = Math.max(SCHEDULE_SLOT_MINUTES, preference.day_end_minutes - preference.day_start_minutes)
+  const available = preference.day_end_minutes - preference.day_start_minutes
+  const largestWholeSlotDuration = Math.floor(available / SCHEDULE_SLOT_MINUTES) * SCHEDULE_SLOT_MINUTES
+  const maximum = Math.max(SCHEDULE_SLOT_MINUTES, largestWholeSlotDuration)
   const requested = estimatedMinutes !== null && Number.isFinite(estimatedMinutes) && estimatedMinutes > 0
     ? estimatedMinutes
     : preference.default_block_minutes
   return clamp(
     Math.max(SCHEDULE_SLOT_MINUTES, ceilToSlot(requested)),
     SCHEDULE_SLOT_MINUTES,
-    available,
+    maximum,
   )
 }
 
@@ -54,8 +60,16 @@ export function minuteFromTimelinePoint(
   const dayDuration = preference.day_end_minutes - preference.day_start_minutes
   const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0
   const unrounded = preference.day_start_minutes + clamp(ratio, 0, 1) * dayDuration
-  const latestStart = Math.max(preference.day_start_minutes, preference.day_end_minutes - durationMinutes)
-  return clamp(roundToSlot(unrounded), preference.day_start_minutes, latestStart)
+  const latestStart = floorMinuteToSlot(
+    preference.day_end_minutes - durationMinutes,
+    preference.day_start_minutes,
+  )
+  if (latestStart < preference.day_start_minutes) return preference.day_start_minutes
+  return clamp(
+    roundMinuteToSlot(unrounded, preference.day_start_minutes),
+    preference.day_start_minutes,
+    latestStart,
+  )
 }
 
 function validDate(value: string, field: string): Date {
@@ -85,7 +99,7 @@ export function toLocalBlockRange(
   if (localEnd.date === planningDate) {
     return { start: localStart.minutes, end: localEnd.minutes }
   }
-  if (localEnd.minutes === 0 && end.getTime() === nextExistingLocalDateStartToUtc(planningDate, timezone).getTime()) {
+  if (end.getTime() === nextExistingLocalDateStartToUtc(planningDate, timezone).getTime()) {
     return { start: localStart.minutes, end: 1440 }
   }
   throw new Error("时间块不能跨本地日期")
@@ -113,6 +127,16 @@ export function findNextFreeStart(
     start += SCHEDULE_SLOT_MINUTES
   ) {
     const end = start + durationMinutes
+    try {
+      localTimeRangeToUtc(
+        date,
+        minuteToTimeInput(start),
+        minuteToTimeInput(end),
+        preference,
+      )
+    } catch {
+      continue
+    }
     const overlaps = blocking.some(block => start < block.end && end > block.start)
     if (!overlaps) return start
   }
@@ -145,7 +169,10 @@ export function localTimeRangeToUtc(
 ): { start_at: string; end_at: string; startMinutes: number; endMinutes: number } {
   const startMinutes = parseTimeInput(startValue, "开始时间")
   const endMinutes = parseTimeInput(endValue, "结束时间", true)
-  if (startMinutes % SCHEDULE_SLOT_MINUTES !== 0 || endMinutes % SCHEDULE_SLOT_MINUTES !== 0) {
+  if (
+    (startMinutes - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0
+    || (endMinutes - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0
+  ) {
     throw new Error("时间必须对齐 15 分钟刻度")
   }
   if (endMinutes <= startMinutes) throw new Error("结束时间必须晚于开始时间")

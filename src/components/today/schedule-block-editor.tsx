@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useRef, useState } from "react"
 
 import type { PlanningPreferenceView, ScheduleBlockView, SchedulableCandidate } from "@/lib/today/types"
 
@@ -10,6 +10,7 @@ import {
   minuteToTimeInput,
   toLocalBlockRange,
 } from "./scheduling-ui"
+import { useModalAccessibility } from "./use-modal-accessibility"
 
 export type ScheduleEditorSubmit = {
   start_at: string
@@ -71,6 +72,12 @@ export function ScheduleBlockEditor({
   const [endValue, setEndValue] = useState(() => minuteToTimeInput(range.end))
   const [localError, setLocalError] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const startInputRef = useRef<HTMLInputElement>(null)
+  const { modalRef, onModalKeyDown } = useModalAccessibility({
+    initialFocusRef: startInputRef,
+    loading,
+    onClose,
+  })
   const title = candidate?.name ?? block?.title ?? "时间块"
   const goalName = candidate?.goal_name ?? block?.goal_name
   const isEdit = block !== null
@@ -104,9 +111,9 @@ export function ScheduleBlockEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-gray-950/35 p-4" onMouseDown={event => {
+    <div className="fixed inset-0 z-50 grid place-items-center bg-gray-950/35 p-4" onKeyDown={onModalKeyDown} onMouseDown={event => {
       if (event.currentTarget === event.target && !loading) onClose()
-    }}>
+    }} ref={modalRef}>
       <section aria-labelledby="schedule-editor-title" aria-modal="true" className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl" role="dialog">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -131,7 +138,7 @@ export function ScheduleBlockEditor({
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm font-medium text-gray-700">
               开始时间
-              <input aria-label="开始时间" className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm tabular-nums focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" disabled={loading} onChange={event => changeStart(event.currentTarget.value)} pattern="(?:[01]\d|2[0-3]):[0-5]\d" value={startValue} />
+              <input aria-label="开始时间" className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm tabular-nums focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" disabled={loading} onChange={event => changeStart(event.currentTarget.value)} pattern="(?:[01]\d|2[0-3]):[0-5]\d" ref={startInputRef} value={startValue} />
             </label>
             <label className="text-sm font-medium text-gray-700">
               结束时间

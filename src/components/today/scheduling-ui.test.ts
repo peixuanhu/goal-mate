@@ -55,6 +55,21 @@ describe("manual scheduling UI helpers", () => {
     expect(minuteFromTimelinePoint(999, { top: 100, height: 300 }, preference, 45)).toBe(555)
   })
 
+  it("uses a day-start-relative grid and floors an unaligned latest start", () => {
+    const offsetPreference = {
+      ...preference,
+      day_start_minutes: 490,
+      day_end_minutes: 603,
+    }
+    expect(minuteFromTimelinePoint(999, { top: 100, height: 300 }, offsetPreference, 30)).toBe(565)
+    expect((565 - offsetPreference.day_start_minutes) % 15).toBe(0)
+    expect(localTimeRangeToUtc("2026-08-23", "08:10", "09:10", offsetPreference)).toEqual(expect.objectContaining({
+      start_at: "2026-08-23T00:10:00.000Z",
+      end_at: "2026-08-23T01:10:00.000Z",
+    }))
+    expect(durationForCandidate(999, offsetPreference)).toBe(105)
+  })
+
   it("scans half-open busy ranges and accepts touching edges", () => {
     const blocks = [
       block("2026-08-23T00:00:00.000Z", "2026-08-23T01:00:00.000Z"),
@@ -68,6 +83,29 @@ describe("manual scheduling UI helpers", () => {
     expect(findNextFreeStart("2026-08-23", 30, preference, [ignored])).toBe(480)
     const full = block("2026-08-23T00:00:00.000Z", "2026-08-23T02:00:00.000Z")
     expect(findNextFreeStart("2026-08-23", 30, preference, [full])).toBeNull()
+  })
+
+  it("reports no space when the planning window is shorter than one slot", () => {
+    expect(findNextFreeStart("2026-08-23", 15, {
+      ...preference,
+      day_start_minutes: 490,
+      day_end_minutes: 500,
+    }, [])).toBeNull()
+  })
+
+  it("skips nonexistent and ambiguous wall-clock slots while scanning", () => {
+    expect(findNextFreeStart("2026-03-08", 30, {
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 150,
+      day_end_minutes: 240,
+    }, [])).toBe(180)
+    expect(findNextFreeStart("2026-11-01", 30, {
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 60,
+      day_end_minutes: 180,
+    }, [])).toBe(120)
   })
 
   it("rejects invalid or DST-nonexistent local intervals", () => {
@@ -84,5 +122,41 @@ describe("manual scheduling UI helpers", () => {
       "Mars/Olympus",
       "2026-08-23",
     )).toThrow("timezone")
+  })
+
+  it("maps the next existing local-date start to minute 1440 even when DST skips midnight", () => {
+    expect(toLocalBlockRange(
+      "2026-03-07T14:00:00.000Z",
+      "2026-03-08T05:00:00.000Z",
+      "America/Havana",
+      "2026-03-07",
+    )).toEqual({ start: 540, end: 1440 })
+    expect(toLocalBlockRange(
+      "2026-08-23T01:00:00.000Z",
+      "2026-08-23T16:00:00.000Z",
+      "Asia/Shanghai",
+      "2026-08-23",
+    )).toEqual({ start: 540, end: 1440 })
+    expect(() => toLocalBlockRange(
+      "2026-03-07T14:00:00.000Z",
+      "2026-03-08T06:00:00.000Z",
+      "America/Havana",
+      "2026-03-07",
+    )).toThrow("时间块不能跨本地日期")
+  })
+
+  it("accepts an aligned 24:00 editor end and rejects an unaligned planning boundary", () => {
+    expect(localTimeRangeToUtc("2026-08-23", "23:45", "24:00", {
+      ...preference,
+      day_end_minutes: 1440,
+    })).toEqual(expect.objectContaining({
+      start_at: "2026-08-23T15:45:00.000Z",
+      end_at: "2026-08-23T16:00:00.000Z",
+    }))
+    expect(() => localTimeRangeToUtc("2026-08-23", "09:55", "10:03", {
+      ...preference,
+      day_start_minutes: 490,
+      day_end_minutes: 603,
+    })).toThrow("15 分钟刻度")
   })
 })

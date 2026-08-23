@@ -117,6 +117,15 @@ function getRequestedDate(url: RequestInfo | URL): string {
   return date
 }
 
+function hasInertAncestor(element: Element): boolean {
+  let current: Element | null = element
+  while (current) {
+    if (current.hasAttribute("inert")) return true
+    current = current.parentElement
+  }
+  return false
+}
+
 describe("manual scheduling components", () => {
   it("gives both Plan and Action candidates a shared keyboard scheduling action", () => {
     const onSchedule = vi.fn()
@@ -229,6 +238,48 @@ describe("manual scheduling components", () => {
     expect(onEditBlock).toHaveBeenCalledWith(expect.objectContaining({ block_id: "a" }))
   })
 
+  it("gives adjacent 15-minute scheduled blocks non-overlapping interactive geometry", () => {
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[
+            scheduledBlock({
+              block_id: "first",
+              title: "第一刻度",
+              start_at: "2026-08-23T01:00:00.000Z",
+              end_at: "2026-08-23T01:15:00.000Z",
+            }),
+            scheduledBlock({
+              block_id: "second",
+              title: "第二刻度",
+              start_at: "2026-08-23T01:15:00.000Z",
+              end_at: "2026-08-23T01:30:00.000Z",
+            }),
+          ]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={{ ...preference, day_end_minutes: 1321 }}
+        />
+      </DndContext>,
+    )
+
+    const trackHeight = Number.parseFloat(screen.getByTestId("today-timeline-dropzone").style.minHeight)
+    const first = screen.getByRole("article", { name: "第一刻度，已安排" })
+    const second = screen.getByRole("article", { name: "第二刻度，已安排" })
+    const firstTop = Number.parseFloat(first.style.top) / 100 * trackHeight
+    const firstCssHeight = Number.parseFloat(first.style.height) / 100 * trackHeight
+    const firstActualHeight = Math.max(firstCssHeight, Number.parseFloat(first.style.minHeight))
+    const secondTop = Number.parseFloat(second.style.top) / 100 * trackHeight
+
+    expect(firstActualHeight).toBeGreaterThanOrEqual(48)
+    expect(firstTop + firstActualHeight).toBeLessThanOrEqual(secondTop)
+    expect(within(first).getByRole("button", { name: "编辑 第一刻度" })).toBeTruthy()
+    expect(within(second).getByRole("button", { name: "完成 第二刻度" })).toBeTruthy()
+  })
+
   it("validates create time locally and submits normalized UTC only after confirmation", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined)
     render(
@@ -262,6 +313,28 @@ describe("manual scheduling components", () => {
     }))
   })
 
+  it("does not close an in-flight editor on Escape", () => {
+    const onClose = vi.fn()
+    render(
+      <ScheduleBlockEditor
+        block={null}
+        candidate={planCandidate}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={600}
+        initialStartMinutes={540}
+        loading
+        onCancelBlock={vi.fn()}
+        onClose={onClose}
+        onIntentChange={vi.fn()}
+        onSubmit={vi.fn()}
+        preference={preference}
+      />,
+    )
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "安排时间块" }), { key: "Escape" })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it("shows plan progress only for a direct ordinary Plan and exposes all outcomes", () => {
     const { rerender } = render(
       <ScheduleCompletionSheet
@@ -290,9 +363,127 @@ describe("manual scheduling components", () => {
     )
     expect(screen.queryByLabelText("计划进度")).toBeNull()
   })
+
+  it("omits progress content and thinking when skipped while preserving drafts for another outcome", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ScheduleCompletionSheet
+        block={scheduledBlock()}
+        error={null}
+        isOrdinaryPlan={false}
+        loading={false}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText("完成内容"), { target: { value: "保留的内容草稿" } })
+    fireEvent.change(screen.getByLabelText("过程思考"), { target: { value: "保留的思考草稿" } })
+    fireEvent.change(screen.getByLabelText("结果备注"), { target: { value: "跳过原因" } })
+    fireEvent.click(screen.getByRole("radio", { name: "跳过" }))
+    expect(screen.queryByLabelText("完成内容")).toBeNull()
+    expect(screen.queryByLabelText("过程思考")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "保存结果" }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({
+      block_id: "block_copy",
+      expected_version: 2,
+      outcome: "skipped",
+      result_note: "跳过原因",
+    }))
+
+    fireEvent.click(screen.getByRole("radio", { name: "部分完成" }))
+    expect((screen.getByLabelText("完成内容") as HTMLTextAreaElement).value).toBe("保留的内容草稿")
+    expect((screen.getByLabelText("过程思考") as HTMLTextAreaElement).value).toBe("保留的思考草稿")
+  })
 })
 
 describe("TodayWorkspace manual scheduling orchestration", () => {
+  it("creates from an 08:10-origin preference using the same valid relative grid", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-08-23T02:00:00.000Z"))
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "offset-key") })
+    const writes: Record<string, unknown>[] = []
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (!init?.method) {
+        return jsonResponse({
+          ...todayView(getRequestedDate(url), [], [planCandidate]),
+          preference: { ...preference, day_start_minutes: 490, day_end_minutes: 610 },
+        })
+      }
+      writes.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+      return jsonResponse({ error: "测试冲突", code: "SCHEDULE_CONFLICT" }, 409)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    const trigger = await screen.findByRole("button", { name: "安排到今天" })
+    fireEvent.click(trigger)
+    expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("08:10")
+    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("09:10")
+    fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toEqual(expect.objectContaining({
+      start_at: "2026-08-23T00:10:00.000Z",
+      end_at: "2026-08-23T01:10:00.000Z",
+    }))
+  })
+
+  it("traps editor focus, inerts the background, closes on Escape, and restores the scheduling trigger", async () => {
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "focus-key") })
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => jsonResponse(todayView(
+      getRequestedDate(url),
+      [],
+      [planCandidate],
+    ))))
+    render(<TodayWorkspace />)
+
+    const trigger = await screen.findByRole("button", { name: "安排到今天" })
+    const header = document.querySelector("header")
+    header?.setAttribute("inert", "preexisting")
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole("dialog", { name: "安排时间块" })
+    const start = within(dialog).getByLabelText("开始时间")
+    await waitFor(() => expect(document.activeElement).toBe(start))
+    expect(hasInertAncestor(trigger)).toBe(true)
+    fireEvent.keyDown(trigger, { key: "Enter" })
+    expect(screen.getByRole("dialog", { name: "安排时间块" })).toBe(dialog)
+    expect(vi.mocked(crypto.randomUUID)).toHaveBeenCalledTimes(1)
+
+    const firstClose = within(dialog).getAllByRole("button", { name: "关闭" })[0]
+    firstClose.focus()
+    fireEvent.keyDown(firstClose, { key: "Tab", shiftKey: true })
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "确认安排" }))
+
+    start.focus()
+    fireEvent.keyDown(start, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+    expect(hasInertAncestor(trigger)).toBe(false)
+    expect(header?.getAttribute("inert")).toBe("preexisting")
+  })
+
+  it("moves completion-sheet focus inside, inerts the background, and restores its trigger", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => jsonResponse(todayView(
+      getRequestedDate(url),
+      [scheduledBlock()],
+      [planCandidate],
+    ))))
+    render(<TodayWorkspace />)
+
+    const trigger = await screen.findByRole("button", { name: "完成 写发布说明" })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole("dialog", { name: "记录时间块结果" })
+    const firstOutcome = within(dialog).getByRole("radio", { name: "完成" })
+    await waitFor(() => expect(document.activeElement).toBe(firstOutcome))
+    expect(hasInertAncestor(trigger)).toBe(true)
+    fireEvent.keyDown(firstOutcome, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "记录时间块结果" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+    expect(hasInertAncestor(trigger)).toBe(false)
+  })
+
   it("shows a scoped error instead of opening an editor when the configured day is full", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date("2026-08-23T02:00:00.000Z"))
@@ -374,14 +565,44 @@ describe("TodayWorkspace manual scheduling orchestration", () => {
     render(<TodayWorkspace />)
 
     expect((await screen.findAllByText("上线产品")).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole("button", { name: "安排到今天" }))
+    const trigger = screen.getByRole("button", { name: "安排到今天" })
+    trigger.focus()
+    fireEvent.click(trigger)
     fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
     expect(fetchMock.mock.calls.filter(call => !call[1]?.method)).toHaveLength(2)
     expect(changed).toHaveBeenCalledTimes(1)
     expect((changed.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ entity: "schedule-block" })
     window.removeEventListener("goal-mate:data-changed", changed)
+  })
+
+  it("keeps the editor and create key after a successful write whose refetch fails", async () => {
+    vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "refetch-key") })
+    let getCount = 0
+    const keys: string[] = []
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        keys.push(new Headers(init.headers).get("Idempotency-Key") ?? "")
+        return jsonResponse(scheduledBlock({ action_id: null, title: "上线产品" }))
+      }
+      getCount += 1
+      if (getCount === 2) return jsonResponse({ error: "刷新失败" }, 500)
+      return jsonResponse(todayView(getRequestedDate(url), [], [planCandidate]))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByRole("button", { name: "安排到今天" })
+    fireEvent.click(screen.getByRole("button", { name: "安排到今天" }))
+    fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
+    const editor = screen.getByRole("dialog", { name: "安排时间块" })
+    expect((await within(editor).findByRole("alert")).textContent).toContain("修改已保存，但今日数据刷新失败")
+
+    fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull())
+    expect(keys).toEqual(["refetch-key", "refetch-key"])
   })
 
   it("sends versioned update, cancel, and completion bodies and keeps scoped 409 dialogs open", async () => {
