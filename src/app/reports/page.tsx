@@ -5,6 +5,7 @@ import Link from "next/link"
 import { CalendarDays, RefreshCcw, Save, Trash2 } from "lucide-react"
 
 import AuthGuard from "@/components/AuthGuard"
+import { AppPage, PageHeader } from "@/components/app-page"
 import { MainLayout } from "@/components/main-layout"
 import { MarkdownPreview } from "@/components/ui/markdown-preview"
 import { Button } from "@/components/ui/button"
@@ -117,18 +118,18 @@ export default function ReportsPage() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <div className="flex justify-end">
-            <Button type="button" variant="outline" onClick={fetchWeeklySummary} disabled={loadingSummary} className="w-full sm:w-auto">
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              {loadingSummary ? "刷新中..." : "刷新本周回顾"}
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">回顾</h1>
-            <p className="text-sm text-muted-foreground">自动汇总本周进展，保存前补充你的下周计划。</p>
-          </div>
+        <AppPage contentClassName="max-w-7xl space-y-6 sm:space-y-8">
+          <PageHeader
+            actions={(
+              <Button type="button" variant="outline" onClick={fetchWeeklySummary} disabled={loadingSummary} className="w-full sm:w-auto">
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                {loadingSummary ? "刷新中..." : "刷新本周回顾"}
+              </Button>
+            )}
+            description="自动汇总本周进展，保存前补充你的下周计划。"
+            eyebrow="Review workspace"
+            title="回顾"
+          />
 
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
@@ -137,19 +138,19 @@ export default function ReportsPage() {
           )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Card>
+            <Card className="border-stone-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">进展记录</CardTitle>
               </CardHeader>
               <CardContent className="text-3xl font-bold">{summary.stats.progressRecordCount}</CardContent>
             </Card>
-            <Card>
+            <Card className="border-stone-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">推进计划</CardTitle>
               </CardHeader>
               <CardContent className="text-3xl font-bold">{summary.stats.planCount}</CardContent>
             </Card>
-            <Card>
+            <Card className="border-stone-200/80 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">关联目标</CardTitle>
               </CardHeader>
@@ -157,7 +158,7 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          <Card>
+          <Card className="border-stone-200/80 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <CalendarDays className="h-5 w-5" />
@@ -238,7 +239,7 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-stone-200/80 shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg sm:text-xl">历史报告</CardTitle>
             </CardHeader>
@@ -286,7 +287,7 @@ export default function ReportsPage() {
           </Card>
 
           {selectedReport && (
-            <Card>
+            <Card className="border-stone-200/80 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">{selectedReport.title}</CardTitle>
               </CardHeader>
@@ -295,7 +296,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </AppPage>
       </MainLayout>
     </AuthGuard>
   )

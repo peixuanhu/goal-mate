@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { MainLayout } from "./main-layout"
 
-vi.mock("./workspace/global-header", () => ({
-  GlobalHeader: () => <header>全局导航</header>,
+vi.mock("./app-header", () => ({
+  AppHeader: () => <header>全局导航</header>,
 }))
 
 vi.mock("./workspace/workspace-sidebar-controller", () => ({

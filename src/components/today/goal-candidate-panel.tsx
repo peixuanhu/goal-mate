@@ -93,14 +93,14 @@ function CandidateCard({
 
   return (
     <article
-      className={`rounded-xl border border-gray-200 bg-white p-3 shadow-xs ${isDragging ? "opacity-50" : ""}`}
+      className={`rounded-xl border border-stone-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(28,25,23,0.04)] transition-shadow hover:shadow-sm ${isDragging ? "opacity-50" : ""}`}
       ref={setNodeRef}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
     >
       <div className="flex items-start gap-2.5">
         <button
           aria-label={`拖动 ${candidate.name}`}
-          className={`mt-0.5 flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-lg touch-none ${isAction ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-500"}`}
+          className={`mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg ${isAction ? "bg-rose-50 text-rose-500" : "bg-violet-50 text-violet-600"}`}
           type="button"
           {...attributes}
           {...listeners}
@@ -109,12 +109,12 @@ function CandidateCard({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 text-sm font-medium leading-5 text-gray-800">{candidate.name}</p>
-            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+            <p className="min-w-0 text-sm font-medium leading-5 text-stone-800">{candidate.name}</p>
+            <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-500">
               {isAction ? "行动项" : "计划"}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-400">
             <span className="inline-flex items-center gap-1">
               <CalendarClock aria-hidden="true" className="h-3 w-3" />
               预计 {candidate.estimated_minutes ?? "—"} 分钟
@@ -125,7 +125,7 @@ function CandidateCard({
         </div>
       </div>
       <button
-        className="mt-3 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className="mt-3 w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs font-medium text-stone-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
         onClick={() => onSchedule(candidate)}
         type="button"
       >
@@ -137,7 +137,7 @@ function CandidateCard({
 
 function EmptyCandidates() {
   return (
-    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+    <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-500">
       暂无可安排事项
     </div>
   )
@@ -165,13 +165,13 @@ function PlanGroups({
         return (
           <section
             aria-labelledby={headingId}
-            className="rounded-xl border border-gray-100 bg-gray-50/60 p-2"
+            className="rounded-xl border border-stone-100 bg-stone-50/70 p-2"
             key={group.planId}
           >
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <h4 className="truncate text-xs font-semibold text-gray-600" id={headingId}>{planName}</h4>
+              <h4 className="truncate text-xs font-semibold text-stone-600" id={headingId}>{planName}</h4>
               {group.actions.length > 0 ? (
-                <span className="shrink-0 text-[10px] text-gray-400">{group.actions.length} 个行动项</span>
+                <span className="shrink-0 text-[10px] text-stone-400">{group.actions.length} 个行动项</span>
               ) : null}
             </div>
             <ul aria-label={`${planName}的行动项`} className="space-y-2">
@@ -211,9 +211,9 @@ function GoalTree({
             <span
               aria-hidden="true"
               className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: group.focused ? focus?.color ?? "#7c3aed" : "#d1d5db" }}
+              style={{ backgroundColor: group.focused ? focus?.color ?? "#7c3aed" : "#d6d3d1" }}
             />
-            <h3 id={`goal-group-${group.key}`} className="truncate text-sm font-semibold text-gray-800">
+            <h3 id={`goal-group-${group.key}`} className="truncate text-sm font-semibold text-stone-800">
               {group.name}
             </h3>
             {group.focused ? (
@@ -244,15 +244,15 @@ export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedu
   return (
     <aside
       aria-labelledby="candidate-panel-heading"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]"
     >
-      <div className="border-b border-gray-100 px-4 py-4">
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">待安排</p>
-        <h2 id="candidate-panel-heading" className="mt-0.5 text-base font-semibold text-gray-900">目标与候选事项</h2>
+      <div className="border-b border-stone-100 px-4 py-4">
+        <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-stone-400">待安排</p>
+        <h2 id="candidate-panel-heading" className="mt-0.5 text-base font-semibold text-stone-950">目标与候选事项</h2>
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-sm text-gray-500" role="status">
+        <div className="flex flex-1 items-center justify-center p-6 text-sm text-stone-500" role="status">
           正在加载候选事项…
         </div>
       ) : error ? (
@@ -262,8 +262,8 @@ export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedu
         </div>
       ) : (
         <Tabs className="min-h-0 flex-1 gap-0" defaultValue="goal-tree">
-          <div className="border-b border-gray-100 px-3 py-3">
-            <TabsList aria-label="候选事项分组方式" className="grid w-full grid-cols-3 bg-gray-100">
+          <div className="border-b border-stone-100 px-3 py-3">
+            <TabsList aria-label="候选事项分组方式" className="grid w-full grid-cols-3 rounded-xl bg-stone-100 p-1">
               <TabsTrigger value="goal-tree">目标树</TabsTrigger>
               <TabsTrigger value="quadrant">四象限</TabsTrigger>
               <TabsTrigger value="unclassified">未归类</TabsTrigger>

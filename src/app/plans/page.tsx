@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label"
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MainLayout } from "@/components/main-layout"
+import { AppPage, PageHeader } from "@/components/app-page"
 import { TextPreview } from "@/components/ui/text-preview"
 import { getRecurrenceTypeDisplay, getRecurringTaskDetails } from "@/lib/recurring-utils"
 import { ChevronUp, ChevronDown, Filter, X, GripVertical } from 'lucide-react'
@@ -433,10 +434,15 @@ function PlansPageContent() {
 
   return (
     <MainLayout>
-      <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-        <Card className="min-w-0 overflow-hidden">
+      <AppPage contentClassName="max-w-7xl space-y-6 sm:space-y-8">
+        <PageHeader
+          description="把目标拆成可以排序、跟踪和持续推进的具体计划。"
+          eyebrow="Plan workspace"
+          title="计划管理"
+        />
+        <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
           <CardHeader className="px-4 sm:px-6">
-            <CardTitle className="text-lg sm:text-xl">计划管理</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">计划清单与编辑</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 px-4 sm:px-6">
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -953,8 +959,8 @@ function PlansPageContent() {
             </div>
 
             {/* 分页 */}
-            <div className="mt-6 flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:bg-gray-800">
-              <div className="text-center text-sm text-gray-600 sm:text-left dark:text-gray-400">
+            <div className="mt-6 flex flex-col gap-4 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+              <div className="text-center text-sm text-stone-600 sm:text-left">
                 共 {total} 条记录，第 {pageNum} 页 / 共 {Math.ceil(total / pageSize)} 页
               </div>
               <div className="flex w-full gap-2 sm:w-auto">
@@ -978,7 +984,7 @@ function PlansPageContent() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </AppPage>
     </MainLayout>
   )
 }

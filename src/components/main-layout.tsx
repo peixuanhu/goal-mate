@@ -2,13 +2,13 @@
 
 import { DndContext, type DragEndEvent } from "@dnd-kit/core"
 import { Bot, ChevronLeft, ChevronRight, ListTree, X } from "lucide-react"
-import React, { useEffect, useState, type ReactNode } from "react"
+import React, { type ReactNode, useEffect, useState } from "react"
 
 import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
 
+import { AppHeader } from "./app-header"
 import { AiWorkspace } from "./today/ai-workspace"
 import { GoalCandidatePanel } from "./today/goal-candidate-panel"
-import { GlobalHeader } from "./workspace/global-header"
 import { WorkspaceSidebarController } from "./workspace/workspace-sidebar-controller"
 
 interface WorkspaceSnapshot {
@@ -46,33 +46,35 @@ export function MainLayout({
     return () => document.removeEventListener("keydown", closeOnEscape)
   }, [mobilePanel])
 
-  const workspace = workspaceSnapshot ? (
-    <GoalCandidatePanel
-      candidates={workspaceSnapshot.candidates}
-      error={workspaceSnapshot.error}
-      focus={workspaceSnapshot.focus}
-      loading={workspaceSnapshot.loading}
-      onSchedule={onScheduleCandidate ?? (() => undefined)}
-    />
-  ) : (
-    <WorkspaceSidebarController date={workspaceDate} />
-  )
+  function renderWorkspace() {
+    if (workspaceSnapshot) {
+      return (
+        <GoalCandidatePanel
+          candidates={workspaceSnapshot.candidates}
+          error={workspaceSnapshot.error}
+          focus={workspaceSnapshot.focus}
+          loading={workspaceSnapshot.loading}
+          onSchedule={onScheduleCandidate ?? (() => undefined)}
+        />
+      )
+    }
+    return <WorkspaceSidebarController date={workspaceDate} />
+  }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#f5f5f4] text-gray-900">
-      <GlobalHeader />
+    <div className="flex min-h-dvh flex-col bg-stone-50 text-stone-900 lg:h-dvh lg:overflow-hidden">
+      <AppHeader />
+
       <DndContext onDragEnd={onWorkspaceDragEnd ?? (() => undefined)}>
-        <div className="relative flex min-h-0 flex-1 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
+        <div className="relative flex min-h-0 flex-1">
           <aside
             aria-label="目标工作台"
-            className={`relative hidden shrink-0 border-r border-gray-200 bg-white transition-[width,opacity] duration-200 lg:block ${leftOpen ? "w-[300px] opacity-100 xl:w-[320px]" : "w-0 overflow-hidden opacity-0"}`}
+            className={`relative hidden shrink-0 border-r border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${leftOpen ? "w-[300px] opacity-100 xl:w-[320px]" : "w-0 overflow-hidden opacity-0"}`}
           >
-            <div className="h-full min-h-0 p-2">
-              {workspace}
-            </div>
+            <div className="h-full min-h-0 p-2">{renderWorkspace()}</div>
             <button
               aria-label="收起目标工作台"
-              className="absolute right-2 top-2 z-20 rounded-lg bg-white/90 p-1.5 text-gray-400 shadow-sm hover:bg-gray-100 hover:text-gray-700"
+              className="absolute right-3 top-3 z-20 rounded-lg p-2 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
               onClick={() => setLeftOpen(false)}
               type="button"
             >
@@ -80,23 +82,23 @@ export function MainLayout({
             </button>
           </aside>
 
-          <main className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">
-            <div className="pointer-events-none sticky top-3 z-20 hidden h-0 items-start justify-between px-3 lg:flex">
+          <main className="relative min-w-0 flex-1 overflow-y-auto">
+            <div className="pointer-events-none sticky top-4 z-20 hidden h-0 items-start justify-between px-4 lg:flex">
               <button
                 aria-label="展开目标工作台"
-                className={`pointer-events-auto rounded-lg border border-gray-200 bg-white/90 p-2 text-gray-500 shadow-sm backdrop-blur hover:bg-white ${leftOpen ? "invisible" : "visible"}`}
+                className={`pointer-events-auto rounded-xl border border-stone-200 bg-white p-2.5 text-stone-500 shadow-sm transition hover:bg-stone-50 hover:text-stone-900 ${leftOpen ? "invisible" : "visible"}`}
                 onClick={() => setLeftOpen(true)}
                 type="button"
               >
-                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                <ChevronRight aria-hidden="true" className="h-5 w-5" />
               </button>
               <button
                 aria-label="展开 AI 助手"
-                className={`pointer-events-auto rounded-lg border border-gray-200 bg-white/90 p-2 text-gray-500 shadow-sm backdrop-blur hover:bg-white ${rightOpen ? "invisible" : "visible"}`}
+                className={`pointer-events-auto rounded-xl border border-stone-200 bg-white p-2.5 text-stone-500 shadow-sm transition hover:bg-stone-50 hover:text-stone-900 ${rightOpen ? "invisible" : "visible"}`}
                 onClick={() => setRightOpen(true)}
                 type="button"
               >
-                <Bot aria-hidden="true" className="h-4 w-4" />
+                <Bot aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
             {children}
@@ -104,25 +106,25 @@ export function MainLayout({
 
           <aside
             aria-label="AI 助手"
-            className={`relative hidden shrink-0 border-l border-gray-200 bg-white transition-[width,opacity] duration-200 lg:block ${rightOpen ? "w-[340px] opacity-100 xl:w-[380px]" : "w-0 overflow-hidden opacity-0"}`}
+            className={`relative z-10 hidden min-h-0 shrink-0 border-l border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${rightOpen ? "w-[360px] opacity-100 xl:w-[400px]" : "w-0 overflow-hidden opacity-0"}`}
           >
-            <div className="h-full min-h-0 p-2"><AiWorkspace /></div>
             <button
               aria-label="收起 AI 助手"
-              className="absolute left-2 top-2 z-20 rounded-lg bg-white/90 p-1.5 text-gray-400 shadow-sm hover:bg-gray-100 hover:text-gray-700"
+              className="absolute right-3 top-3 z-20 rounded-lg p-2 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
               onClick={() => setRightOpen(false)}
               type="button"
             >
-              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              <X aria-hidden="true" className="h-4 w-4" />
             </button>
+            <AiWorkspace className="min-h-0 rounded-none border-0 shadow-none" />
           </aside>
         </div>
       </DndContext>
 
-      <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur lg:hidden">
+      <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-2 rounded-2xl border border-stone-200 bg-white/95 p-2 shadow-lg backdrop-blur lg:hidden">
         <button
           aria-label="打开目标工作台"
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
           onClick={() => setMobilePanel("workspace")}
           type="button"
         >
@@ -131,7 +133,7 @@ export function MainLayout({
         </button>
         <button
           aria-label="打开 AI 助手"
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
           onClick={() => setMobilePanel("ai")}
           type="button"
         >
@@ -141,25 +143,30 @@ export function MainLayout({
       </div>
 
       {mobilePanel ? (
-        <div className="fixed inset-0 z-50 bg-gray-950/35 lg:hidden" onMouseDown={event => {
-          if (event.currentTarget === event.target) setMobilePanel(null)
-        }}>
+        <div
+          className="fixed inset-0 z-50 bg-stone-950/35 backdrop-blur-[1px] lg:hidden"
+          onMouseDown={event => {
+            if (event.currentTarget === event.target) setMobilePanel(null)
+          }}
+        >
           <section
             aria-label={mobilePanel === "workspace" ? "目标工作台" : "AI 助手"}
             aria-modal="true"
-            className="absolute inset-y-0 left-0 flex w-[92vw] max-w-[380px] flex-col bg-[#f5f5f4] p-2 shadow-2xl"
+            className={`absolute inset-y-0 flex w-[min(92vw,400px)] flex-col bg-stone-50 p-2 shadow-2xl ${mobilePanel === "workspace" ? "left-0 border-r" : "right-0 border-l"} border-stone-200`}
             role="dialog"
           >
             <button
               aria-label={mobilePanel === "workspace" ? "关闭目标工作台" : "关闭 AI 助手"}
-              className="absolute right-4 top-4 z-30 rounded-lg bg-white p-1.5 text-gray-500 shadow-sm"
+              className="absolute right-4 top-4 z-30 rounded-lg bg-white p-2 text-stone-500 shadow-sm transition hover:bg-stone-100"
               onClick={() => setMobilePanel(null)}
               type="button"
             >
               <X aria-hidden="true" className="h-4 w-4" />
             </button>
             <div className="min-h-0 flex-1">
-              {mobilePanel === "workspace" ? workspace : <AiWorkspace />}
+              {mobilePanel === "workspace"
+                ? renderWorkspace()
+                : <AiWorkspace className="min-h-0 rounded-none border-0 shadow-none" />}
             </div>
           </section>
         </div>

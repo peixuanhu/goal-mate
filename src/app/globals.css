@@ -49,38 +49,38 @@
     "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.75rem;
+  --background: oklch(0.976 0.004 95);
+  --foreground: oklch(0.216 0.006 56);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.216 0.006 56);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.216 0.006 56);
+  --primary: oklch(0.541 0.244 293);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.956 0.006 95);
+  --secondary-foreground: oklch(0.278 0.006 56);
+  --muted: oklch(0.956 0.006 95);
+  --muted-foreground: oklch(0.553 0.014 58);
+  --accent: oklch(0.952 0.022 293);
+  --accent-foreground: oklch(0.42 0.177 293);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.902 0.009 82);
+  --input: oklch(0.902 0.009 82);
+  --ring: oklch(0.606 0.218 293);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar: oklch(0.992 0.002 95);
+  --sidebar-foreground: oklch(0.216 0.006 56);
+  --sidebar-primary: oklch(0.541 0.244 293);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.952 0.022 293);
+  --sidebar-accent-foreground: oklch(0.42 0.177 293);
+  --sidebar-border: oklch(0.902 0.009 82);
+  --sidebar-ring: oklch(0.606 0.218 293);
 }
 
 .dark {
@@ -122,64 +122,8 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
-}
-
-/* CopilotKit 聊天界面样式 - 强制应用 */
-
-/* 导入CopilotKit默认样式 */
-@import "@copilotkit/react-ui/styles.css";
-
-/* 聊天容器样式 */
-[data-copilot-chat="true"] {
-  height: 100% !important;
-  max-height: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  background: hsl(var(--background)) !important;
-  border: none !important;
-  overflow: hidden !important;
-  font-family: inherit !important;
-}
-
-/* 覆盖所有CopilotKit内部样式 */
-[data-copilot-chat="true"] *,
-[data-copilot-chat="true"] *::before,
-[data-copilot-chat="true"] *::after {
-  box-sizing: border-box !important;
-  font-family: inherit !important;
-}
-
-/* 聊天组件主体 */
-.copilot-chat {
-  height: 100% !important;
-  width: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  background: hsl(var(--background)) !important;
-  border: none !important;
-  color: hsl(var(--foreground)) !important;
-}
-
-/* 勿用 [class*="copilot"] 全盘覆盖 background/border，会破坏聊天气泡；消息与输入样式由 chat-wrapper 接管 */
-
-/* 仅当页面显式标注 data-copilot-chat 时（如 test-chat）提供轻量滚动条与盒模型 */
-[data-copilot-chat="true"] *::-webkit-scrollbar {
-  width: 0.25rem !important;
-}
-
-[data-copilot-chat="true"] *::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-[data-copilot-chat="true"] *::-webkit-scrollbar-thumb {
-  background: hsl(var(--border)) !important;
-  border-radius: var(--radius) !important;
-}
-
-[data-copilot-chat="true"] *::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground)) !important;
 }
 
 /* 自定义工具类 */

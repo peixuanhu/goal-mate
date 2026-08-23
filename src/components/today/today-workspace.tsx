@@ -393,10 +393,10 @@ export function TodayWorkspace() {
       workspaceSnapshot={{ candidates, error, focus, loading }}
     >
       <div className="h-full min-h-0 px-3 py-4 sm:px-5 sm:py-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(28,25,23,0.04)] sm:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Today workspace</p>
-            <h1 className="truncate text-lg font-semibold text-gray-900">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-stone-400">Today workspace</p>
+            <h1 className="mt-0.5 truncate text-xl font-semibold tracking-tight text-stone-950">
               {date === null ? "正在准备本地日期…" : formatHeadingDate(date)}
             </h1>
           </div>
@@ -436,7 +436,7 @@ export function TodayWorkspace() {
         ) : null}
 
         {date === null ? (
-          <div className="grid min-h-[520px] place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500 shadow-sm" role="status">
+          <div className="grid min-h-[520px] place-items-center rounded-2xl border border-stone-200/80 bg-white text-sm text-stone-500 shadow-sm" role="status">
             正在准备本地日期…
           </div>
         ) : (

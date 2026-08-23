@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
+import { AppPage, PageHeader } from "@/components/app-page"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
@@ -244,11 +245,17 @@ function ProgressPageContent() {
   return (
     <AuthGuard>
       <MainLayout>
-        <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <Card className="min-w-0 overflow-hidden">
+        <AppPage contentClassName="max-w-7xl space-y-6 sm:space-y-8">
+          <PageHeader
+            description="记录完成内容和思考，让每次推进都能回到对应计划。"
+            eyebrow="Progress workspace"
+            title="进展记录"
+          />
+
+          <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="flex flex-col gap-3 text-lg sm:flex-row sm:items-center sm:justify-between sm:text-xl">
-                <span>进展记录</span>
+                <span>记录筛选与编辑</span>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                   <Button 
                     size="sm" 
@@ -271,7 +278,7 @@ function ProgressPageContent() {
             </CardHeader>
             <CardContent className="space-y-6 px-4 sm:px-6">
               {/* 计划选择器 */}
-              <div className="mb-6 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:p-4">
+              <div className="mb-6 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">选择计划</Label>
@@ -556,8 +563,8 @@ function ProgressPageContent() {
 
               {/* 记录统计 */}
               {records.length > 0 && (
-                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50 p-3">
+                  <div className="text-sm text-stone-600">
                     共 {records.length} 条进展记录
                     {planId !== 'all' && ` • ${plans.find(p => p.plan_id === planId)?.name || ''}`}
                   </div>
@@ -565,7 +572,7 @@ function ProgressPageContent() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </AppPage>
       </MainLayout>
     </AuthGuard>
   )
