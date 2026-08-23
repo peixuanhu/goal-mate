@@ -21,7 +21,7 @@ export function AiWorkspace() {
   return (
     <aside
       aria-labelledby="ai-workspace-heading"
-      className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
     >
       <div className="border-b border-gray-100 px-5 py-4">
         <div className="flex items-center gap-3">
@@ -30,7 +30,7 @@ export function AiWorkspace() {
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Goal Mate AI</p>
-            <h2 id="ai-workspace-heading" className="text-base font-semibold text-gray-900">今日助手</h2>
+            <h2 id="ai-workspace-heading" className="text-base font-semibold text-gray-900">智能助手</h2>
           </div>
         </div>
       </div>

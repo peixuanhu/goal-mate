@@ -1,164 +1,139 @@
-"use client";
+"use client"
 
-import { ReactNode, useState } from "react";
-import { ChatWrapper } from "./chat-wrapper";
-import UserMenu from "./UserMenu";
-import { QuadrantLeftSidebar } from "./quadrant-left-sidebar";
-import { MessageCircle, X, PanelLeft, Bot } from "lucide-react";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core"
+import { Bot, ChevronLeft, ChevronRight, ListTree, X } from "lucide-react"
+import React, { useEffect, useState, type ReactNode } from "react"
+
+import { AiWorkspace } from "./today/ai-workspace"
+import { GlobalHeader } from "./workspace/global-header"
+import { WorkspaceSidebarController } from "./workspace/workspace-sidebar-controller"
 
 interface MainLayoutProps {
-  children: ReactNode;
+  children: ReactNode
+  workspaceDate?: string | null
+  onWorkspaceDragEnd?: (event: DragEndEvent) => void
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
-  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+export function MainLayout({ children, workspaceDate, onWorkspaceDragEnd }: MainLayoutProps) {
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const [mobilePanel, setMobilePanel] = useState<"workspace" | "ai" | null>(null)
+
+  useEffect(() => {
+    if (mobilePanel === null) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobilePanel(null)
+    }
+    document.addEventListener("keydown", closeOnEscape)
+    return () => document.removeEventListener("keydown", closeOnEscape)
+  }, [mobilePanel])
 
   return (
-    <div className="min-h-screen flex flex-col bg-background lg:flex-row lg:h-screen lg:max-h-dvh lg:overflow-hidden">
-      {/* 左侧四象限侧边栏 - 桌面端显示 */}
-      <div className="hidden lg:flex shrink-0">
-        <QuadrantLeftSidebar 
-          isOpen={isLeftSidebarOpen} 
-          onToggle={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)} 
-        />
+    <div className="flex min-h-dvh flex-col bg-[#f5f5f4] text-gray-900">
+      <GlobalHeader />
+      <DndContext onDragEnd={onWorkspaceDragEnd ?? (() => undefined)}>
+        <div className="relative flex min-h-0 flex-1 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
+          <aside
+            aria-label="目标工作台"
+            className={`relative hidden shrink-0 border-r border-gray-200 bg-white transition-[width,opacity] duration-200 lg:block ${leftOpen ? "w-[300px] opacity-100 xl:w-[320px]" : "w-0 overflow-hidden opacity-0"}`}
+          >
+            <div className="h-full min-h-0 p-2">
+              <WorkspaceSidebarController date={workspaceDate} />
+            </div>
+            <button
+              aria-label="收起目标工作台"
+              className="absolute right-2 top-2 z-20 rounded-lg bg-white/90 p-1.5 text-gray-400 shadow-sm hover:bg-gray-100 hover:text-gray-700"
+              onClick={() => setLeftOpen(false)}
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </aside>
+
+          <main className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">
+            <div className="pointer-events-none sticky top-3 z-20 hidden h-0 items-start justify-between px-3 lg:flex">
+              <button
+                aria-label="展开目标工作台"
+                className={`pointer-events-auto rounded-lg border border-gray-200 bg-white/90 p-2 text-gray-500 shadow-sm backdrop-blur hover:bg-white ${leftOpen ? "invisible" : "visible"}`}
+                onClick={() => setLeftOpen(true)}
+                type="button"
+              >
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </button>
+              <button
+                aria-label="展开 AI 助手"
+                className={`pointer-events-auto rounded-lg border border-gray-200 bg-white/90 p-2 text-gray-500 shadow-sm backdrop-blur hover:bg-white ${rightOpen ? "invisible" : "visible"}`}
+                onClick={() => setRightOpen(true)}
+                type="button"
+              >
+                <Bot aria-hidden="true" className="h-4 w-4" />
+              </button>
+            </div>
+            {children}
+          </main>
+
+          <aside
+            aria-label="AI 助手"
+            className={`relative hidden shrink-0 border-l border-gray-200 bg-white transition-[width,opacity] duration-200 lg:block ${rightOpen ? "w-[340px] opacity-100 xl:w-[380px]" : "w-0 overflow-hidden opacity-0"}`}
+          >
+            <div className="h-full min-h-0 p-2"><AiWorkspace /></div>
+            <button
+              aria-label="收起 AI 助手"
+              className="absolute left-2 top-2 z-20 rounded-lg bg-white/90 p-1.5 text-gray-400 shadow-sm hover:bg-gray-100 hover:text-gray-700"
+              onClick={() => setRightOpen(false)}
+              type="button"
+            >
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </aside>
+        </div>
+      </DndContext>
+
+      <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 shadow-lg backdrop-blur lg:hidden">
+        <button
+          aria-label="打开目标工作台"
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          onClick={() => setMobilePanel("workspace")}
+          type="button"
+        >
+          <ListTree aria-hidden="true" className="h-4 w-4" />
+          工作台
+        </button>
+        <button
+          aria-label="打开 AI 助手"
+          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          onClick={() => setMobilePanel("ai")}
+          type="button"
+        >
+          <Bot aria-hidden="true" className="h-4 w-4" />
+          AI
+        </button>
       </div>
 
-      {/* 主要内容区域 */}
-      <main className="w-full min-w-0 shrink-0 overflow-y-auto lg:min-h-0 lg:shrink lg:flex-1 relative">
-        {/* 桌面端折叠按钮栏 */}
-        <div className="hidden lg:flex absolute top-4 left-4 z-20 gap-2">
-          <button
-            onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-            className={`p-2 rounded-lg bg-white/90 backdrop-blur shadow-sm border border-gray-200 hover:bg-gray-50 transition-all ${isLeftSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-            title="展开四象限"
+      {mobilePanel ? (
+        <div className="fixed inset-0 z-50 bg-gray-950/35 lg:hidden" onMouseDown={event => {
+          if (event.currentTarget === event.target) setMobilePanel(null)
+        }}>
+          <section
+            aria-label={mobilePanel === "workspace" ? "目标工作台" : "AI 助手"}
+            aria-modal="true"
+            className="absolute inset-y-0 left-0 flex w-[92vw] max-w-[380px] flex-col bg-[#f5f5f4] p-2 shadow-2xl"
+            role="dialog"
           >
-            <PanelLeft className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
-        <div className="hidden lg:flex absolute top-4 right-4 z-20">
-          <button
-            onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-            className={`p-2 rounded-lg bg-white/90 backdrop-blur shadow-sm border border-gray-200 hover:bg-gray-50 transition-all ${isRightPanelOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-            title="展开 AI 助手"
-          >
-            <Bot className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
-        {children}
-      </main>
-
-      {/* AI 助手 - 桌面端：右侧栏 */}
-      <div className={`hidden lg:flex z-10 flex-col border-t border-border bg-background lg:h-screen lg:max-h-none lg:min-h-0 lg:border-l lg:border-t-0 lg:sticky lg:top-0 transition-all duration-300 ${isRightPanelOpen ? 'lg:w-[400px] xl:w-[450px]' : 'lg:w-0 lg:opacity-0 lg:overflow-hidden'}`}>
-        {/* 头部 */}
-        <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950 md:p-6">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center space-x-2 md:space-x-3">
-              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="h-5 w-5 text-white" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" 
-                  />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-gray-800 md:text-lg dark:text-gray-200">
-                  Goal Mate AI助手
-                </h2>
-                <p className="truncate text-xs text-gray-600 md:text-sm dark:text-gray-400">
-                  智能目标管理助手
-                </p>
-              </div>
+            <button
+              aria-label={mobilePanel === "workspace" ? "关闭目标工作台" : "关闭 AI 助手"}
+              className="absolute right-4 top-4 z-30 rounded-lg bg-white p-1.5 text-gray-500 shadow-sm"
+              onClick={() => setMobilePanel(null)}
+              type="button"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <div className="min-h-0 flex-1">
+              {mobilePanel === "workspace" ? <WorkspaceSidebarController date={workspaceDate} /> : <AiWorkspace />}
             </div>
-            
-            {/* 用户菜单 */}
-            <UserMenu />
-          </div>
+          </section>
         </div>
-        
-        {/* 聊天区域 */}
-        <div className="flex-1 min-h-0 relative bg-gray-50 dark:bg-gray-900">
-          <ChatWrapper />
-        </div>
-      </div>
-
-      {/* 移动端/平板 AI 助手悬浮按钮 */}
-      <button
-        onClick={() => setIsMobileChatOpen(true)}
-        className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
-        aria-label="打开 AI 助手"
-      >
-        <MessageCircle className="w-6 h-6" />
-      </button>
-
-      {/* 移动端/平板 AI 助手抽屉 */}
-      {isMobileChatOpen && (
-        <>
-          {/* 遮罩层 */}
-          <div 
-            className="lg:hidden fixed inset-0 bg-black/50 z-50"
-            onClick={() => setIsMobileChatOpen(false)}
-          />
-          {/* 抽屉 */}
-          <div className="lg:hidden fixed inset-y-0 right-0 w-[85%] max-w-[400px] bg-background z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            {/* 头部 */}
-            <div className="shrink-0 border-b bg-gradient-to-r from-blue-50 to-indigo-50 p-4 dark:from-blue-950 dark:to-indigo-950">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center space-x-2">
-                  <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      className="h-5 w-5 text-white" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" 
-                      />
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-base font-semibold text-gray-800 dark:text-gray-200">
-                      Goal Mate AI助手
-                    </h2>
-                    <p className="truncate text-xs text-gray-600 dark:text-gray-400">
-                      智能目标管理助手
-                    </p>
-                  </div>
-                </div>
-                
-                {/* 关闭按钮 */}
-                <button
-                  onClick={() => setIsMobileChatOpen(false)}
-                  className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  aria-label="关闭"
-                >
-                  <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                </button>
-              </div>
-            </div>
-            
-            {/* 聊天区域 */}
-            <div className="flex-1 min-h-0 relative bg-gray-50 dark:bg-gray-900">
-              <ChatWrapper />
-            </div>
-          </div>
-        </>
-      )}
+      ) : null}
     </div>
-  );
-} 
+  )
+}

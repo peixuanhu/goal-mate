@@ -33,6 +33,14 @@ vi.mock("@/components/chat-wrapper", async () => {
 afterEach(cleanup)
 
 describe("AiWorkspace behavior", () => {
+  it("uses a page-agnostic assistant title and can shrink inside the shared shell", () => {
+    render(<AiWorkspace />)
+
+    expect(screen.getByRole("heading", { name: "智能助手" })).toBeTruthy()
+    expect(screen.getByRole("complementary").className).toContain("min-h-0")
+    expect(screen.getByRole("complementary").className).not.toContain("min-h-[620px]")
+  })
+
   it("keeps the same stateful chat DOM mounted across repeated tab switches", () => {
     render(<AiWorkspace />)
 
