@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { cleanup, render, screen } from "@testing-library/react"
 import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -72,5 +74,17 @@ describe("unified interface foundations", () => {
 
     expect(await screen.findByTestId("goal-mate-chat")).toBeTruthy()
     expect(screen.getByTestId("copilot-chat-double")).toBeTruthy()
+  })
+
+  it("uses the shared page frame on every management route", () => {
+    const pageSources = ["goals", "plans", "progress", "reports"].map(route => (
+      readFileSync(path.join(process.cwd(), "src", "app", route, "page.tsx"), "utf8")
+    ))
+
+    for (const source of pageSources) {
+      expect(source).toContain("<AppPage")
+      expect(source).toContain("<PageHeader")
+      expect(source).not.toContain("返回首页")
+    }
   })
 })
