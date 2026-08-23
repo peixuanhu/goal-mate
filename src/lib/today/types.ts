@@ -54,6 +54,6 @@ export type TodayView = {
   preference: PlanningPreferenceView
   focus: { goal_id: string; name: string; tag: string; color: string; version: string } | null
   candidates: SchedulableCandidate[]
-  blocks: []
+  blocks: ScheduleBlockView[]
   checks: []
 }

@@ -7,7 +7,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { addDays, normalizeLocalDateInput } from "@/lib/focus-period-utils"
-import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
+import type { ScheduleBlockView, SchedulableCandidate, TodayView } from "@/lib/today/types"
 
 import { TodayWorkspace } from "./today-workspace"
 
@@ -64,7 +64,7 @@ function requestedDate(fetchMock: ReturnType<typeof vi.fn>, callIndex: number): 
   return date
 }
 
-function todayView(date: string, candidateName: string): TodayView {
+function todayView(date: string, candidateName: string, blocks: ScheduleBlockView[] = []): TodayView {
   return {
     date,
     preference: {
@@ -95,8 +95,26 @@ function todayView(date: string, candidateName: string): TodayView {
       is_recurring: false,
       version: `${date}T00:00:00.000Z`,
     }],
-    blocks: [],
+    blocks,
     checks: [],
+  }
+}
+
+function scheduleBlock(): ScheduleBlockView {
+  return {
+    block_id: "block_copy",
+    plan_id: "plan_launch",
+    action_id: "action_copy",
+    title: "写发布说明",
+    goal_id: "goal_product",
+    goal_name: "发布 Goal Mate v1",
+    energy_level: "medium",
+    start_at: "2026-08-23T01:00:00.000Z",
+    end_at: "2026-08-23T02:00:00.000Z",
+    status: "scheduled",
+    source: "manual",
+    result_note: null,
+    version: 2,
   }
 }
 
@@ -207,6 +225,42 @@ describe("TodayWorkspace behavior", () => {
     const alert = await screen.findByRole("alert")
     expect(alert.textContent).toContain("日期")
     expect(screen.queryByText("错误日期候选")).toBeNull()
+  })
+
+  it("accepts a response containing a fully normalized schedule block", async () => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      return Promise.resolve(jsonResponse(todayView(date, "带排期的候选", [scheduleBlock()])))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect(await screen.findByText("带排期的候选")).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it.each([
+    ["status", { status: "queued" }],
+    ["source", { source: "robot" }],
+    ["version", { version: 1.5 }],
+    ["ISO instant", { start_at: "2026-08-23 09:00" }],
+    ["impossible ISO instant", { start_at: "2026-02-30T01:00:00.000Z" }],
+    ["required field", { title: null }],
+  ])("rejects a response containing a schedule block with malformed %s", async (_label, malformed) => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      return Promise.resolve(jsonResponse({
+        ...todayView(date, "不应显示的候选"),
+        blocks: [{ ...scheduleBlock(), ...malformed }],
+      }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("今日数据格式无效")
+    expect(screen.queryByText("不应显示的候选")).toBeNull()
   })
 
   it("aborts the active request when the workspace unmounts", async () => {

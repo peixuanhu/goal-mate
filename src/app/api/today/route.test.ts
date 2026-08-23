@@ -58,7 +58,21 @@ describe("GET /api/today", () => {
       },
       focus: null,
       candidates: [],
-      blocks: [],
+      blocks: [{
+        block_id: "block_copy",
+        plan_id: "plan_launch",
+        action_id: "action_copy",
+        title: "写发布说明",
+        goal_id: "goal_product",
+        goal_name: "发布 Goal Mate v1",
+        energy_level: "medium",
+        start_at: "2026-08-23T01:00:00.000Z",
+        end_at: "2026-08-23T02:00:00.000Z",
+        status: "scheduled",
+        source: "manual",
+        result_note: null,
+        version: 2,
+      }],
       checks: [],
     }
     mocks.loadTodayView.mockResolvedValue(todayView)

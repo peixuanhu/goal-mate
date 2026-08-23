@@ -8,7 +8,12 @@ import UserMenu from "@/components/UserMenu"
 import { Button } from "@/components/ui/button"
 import { addDays, normalizeLocalDateInput, parseDateOnly } from "@/lib/focus-period-utils"
 import { getDefaultPlanningPreference } from "@/lib/today/planning-preference"
-import type { PlanningPreferenceView, SchedulableCandidate, TodayView } from "@/lib/today/types"
+import type {
+  PlanningPreferenceView,
+  ScheduleBlockView,
+  SchedulableCandidate,
+  TodayView,
+} from "@/lib/today/types"
 import { cn } from "@/lib/utils"
 
 import { AiWorkspace } from "./ai-workspace"
@@ -65,6 +70,35 @@ function isFocus(value: unknown): value is NonNullable<TodayView["focus"]> {
     && typeof value.version === "string"
 }
 
+const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
+function isIsoInstant(value: unknown): value is string {
+  if (typeof value !== "string" || !ISO_INSTANT_PATTERN.test(value)) return false
+
+  const parsed = new Date(value)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value
+}
+
+function isScheduleBlockView(value: unknown): value is ScheduleBlockView {
+  if (!isRecord(value)) return false
+
+  return typeof value.block_id === "string"
+    && typeof value.plan_id === "string"
+    && isNullableString(value.action_id)
+    && typeof value.title === "string"
+    && isNullableString(value.goal_id)
+    && isNullableString(value.goal_name)
+    && (value.energy_level === null || value.energy_level === "low" || value.energy_level === "medium" || value.energy_level === "high")
+    && isIsoInstant(value.start_at)
+    && isIsoInstant(value.end_at)
+    && (value.status === "scheduled" || value.status === "completed" || value.status === "partial" || value.status === "skipped" || value.status === "cancelled")
+    && (value.source === "manual" || value.source === "ai_check" || value.source === "ai_chat")
+    && isNullableString(value.result_note)
+    && typeof value.version === "number"
+    && Number.isInteger(value.version)
+    && value.version >= 1
+}
+
 function isTodayView(value: unknown): value is TodayView {
   if (!isRecord(value)) return false
 
@@ -74,7 +108,7 @@ function isTodayView(value: unknown): value is TodayView {
     && Array.isArray(value.candidates)
     && value.candidates.every(isCandidate)
     && Array.isArray(value.blocks)
-    && value.blocks.length === 0
+    && value.blocks.every(isScheduleBlockView)
     && Array.isArray(value.checks)
     && value.checks.length === 0
 }

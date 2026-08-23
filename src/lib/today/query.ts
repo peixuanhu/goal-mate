@@ -9,6 +9,8 @@ import {
   toPlanningPreferenceView,
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
+import { toScheduleBlockView } from "./schedule-service"
+import { getUtcDayRange } from "./timezone"
 import type {
   EnergyLevel,
   QuadrantId,
@@ -47,8 +49,35 @@ type ActionCandidateRow = {
   energy_level: string | null
   priority_quadrant: string | null
   is_completed: boolean
+  scheduleBlocks: Array<{ block_id: string; status: string }>
   gmt_create: Date
   gmt_modified: Date
+}
+
+type ScheduleBlockRow = {
+  block_id: string
+  plan_id: string
+  action_id: string | null
+  start_at: Date
+  end_at: Date
+  status: string
+  source: string
+  result_note: string | null
+  create_fingerprint: string | null
+  version: number
+  plan: {
+    plan_id: string
+    name: string
+    energy_level: string | null
+    goal: CandidateGoalRow | null
+  }
+  action: {
+    action_id: string
+    plan_id: string
+    name: string
+    energy_level: string | null
+    is_completed: boolean
+  } | null
 }
 
 type PlanCandidateRow = {
@@ -97,11 +126,45 @@ export interface TodayQueryDb {
         tags: true
         actionItems: {
           where: { is_completed: false }
+          include: {
+            scheduleBlocks: {
+              where: { status: "scheduled" }
+              select: { block_id: true; status: true }
+            }
+          }
           orderBy: [{ position: "asc" }, { gmt_create: "asc" }, { action_id: "asc" }]
         }
       }
       orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }, { plan_id: "asc" }]
     }): PromiseLike<PlanCandidateRow[]>
+  }
+  scheduleBlock: {
+    findMany(args: {
+      where: {
+        start_at: { lt: Date }
+        end_at: { gt: Date }
+      }
+      include: {
+        plan: {
+          select: {
+            plan_id: true
+            name: true
+            energy_level: true
+            goal: { select: { goal_id: true; name: true } }
+          }
+        }
+        action: {
+          select: {
+            action_id: true
+            plan_id: true
+            name: true
+            energy_level: true
+            is_completed: true
+          }
+        }
+      }
+      orderBy: [{ start_at: "asc" }, { block_id: "asc" }]
+    }): PromiseLike<ScheduleBlockRow[]>
   }
 }
 
@@ -205,6 +268,7 @@ function buildCandidates(plans: PlanCandidateRow[]): SchedulableCandidate[] {
         ? []
         : plan.actionItems
           .filter(action => !action.is_completed)
+          .filter(action => !action.scheduleBlocks.some(block => block.status === "scheduled"))
           .sort(compareActions)
           .map(action => actionCandidate(plan, action))
 
@@ -213,8 +277,10 @@ function buildCandidates(plans: PlanCandidateRow[]): SchedulableCandidate[] {
 }
 
 export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<TodayView> {
-  const [preferenceRow, focus, plans] = await Promise.all([
-    db.planningPreference.findUnique({ where: { preference_id: "default" } }),
+  const preferenceRow = await db.planningPreference.findUnique({ where: { preference_id: "default" } })
+  const preference = preferenceRow ? toPlanningPreferenceView(preferenceRow) : getDefaultPlanningPreference()
+  const { start, endExclusive } = getUtcDayRange(dateKey, preference.timezone)
+  const [focus, plans, blockRows] = await Promise.all([
     loadFocus(db, dateKey),
     db.plan.findMany({
       where: { progress: { lt: 1 } },
@@ -223,19 +289,59 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
         tags: true,
         actionItems: {
           where: { is_completed: false },
+          include: {
+            scheduleBlocks: {
+              where: { status: "scheduled" },
+              select: { block_id: true, status: true },
+            },
+          },
           orderBy: [{ position: "asc" }, { gmt_create: "asc" }, { action_id: "asc" }],
         },
       },
       orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }, { plan_id: "asc" }],
     }),
+    db.scheduleBlock.findMany({
+      where: {
+        start_at: { lt: endExclusive },
+        end_at: { gt: start },
+      },
+      include: {
+        plan: {
+          select: {
+            plan_id: true,
+            name: true,
+            energy_level: true,
+            goal: { select: { goal_id: true, name: true } },
+          },
+        },
+        action: {
+          select: {
+            action_id: true,
+            plan_id: true,
+            name: true,
+            energy_level: true,
+            is_completed: true,
+          },
+        },
+      },
+      orderBy: [{ start_at: "asc" }, { block_id: "asc" }],
+    }),
   ])
+
+  const blocks = blockRows
+    .filter(block => block.start_at < endExclusive && block.end_at > start)
+    .sort((left, right) => (
+      left.start_at.getTime() - right.start_at.getTime()
+      || left.block_id.localeCompare(right.block_id)
+    ))
+    .map(block => toScheduleBlockView(block))
 
   return {
     date: dateKey,
-    preference: preferenceRow ? toPlanningPreferenceView(preferenceRow) : getDefaultPlanningPreference(),
+    preference,
     focus,
     candidates: buildCandidates(plans),
-    blocks: [],
+    blocks,
     checks: [],
   }
 }
