@@ -392,6 +392,45 @@ describe("ScheduleBlock service", () => {
     expect(db.$transaction).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ["update", (db: MockRootDb, version: number) => updateScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: version,
+      start_at: "2026-08-23T03:00:00.000Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    })],
+    ["cancel", (db: MockRootDb, version: number) => cancelScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: version,
+    })],
+  ] as const)("accepts the PostgreSQL integer upper version boundary for %s", async (_label, operation) => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2034"))
+
+    await expect(operation(db, 2_147_483_647)).rejects.toMatchObject({ code: "SCHEDULE_CONFLICT" })
+    expect(db.$transaction).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ["update", (db: MockRootDb, version: number) => updateScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: version,
+      start_at: "2026-08-23T03:00:00.000Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    })],
+    ["cancel", (db: MockRootDb, version: number) => cancelScheduleBlock(db, {
+      block_id: "block_1",
+      expected_version: version,
+    })],
+  ] as const)("rejects out-of-range and unsafe versions for %s", async (_label, operation) => {
+    for (const version of [2_147_483_648, Number.MAX_SAFE_INTEGER + 1]) {
+      const db = makeDb()
+
+      await expect(operation(db, version)).rejects.toMatchObject({ code: "VALIDATION" })
+      expect(db.$transaction).not.toHaveBeenCalled()
+    }
+  })
+
   it("returns an identical retry and rejects a key collision with different immutable content", async () => {
     const identicalDb = makeDb()
     identicalDb.scheduleBlock.findUnique.mockResolvedValue(createdBlock())

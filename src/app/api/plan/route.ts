@@ -117,7 +117,8 @@ export async function GET(req: NextRequest) {
         goal: { select: { goal_id: true, name: true, tag: true } },
         progressRecords: {
           select: {
-            gmt_create: true
+            gmt_create: true,
+            counts_toward_recurrence: true
           },
           orderBy: { gmt_create: 'desc' }
         }

@@ -298,6 +298,8 @@ describe("ScheduleBlock completion service", () => {
     ["blank id", { ...validInput, block_id: "  " }],
     ["zero version", { ...validInput, expected_version: 0 }],
     ["fractional version", { ...validInput, expected_version: 1.5 }],
+    ["PostgreSQL integer overflow version", { ...validInput, expected_version: 2_147_483_648 }],
+    ["unsafe version", { ...validInput, expected_version: Number.MAX_SAFE_INTEGER + 1 }],
     ["unknown outcome", { ...validInput, outcome: "cancelled" }],
     ["nullable text", { ...validInput, content: null }],
     ["NaN progress", { ...validInput, plan_progress: Number.NaN }],
@@ -311,6 +313,17 @@ describe("ScheduleBlock completion service", () => {
       input as unknown as CompleteScheduleBlockInput,
     )).rejects.toMatchObject({ code: "VALIDATION" })
     expect(db.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("accepts the PostgreSQL integer upper version boundary", async () => {
+    const db = makeDb()
+    db.$transaction.mockRejectedValue(prismaError("P2034"))
+
+    await expect(completeScheduleBlock(db, {
+      ...validInput,
+      expected_version: 2_147_483_647,
+    })).rejects.toMatchObject({ code: "SCHEDULE_CONFLICT" })
+    expect(db.$transaction).toHaveBeenCalledOnce()
   })
 
   it("rejects plan_progress for recurring Plans before any mutation", async () => {
@@ -420,12 +433,23 @@ describe("ScheduleBlock completion service", () => {
   it.each([
     ["P2034", prismaError("P2034"), "SCHEDULE_CONFLICT"],
     ["progress uniqueness P2002", prismaError("P2002", ["schedule_block_id"]), "STALE_VERSION"],
+    ["progress constraint P2002", prismaError("P2002", "ProgressRecord_schedule_block_id_key"), "STALE_VERSION"],
     ["missing relation P2003", prismaError("P2003"), "NOT_FOUND"],
   ])("maps %s transaction failures", async (_label, failure, code) => {
     const db = makeDb()
     db.progressRecord.create.mockRejectedValue(failure)
 
     await expect(completeScheduleBlock(db, validInput)).rejects.toMatchObject({ code })
+  })
+
+  it.each([
+    ["ProgressRecord id", prismaError("P2002", ["id"])],
+    ["unknown target", prismaError("P2002")],
+  ])("does not hide unrelated P2002 failures for %s", async (_label, failure) => {
+    const db = makeDb()
+    db.progressRecord.create.mockRejectedValue(failure)
+
+    await expect(completeScheduleBlock(db, validInput)).rejects.toBe(failure)
   })
 
   it("rethrows unknown transaction failures", async () => {

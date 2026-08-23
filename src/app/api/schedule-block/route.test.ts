@@ -265,10 +265,31 @@ describe("/api/schedule-block", () => {
     })
   })
 
+  it("PUT accepts the PostgreSQL integer upper version boundary", async () => {
+    mocks.cancelScheduleBlock.mockResolvedValue({ ...blockView, status: "cancelled", version: 2 })
+
+    const response = await PUT(request("http://localhost/api/schedule-block", {
+      method: "PUT",
+      body: JSON.stringify({
+        operation: "cancel",
+        block_id: "block_copy",
+        expected_version: 2_147_483_647,
+      }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.cancelScheduleBlock).toHaveBeenCalledWith(mocks.prisma, {
+      block_id: "block_copy",
+      expected_version: 2_147_483_647,
+    })
+  })
+
   it.each([
     ["missing operation", { block_id: "block_copy", expected_version: 1 }],
     ["unknown operation", { operation: "delete", block_id: "block_copy", expected_version: 1 }],
     ["missing update version", { operation: "update", block_id: "block_copy", start_at: "x", end_at: "y" }],
+    ["PostgreSQL integer overflow version", { operation: "cancel", block_id: "block_copy", expected_version: 2_147_483_648 }],
+    ["unsafe version", { operation: "cancel", block_id: "block_copy", expected_version: Number.MAX_SAFE_INTEGER + 1 }],
     ["cancel extras", { operation: "cancel", block_id: "block_copy", expected_version: 1, now: "2020-01-01" }],
   ])("PUT rejects %s before delegation", async (_label, body) => {
     const response = await PUT(request("http://localhost/api/schedule-block", {

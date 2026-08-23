@@ -83,6 +83,18 @@ describe("/api/plan/order", () => {
       where: { plan_id: "plan_a", goal_id: "goal_arch" },
       data: { goal_position: 2000 },
     })
+    expect(prismaMock.plan.findMany).toHaveBeenLastCalledWith({
+      where: { goal_id: "goal_arch" },
+      orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }],
+      include: {
+        tags: true,
+        goal: { select: { goal_id: true, name: true, tag: true } },
+        progressRecords: {
+          select: { gmt_create: true, counts_toward_recurrence: true },
+          orderBy: { gmt_create: "desc" },
+        },
+      },
+    })
     expect(await json(response)).toEqual({
       list: [
         expect.objectContaining({ plan_id: "plan_b", tags: ["study"] }),

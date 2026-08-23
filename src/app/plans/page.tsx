@@ -37,7 +37,10 @@ interface Plan {
   recurrence_type?: string
   recurrence_value?: string
   tags: string[]
-  progressRecords: Array<{ gmt_create: Date }>
+  progressRecords: Array<{
+    gmt_create: Date | string
+    counts_toward_recurrence?: boolean
+  }>
   priority_quadrant?: string | null
   is_scheduled?: boolean
 }

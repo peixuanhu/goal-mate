@@ -10,7 +10,7 @@ export interface RecurringPlan {
   recurrence_value?: string | null
   name?: string | null
   progressRecords: Array<{
-    gmt_create: Date
+    gmt_create: Date | string
     counts_toward_recurrence?: boolean
   }>
 }

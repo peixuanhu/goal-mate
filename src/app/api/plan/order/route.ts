@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest) {
           tags: true,
           goal: { select: { goal_id: true, name: true, tag: true } },
           progressRecords: {
-            select: { gmt_create: true },
+            select: { gmt_create: true, counts_toward_recurrence: true },
             orderBy: { gmt_create: 'desc' },
           },
         },

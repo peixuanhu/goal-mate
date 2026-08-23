@@ -35,7 +35,10 @@ type GoalPlan = {
   recurrence_type?: string | null
   recurrence_value?: string | null
   tags: string[]
-  progressRecords?: Array<{ gmt_create: string | Date }>
+  progressRecords?: Array<{
+    gmt_create: string | Date
+    counts_toward_recurrence?: boolean
+  }>
 }
 
 type GoalPlanListProps = {
@@ -51,13 +54,16 @@ async function readApiError(response: Response, fallback: string): Promise<strin
   }
 }
 
-function formatProgress(plan: GoalPlan): string {
+export function formatGoalPlanProgress(plan: GoalPlan): string {
   if (plan.is_recurring) {
     const details = getRecurringTaskDetails({
       ...plan,
       recurrence_type: plan.recurrence_type ?? undefined,
       recurrence_value: plan.recurrence_value ?? undefined,
-      progressRecords: (plan.progressRecords ?? []).map(record => ({ gmt_create: new Date(record.gmt_create) })),
+      progressRecords: (plan.progressRecords ?? []).map(record => ({
+        gmt_create: new Date(record.gmt_create),
+        counts_toward_recurrence: record.counts_toward_recurrence,
+      })),
     })
     return details ? `${details.progressText} ${details.statusText}` : getRecurrenceTypeDisplay(plan.recurrence_type || "")
   }
@@ -149,7 +155,7 @@ function SortablePlanRow({
       <span className={cn("inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", getDifficultyClass(plan.difficulty))}>
         {plan.difficulty || "未设置"}
       </span>
-      <span className="whitespace-nowrap text-gray-700 dark:text-gray-200">{formatProgress(plan)}</span>
+      <span className="whitespace-nowrap text-gray-700 dark:text-gray-200">{formatGoalPlanProgress(plan)}</span>
       <span className="whitespace-nowrap text-gray-500">{formatRecentProgress(plan)}</span>
       <Button
         type="button"

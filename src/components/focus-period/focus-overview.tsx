@@ -60,11 +60,19 @@ type FocusPlan = {
   is_recurring: boolean
   recurrence_type: string | null
   recurrence_value: string | null
-  progressRecords?: Array<{ gmt_create: string }>
+  progressRecords?: Array<{
+    gmt_create: string
+    counts_toward_recurrence?: boolean
+  }>
 }
 
-function isProgressRecord(value: unknown): value is { gmt_create: string } {
-  return isRecord(value) && typeof value.gmt_create === "string"
+function isProgressRecord(value: unknown): value is {
+  gmt_create: string
+  counts_toward_recurrence?: boolean
+} {
+  return isRecord(value)
+    && typeof value.gmt_create === "string"
+    && (value.counts_toward_recurrence === undefined || typeof value.counts_toward_recurrence === "boolean")
 }
 
 function isFocusPlan(value: unknown): value is FocusPlan {
@@ -89,13 +97,16 @@ function parseFocusPlanList(data: unknown): FocusPlan[] {
   return data.list
 }
 
-function formatPlanProgress(plan: FocusPlan): string {
+export function formatFocusPlanProgress(plan: FocusPlan): string {
   if (plan.is_recurring) {
     const details = getRecurringTaskDetails({
       ...plan,
       recurrence_type: plan.recurrence_type ?? undefined,
       recurrence_value: plan.recurrence_value ?? undefined,
-      progressRecords: (plan.progressRecords ?? []).map(record => ({ gmt_create: new Date(record.gmt_create) })),
+      progressRecords: (plan.progressRecords ?? []).map(record => ({
+        gmt_create: new Date(record.gmt_create),
+        counts_toward_recurrence: record.counts_toward_recurrence,
+      })),
     })
 
     return details ? `${details.progressText} ${details.statusText}` : getRecurrenceTypeDisplay(plan.recurrence_type || "")
@@ -432,7 +443,7 @@ export function FocusOverview() {
                         <span className={cn("inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", getPlanDifficultyClass(plan.difficulty))}>
                           {plan.difficulty || "未设置"}
                         </span>
-                        <span className="whitespace-nowrap text-muted-foreground">{formatPlanProgress(plan)}</span>
+                        <span className="whitespace-nowrap text-muted-foreground">{formatFocusPlanProgress(plan)}</span>
                         <span className="whitespace-nowrap text-muted-foreground">{formatPlanRecentProgress(plan)}</span>
                       </button>
                     ))}

@@ -15,7 +15,7 @@ export async function GET() {
       include: {
         tags: true,
         progressRecords: {
-          select: { gmt_create: true },
+          select: { gmt_create: true, counts_toward_recurrence: true },
           orderBy: { gmt_create: 'desc' }
         }
       }

@@ -165,6 +165,7 @@ const STATUSES = new Set<ScheduleBlockStatus>([
   "cancelled",
 ])
 const ENERGY_LEVELS = new Set<EnergyLevel>(["low", "medium", "high"])
+const POSTGRESQL_INT_MAX = 2_147_483_647
 const ISO_INSTANT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/
 const SCHEDULE_RELATIONS = {
   plan: {
@@ -219,9 +220,12 @@ function optionalId(value: unknown, field: string): string | null {
   return requiredString(value, field)
 }
 
-function positiveVersion(value: unknown): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    validation("expected_version must be a positive integer")
+export function parseScheduleBlockVersion(value: unknown): number {
+  if (typeof value !== "number"
+    || !Number.isSafeInteger(value)
+    || value < 1
+    || value > POSTGRESQL_INT_MAX) {
+    validation(`expected_version must be an integer between 1 and ${POSTGRESQL_INT_MAX}`)
   }
   return value
 }
@@ -313,7 +317,7 @@ function normalizeUpdateInput(input: UpdateScheduleBlockInput): NormalizedUpdate
   assertOnlyFields(input, UPDATE_FIELDS)
   return {
     blockId: requiredString(input.block_id, "block_id"),
-    expectedVersion: positiveVersion(input.expected_version),
+    expectedVersion: parseScheduleBlockVersion(input.expected_version),
     startAt: parseIsoInstant(input.start_at, "start_at"),
     endAt: parseIsoInstant(input.end_at, "end_at"),
   }
@@ -326,7 +330,7 @@ function normalizeCancelInput(input: CancelScheduleBlockInput): NormalizedCancel
   assertOnlyFields(input, CANCEL_FIELDS)
   return {
     blockId: requiredString(input.block_id, "block_id"),
-    expectedVersion: positiveVersion(input.expected_version),
+    expectedVersion: parseScheduleBlockVersion(input.expected_version),
   }
 }
 

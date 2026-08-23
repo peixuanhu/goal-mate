@@ -22,9 +22,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getCurrentPeriodCount, getTargetCount } from "@/lib/recurring-utils";
 
 interface ProgressRecord {
   gmt_create: string;
+  counts_toward_recurrence?: boolean;
 }
 
 interface Plan {
@@ -40,12 +42,6 @@ interface Plan {
   recurrence_type: string | null;
   recurrence_value: string | null;
   progressRecords?: ProgressRecord[];
-}
-
-enum RecurrenceType {
-  DAILY = 'daily',
-  WEEKLY = 'weekly',
-  MONTHLY = 'monthly'
 }
 
 interface QuadrantData {
@@ -105,85 +101,12 @@ interface TaskCardProps {
   onRemove?: (planId: string) => void;
 }
 
-// 获取当前周期的开始时间
-function getCurrentPeriodStart(recurrenceType: RecurrenceType): Date {
-  const now = new Date();
-  switch (recurrenceType) {
-    case RecurrenceType.DAILY:
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    case RecurrenceType.WEEKLY:
-      const currentDay = now.getDay();
-      const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
-    case RecurrenceType.MONTHLY:
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    default:
-      return new Date(0);
-  }
-}
-
-// 获取当前周期的结束时间
-function getCurrentPeriodEnd(recurrenceType: RecurrenceType): Date {
-  const now = new Date();
-  switch (recurrenceType) {
-    case RecurrenceType.DAILY:
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, -1);
-    case RecurrenceType.WEEKLY:
-      const currentDay = now.getDay();
-      const sundayOffset = currentDay === 0 ? 0 : 7 - currentDay;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + sundayOffset + 1, 0, 0, 0, -1);
-    case RecurrenceType.MONTHLY:
-      return new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, -1);
-    default:
-      return new Date();
-  }
-}
-
-// 获取目标次数
-function getTargetCount(plan: Plan): number {
-  if (!plan.is_recurring) return 1;
-  if (plan.recurrence_value && plan.recurrence_value !== 'null') {
-    return parseInt(plan.recurrence_value) || 1;
-  }
-  
-  // 根据任务名称智能推测目标次数（与 recurring-utils.ts 保持一致）
-  const planName = plan.name?.toLowerCase() || '';
-  if (planName.includes('2-3次') || planName.includes('2～3次')) {
-    return 3;
-  }
-  if (planName.includes('一次') || planName.includes('1次')) {
-    return 1;
-  }
-  if (planName.includes('三次') || planName.includes('3次')) {
-    return 3;
-  }
-  if (planName.includes('两次') || planName.includes('2次')) {
-    return 2;
-  }
-  
-  // 默认返回1
-  return 1;
-}
-
-// 获取当前周期内的进展记录次数
-function getCurrentPeriodCount(plan: Plan): number {
-  if (!plan.is_recurring || !plan.recurrence_type || !plan.progressRecords) {
-    return 0;
-  }
-  const recurrenceType = plan.recurrence_type as RecurrenceType;
-  const periodStart = getCurrentPeriodStart(recurrenceType);
-  const periodEnd = getCurrentPeriodEnd(recurrenceType);
-  return plan.progressRecords.filter(record => {
-    const recordDate = new Date(record.gmt_create);
-    return recordDate >= periodStart && recordDate <= periodEnd;
-  }).length;
-}
-
 // 判断任务是否已完成（周期性任务按周期完成次数判断，普通任务按进度判断）
-function isTaskCompleted(plan: Plan): boolean {
+export function isQuadrantPlanCompleted(plan: Plan): boolean {
   if (plan.is_recurring && plan.recurrence_type) {
-    const currentCount = getCurrentPeriodCount(plan);
-    const targetCount = getTargetCount(plan);
+    const recurringPlan = { ...plan, progressRecords: plan.progressRecords ?? [] };
+    const currentCount = getCurrentPeriodCount(recurringPlan);
+    const targetCount = getTargetCount(recurringPlan);
     return currentCount >= targetCount;
   } else {
     return plan.progress >= 1; // progress is 0-1, not 0-100
@@ -193,8 +116,8 @@ function isTaskCompleted(plan: Plan): boolean {
 // 排序任务：未完成的在前，已完成的在后，各自按名称排序
 function sortTasksByCompletion(plans: Plan[]): Plan[] {
   return [...plans].sort((a, b) => {
-    const aCompleted = isTaskCompleted(a);
-    const bCompleted = isTaskCompleted(b);
+    const aCompleted = isQuadrantPlanCompleted(a);
+    const bCompleted = isQuadrantPlanCompleted(b);
     
     // 如果完成状态不同，未完成的在前
     if (aCompleted !== bCompleted) {
@@ -216,7 +139,7 @@ function TaskCard({ plan, isOverlay, onTaskClick, onRemove }: TaskCardProps) {
     isDragging,
   } = useSortable({ id: plan.plan_id, data: { plan } });
   const [isHovered, setIsHovered] = useState(false);
-  const isCompleted = isTaskCompleted(plan);
+  const isCompleted = isQuadrantPlanCompleted(plan);
 
   const style = {
     transform: CSS.Transform.toString(transform),

@@ -7,6 +7,7 @@ import {
 } from "./planning-preference"
 import {
   lockScheduleLocalDates,
+  parseScheduleBlockVersion,
   ScheduleServiceError,
   toScheduleBlockView,
 } from "./schedule-service"
@@ -116,10 +117,7 @@ function normalizeInput(value: CompleteScheduleBlockInput): NormalizedCompletion
     validation(`unexpected field: ${unexpected}`)
   }
 
-  const expectedVersion = value.expected_version
-  if (typeof expectedVersion !== "number" || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
-    validation("expected_version must be a positive integer")
-  }
+  const expectedVersion = parseScheduleBlockVersion(value.expected_version)
   const outcome = value.outcome
   if (outcome !== "completed" && outcome !== "partial" && outcome !== "skipped") {
     validation("outcome must be completed, partial, or skipped")
@@ -150,6 +148,22 @@ function isPrismaError(error: unknown, code: string): boolean {
     && error !== null
     && "code" in error
     && (error as { code?: unknown }).code === code
+}
+
+function prismaErrorTargets(error: unknown): string[] {
+  if (typeof error !== "object" || error === null || !("meta" in error)) {
+    return []
+  }
+  const target = (error as { meta?: { target?: unknown } }).meta?.target
+  if (typeof target === "string") return [target]
+  return Array.isArray(target)
+    ? target.filter((value): value is string => typeof value === "string")
+    : []
+}
+
+function isProgressScheduleBlockUniqueError(error: unknown): boolean {
+  return isPrismaError(error, "P2002")
+    && prismaErrorTargets(error).some(target => target.includes("schedule_block_id"))
 }
 
 async function loadTimezone(tx: Prisma.TransactionClient): Promise<string> {
@@ -272,7 +286,7 @@ export async function completeScheduleBlock(
     if (isPrismaError(error, "P2034")) {
       throw new ScheduleServiceError("SCHEDULE_CONFLICT", "完成操作发生并发冲突，请重试")
     }
-    if (isPrismaError(error, "P2002")) {
+    if (isProgressScheduleBlockUniqueError(error)) {
       throw new ScheduleServiceError("STALE_VERSION", "时间块已完成或进展记录已存在")
     }
     if (isPrismaError(error, "P2003")) {

@@ -81,7 +81,7 @@ describe("/api/plan", () => {
         tags: true,
         goal: { select: { goal_id: true, name: true, tag: true } },
         progressRecords: {
-          select: { gmt_create: true },
+          select: { gmt_create: true, counts_toward_recurrence: true },
           orderBy: { gmt_create: "desc" },
         },
       },
@@ -97,6 +97,29 @@ describe("/api/plan", () => {
       ],
       total: 1,
     })
+  })
+
+  it("GET preserves the recurrence-counting flag in its response shape", async () => {
+    const partialRecord = {
+      gmt_create: new Date("2026-08-23T01:00:00.000Z"),
+      counts_toward_recurrence: false,
+    }
+    prismaMock.plan.findMany.mockResolvedValue([{
+      ...basePlan,
+      is_recurring: true,
+      recurrence_type: "daily",
+      recurrence_value: "1",
+      progressRecords: [partialRecord],
+    }])
+    prismaMock.plan.count.mockResolvedValue(1)
+
+    const response = await GET(request("http://localhost/api/plan?goal_id=goal_arch&pageSize=1000"))
+    const data = await json(response)
+
+    expect(data.list[0].progressRecords).toEqual([{
+      gmt_create: "2026-08-23T01:00:00.000Z",
+      counts_toward_recurrence: false,
+    }])
   })
 
   it("GET supports unassigned plans", async () => {

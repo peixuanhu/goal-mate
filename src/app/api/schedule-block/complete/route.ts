@@ -5,7 +5,10 @@ import {
   completeScheduleBlock,
   type CompleteScheduleBlockInput,
 } from "@/lib/today/completion-service"
-import { ScheduleServiceError } from "@/lib/today/schedule-service"
+import {
+  parseScheduleBlockVersion,
+  ScheduleServiceError,
+} from "@/lib/today/schedule-service"
 
 const prisma = new PrismaClient()
 const POST_FIELDS = new Set([
@@ -68,11 +71,7 @@ function parseBody(body: Record<string, unknown>): CompleteScheduleBlockInput {
     routeValidation(`unexpected field: ${unexpected}`)
   }
 
-  if (typeof body.expected_version !== "number"
-    || !Number.isInteger(body.expected_version)
-    || body.expected_version < 1) {
-    routeValidation("expected_version must be a positive integer")
-  }
+  const expectedVersion = parseScheduleBlockVersion(body.expected_version)
   if (body.outcome !== "completed" && body.outcome !== "partial" && body.outcome !== "skipped") {
     routeValidation("outcome must be completed, partial, or skipped")
   }
@@ -90,7 +89,7 @@ function parseBody(body: Record<string, unknown>): CompleteScheduleBlockInput {
   const resultNote = optionalText(body, "result_note")
   return {
     block_id: requiredString(body.block_id, "block_id"),
-    expected_version: body.expected_version,
+    expected_version: expectedVersion,
     outcome: body.outcome,
     ...(content !== undefined ? { content } : {}),
     ...(thinking !== undefined ? { thinking } : {}),

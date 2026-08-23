@@ -8,6 +8,7 @@ import {
 import {
   cancelScheduleBlock,
   createScheduleBlock,
+  parseScheduleBlockVersion,
   ScheduleServiceError,
   toScheduleBlockView,
   updateScheduleBlock,
@@ -85,13 +86,6 @@ function requiredString(value: unknown, field: string): string {
 function optionalStringOrNull(value: unknown, field: string): string | null | undefined {
   if (value === undefined || value === null) return value
   return requiredString(value, field)
-}
-
-function requiredVersion(value: unknown): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    routeValidation("expected_version must be a positive integer")
-  }
-  return value
 }
 
 export function toScheduleErrorResponse(error: unknown): NextResponse | null {
@@ -184,7 +178,7 @@ export async function PUT(req: NextRequest) {
       assertOnlyFields(body, UPDATE_FIELDS)
       return NextResponse.json(await updateScheduleBlock(prisma, {
         block_id: requiredString(body.block_id, "block_id"),
-        expected_version: requiredVersion(body.expected_version),
+        expected_version: parseScheduleBlockVersion(body.expected_version),
         start_at: requiredString(body.start_at, "start_at"),
         end_at: requiredString(body.end_at, "end_at"),
       }))
@@ -193,7 +187,7 @@ export async function PUT(req: NextRequest) {
       assertOnlyFields(body, CANCEL_FIELDS)
       return NextResponse.json(await cancelScheduleBlock(prisma, {
         block_id: requiredString(body.block_id, "block_id"),
-        expected_version: requiredVersion(body.expected_version),
+        expected_version: parseScheduleBlockVersion(body.expected_version),
       }))
     }
     routeValidation("operation must be update or cancel")

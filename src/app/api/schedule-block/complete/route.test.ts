@@ -96,6 +96,21 @@ describe("POST /api/schedule-block/complete", () => {
     })
   })
 
+  it("accepts the PostgreSQL integer upper version boundary", async () => {
+    const response = await POST(request(JSON.stringify({
+      block_id: "block_copy",
+      expected_version: 2_147_483_647,
+      outcome: "completed",
+    })))
+
+    expect(response.status).toBe(200)
+    expect(mocks.completeScheduleBlock).toHaveBeenCalledWith(mocks.prisma, {
+      block_id: "block_copy",
+      expected_version: 2_147_483_647,
+      outcome: "completed",
+    })
+  })
+
   it.each([
     ["malformed JSON", "{"],
     ["non-object JSON", "[]"],
@@ -107,6 +122,8 @@ describe("POST /api/schedule-block/complete", () => {
     })],
     ["missing block id", JSON.stringify({ expected_version: 1, outcome: "completed" })],
     ["zero version", JSON.stringify({ block_id: "block_copy", expected_version: 0, outcome: "completed" })],
+    ["PostgreSQL integer overflow version", JSON.stringify({ block_id: "block_copy", expected_version: 2_147_483_648, outcome: "completed" })],
+    ["unsafe version", JSON.stringify({ block_id: "block_copy", expected_version: Number.MAX_SAFE_INTEGER + 1, outcome: "completed" })],
     ["unknown outcome", JSON.stringify({ block_id: "block_copy", expected_version: 1, outcome: "cancelled" })],
     ["nullable text", JSON.stringify({ block_id: "block_copy", expected_version: 1, outcome: "completed", content: null })],
     ["nullable progress", JSON.stringify({ block_id: "block_copy", expected_version: 1, outcome: "completed", plan_progress: null })],
