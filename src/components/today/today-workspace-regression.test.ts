@@ -67,15 +67,15 @@ describe("read-only Today workspace", () => {
     expect(source).toContain("今日检查将在排程阶段启用")
   })
 
-  it("lays out goal, quadrant and inbox candidate tabs", () => {
+  it("lays out goal, quadrant and unclassified candidate tabs", () => {
     const source = readProjectFile("src/components/today/goal-candidate-panel.tsx")
 
     expect(source).toContain('value="goal-tree"')
     expect(source).toContain('value="quadrant"')
-    expect(source).toContain('value="inbox"')
+    expect(source).toContain('value="unclassified"')
     expect(source).toContain("目标树")
     expect(source).toContain("四象限")
-    expect(source).toContain("收集箱")
+    expect(source).toContain("未归类")
   })
 
   it("renders a bounded timeline with the exact empty-state guidance", () => {

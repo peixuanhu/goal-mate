@@ -4,8 +4,9 @@ import { useDraggable } from "@dnd-kit/core"
 import { CalendarClock, CircleDot, Flag, Layers3 } from "lucide-react"
 import React, { useId } from "react"
 
+import { QuadrantBoard } from "@/components/workspace/quadrant-board"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { QuadrantId, SchedulableCandidate, TodayView } from "@/lib/today/types"
+import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
 
 interface GoalCandidatePanelProps {
   focus: TodayView["focus"]
@@ -29,13 +30,6 @@ interface PlanCandidateGroup {
 }
 
 export const FOCUS_GROUP_KEY = "__focus__"
-
-export const QUADRANT_LABELS: Record<QuadrantId, string> = {
-  q1: "重要且紧急",
-  q2: "重要不紧急",
-  q3: "紧急不重要",
-  q4: "不重要不紧急",
-}
 
 function groupByPlan(candidates: SchedulableCandidate[]): PlanCandidateGroup[] {
   const groups = new Map<string, PlanCandidateGroup>()
@@ -242,7 +236,8 @@ export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedu
       .filter(candidate => candidate.kind === "plan")
       .map(candidate => [candidate.plan_id, candidate.name] as const),
   )
-  const inboxCandidates = candidates.filter(
+  const goalCandidates = candidates.filter(candidate => candidate.goal_id !== null)
+  const unclassifiedCandidates = candidates.filter(
     candidate => candidate.goal_id === null && candidate.effective_quadrant === null,
   )
 
@@ -271,32 +266,20 @@ export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedu
             <TabsList aria-label="候选事项分组方式" className="grid w-full grid-cols-3 bg-gray-100">
               <TabsTrigger value="goal-tree">目标树</TabsTrigger>
               <TabsTrigger value="quadrant">四象限</TabsTrigger>
-              <TabsTrigger value="inbox">收集箱</TabsTrigger>
+              <TabsTrigger value="unclassified">未归类</TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="goal-tree">
-            <GoalTree candidates={candidates} focus={focus} onSchedule={onSchedule} planNamesById={planNamesById} />
+            <GoalTree candidates={goalCandidates} focus={focus} onSchedule={onSchedule} planNamesById={planNamesById} />
           </TabsContent>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="quadrant">
-            <div className="space-y-5">
-              {(Object.keys(QUADRANT_LABELS) as QuadrantId[]).map(quadrant => {
-                const quadrantCandidates = candidates.filter(candidate => candidate.effective_quadrant === quadrant)
-                return (
-                  <section aria-labelledby={`quadrant-${quadrant}`} key={quadrant}>
-                    <h3 id={`quadrant-${quadrant}`} className="mb-2 text-sm font-semibold text-gray-700">
-                      {QUADRANT_LABELS[quadrant]}
-                    </h3>
-                    <PlanGroups candidates={quadrantCandidates} onSchedule={onSchedule} planNamesById={planNamesById} />
-                  </section>
-                )
-              })}
-            </div>
+            <QuadrantBoard />
           </TabsContent>
 
-          <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="inbox">
-            <PlanGroups candidates={inboxCandidates} onSchedule={onSchedule} planNamesById={planNamesById} />
+          <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="unclassified">
+            <PlanGroups candidates={unclassifiedCandidates} onSchedule={onSchedule} planNamesById={planNamesById} />
           </TabsContent>
         </Tabs>
       )}

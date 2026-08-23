@@ -8,6 +8,17 @@ import type { SchedulableCandidate } from "@/lib/today/types"
 
 import { GoalCandidatePanel } from "./goal-candidate-panel"
 
+vi.mock("@/components/workspace/quadrant-board", () => ({
+  QuadrantBoard: () => (
+    <div>
+      <section aria-label="重要且紧急" role="region" />
+      <section aria-label="重要不紧急" role="region" />
+      <section aria-label="紧急不重要" role="region" />
+      <section aria-label="不重要不紧急" role="region" />
+    </div>
+  ),
+}))
+
 afterEach(cleanup)
 
 function candidate(
@@ -103,7 +114,7 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect(document.getElementById(labelledHeadingId ?? "")?.textContent).toBe("聚焦计划")
   })
 
-  it("uses the full candidate list to name an action-only quadrant plan group", () => {
+  it("uses the shared 2×2 quadrant board", () => {
     const candidates: SchedulableCandidate[] = [
       candidate({
         id: "plan-cross",
@@ -130,9 +141,43 @@ describe("GoalCandidatePanel hierarchy", () => {
     fireEvent.mouseUp(quadrantTab, { button: 0, ctrlKey: false })
     fireEvent.click(quadrantTab)
 
-    const q1 = screen.getByRole("region", { name: "重要且紧急" })
-    const parentPlanGroup = within(q1).getByRole("region", { name: "跨象限父计划" })
-    expect(within(parentPlanGroup).getByText("重要紧急行动")).toBeTruthy()
-    expect(within(q1).queryByRole("region", { name: "计划 plan-cross" })).toBeNull()
+    expect(screen.getByRole("region", { name: "重要且紧急" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "重要不紧急" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "紧急不重要" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "不重要不紧急" })).toBeTruthy()
+  })
+
+  it("keeps unassigned candidates out of the goal tree and shows them as unclassified", () => {
+    const candidates: SchedulableCandidate[] = [
+      candidate({
+        id: "plan-goal",
+        kind: "plan",
+        name: "目标内计划",
+        plan_id: "plan-goal",
+        goal_id: "goal-one",
+        goal_name: "目标一",
+      }),
+      candidate({
+        id: "plan-loose",
+        kind: "plan",
+        name: "尚未归类计划",
+        plan_id: "plan-loose",
+      }),
+    ]
+
+    render(
+      <GoalCandidatePanel candidates={candidates} error={null} focus={null} loading={false} onSchedule={vi.fn()} />,
+    )
+
+    expect(screen.getAllByText("目标内计划").length).toBeGreaterThan(0)
+    expect(screen.queryByText("尚未归类计划")).toBeNull()
+
+    const unclassifiedTab = screen.getByRole("tab", { name: "未归类" })
+    fireEvent.mouseDown(unclassifiedTab, { button: 0, ctrlKey: false })
+    fireEvent.mouseUp(unclassifiedTab, { button: 0, ctrlKey: false })
+    fireEvent.click(unclassifiedTab)
+
+    expect(screen.getAllByText("尚未归类计划").length).toBeGreaterThan(0)
+    expect(screen.queryByText("目标内计划")).toBeNull()
   })
 })
