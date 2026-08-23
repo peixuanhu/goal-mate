@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -111,6 +111,14 @@ function DraggableTableRow({
 }
 
 export default function PlansPage() {
+  return (
+    <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">正在加载计划…</div>}>
+      <PlansPageContent />
+    </Suspense>
+  )
+}
+
+function PlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialUrlGoalId = searchParams.get('goal_id');
