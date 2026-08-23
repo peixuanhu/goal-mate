@@ -180,8 +180,8 @@ docker-compose -f docker-compose.china.yml logs --tail=100
 # 备份数据库
 docker exec goal-mate-app npx prisma db pull
 
-# 查看数据库状态
-docker exec goal-mate-app npx prisma db push --preview-feature
+# 同步数据库结构并应用完整性约束
+docker exec goal-mate-app npm run db:deploy
 ```
 
 ## 🌐 网络优化建议
@@ -200,4 +200,4 @@ docker exec goal-mate-app npx prisma db push --preview-feature
 
 ---
 
-**预计部署时间：3-8分钟**（具体取决于网络状况） 
+**预计部署时间：3-8分钟**（具体取决于网络状况）

@@ -64,8 +64,8 @@
 
 2. **初始化数据库**
    ```bash
-   npx prisma generate
-   npx prisma db push
+   npm run db:generate
+   npm run db:push
    ```
 
 3. **启动开发服务器**
@@ -154,4 +154,4 @@ const serviceAdapter = new OpenAIAdapter({
 const response = await fetch(`https://api.baidu.com/search?q=${query}`, {
   headers: { 'Authorization': 'Bearer your_api_key' }
 });
-``` 
+```

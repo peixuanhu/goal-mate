@@ -141,6 +141,9 @@ const packageJson = JSON.parse(readRootFile("package.json")) as {
 const dockerfile = readRootFile("Dockerfile")
 const dockerCompose = readRootFile("docker-compose.yml")
 const readme = readRootFile("README.md")
+const directDeployScript = readRootFile("deploy-direct.sh")
+const setupGuide = readRootFile("setup.md")
+const chinaDeployGuide = readRootFile("DEPLOY-CHINA.md")
 
 const databaseOnlyChecks = [
   {
@@ -368,5 +371,20 @@ describe("today workspace Prisma contract", () => {
     expect(dockerCompose).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
     expect(readme).toContain("npm run db:push")
     expect(readme).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
+  })
+
+  it("routes the direct deployment script through the integrity overlay", () => {
+    expect(directDeployScript).toContain("npm run db:deploy")
+    expect(directDeployScript).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
+  })
+
+  it("routes the setup guide through the integrity overlay", () => {
+    expect(setupGuide).toMatch(/npm run db:(?:push|deploy)/)
+    expect(setupGuide).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
+  })
+
+  it("routes the China Docker deployment guide through the integrity overlay", () => {
+    expect(chinaDeployGuide).toContain("docker exec goal-mate-app npm run db:deploy")
+    expect(chinaDeployGuide).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
   })
 })

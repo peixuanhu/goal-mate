@@ -65,7 +65,7 @@ npm run build
 
 # 初始化数据库
 echo "10. 初始化数据库..."
-npx prisma db push
+npm run db:deploy
 
 # 创建环境变量文件（如果不存在）
 if [ ! -f ".env" ]; then
@@ -132,4 +132,4 @@ echo "重启服务: systemctl restart goal-mate"
 echo "停止服务: systemctl stop goal-mate"
 echo "检查状态: systemctl status goal-mate"
 echo ""
-echo "注意: 请编辑 /root/goal-mate/.env 文件设置您的API密钥" 
+echo "注意: 请编辑 /root/goal-mate/.env 文件设置您的API密钥"
