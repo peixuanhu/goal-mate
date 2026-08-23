@@ -135,6 +135,41 @@ describe("table action layout regression", () => {
     expect(source).toContain("打开计划")
   })
 
+  it("collapses only fully completed non-recurring goal route plans", () => {
+    const source = readProjectFile("src/components/goals/goal-plan-list.tsx")
+
+    expect(source).toContain("function isFullyCompletedPlan(plan: GoalPlan): boolean")
+    expect(source).toContain("return !plan.is_recurring && (plan.progress || 0) >= 1")
+    expect(source).toContain("const activePlans = plans.filter(plan => !isFullyCompletedPlan(plan))")
+    expect(source).toContain("const completedPlans = plans.filter(isFullyCompletedPlan)")
+    expect(source).toContain("const [completedPlansOpen, setCompletedPlansOpen] = React.useState(false)")
+    expect(source).toContain("已完成")
+    expect(source).toContain("aria-expanded={completedPlansOpen}")
+  })
+
+  it("keeps expanded completed route plans gray and struck through", () => {
+    const source = readProjectFile("src/components/goals/goal-plan-list.tsx")
+
+    expect(source).toContain("completed?: boolean")
+    expect(source).toContain("completed && \"text-gray-400 line-through")
+    expect(source).toContain("completed && \"text-gray-400")
+    expect(source).toContain("completed={isFullyCompletedPlan(plan)}")
+  })
+
+  it("lets goal route plan handles drag plans into the quadrant sidebar", () => {
+    const source = readProjectFile("src/components/goals/goal-plan-list.tsx")
+    const quadrantSource = readProjectFile("src/components/quadrant-left-sidebar.tsx")
+
+    expect(source).toContain("type QuadrantId = \"q1\" | \"q2\" | \"q3\" | \"q4\"")
+    expect(source).toContain("function getQuadrantDropTarget")
+    expect(source).toContain('closest("[data-quadrant-drop-id]")')
+    expect(source).toContain("async function schedulePlanToQuadrant")
+    expect(source).toContain("priority_quadrant: targetQuadrant")
+    expect(source).toContain("refreshQuadrantSidebar()")
+    expect(source).toContain("void schedulePlanToQuadrant(planId, quadrantDropTarget)")
+    expect(quadrantSource).toContain("data-quadrant-drop-id={quadrant.id}")
+  })
+
   it("keeps plan row actions in a single stable button group", () => {
     const source = readProjectFile("src/app/plans/page.tsx")
 

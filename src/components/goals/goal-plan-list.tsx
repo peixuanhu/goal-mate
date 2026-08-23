@@ -19,12 +19,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Plus, X } from "lucide-react"
+import { ChevronDown, ChevronRight, GripVertical, Plus, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getRecurringTaskDetails, getRecurrenceTypeDisplay } from "@/lib/recurring-utils"
-import { cn } from "@/lib/utils"
+import { cn, refreshQuadrantSidebar } from "@/lib/utils"
 
 type GoalPlan = {
   plan_id: string
@@ -44,6 +44,10 @@ type GoalPlan = {
 type GoalPlanListProps = {
   goalId: string
 }
+
+type QuadrantId = "q1" | "q2" | "q3" | "q4"
+
+const QUADRANT_IDS: QuadrantId[] = ["q1", "q2", "q3", "q4"]
 
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
@@ -78,6 +82,45 @@ function formatRecentProgress(plan: GoalPlan): string {
   return new Date(firstRecord.gmt_create).toLocaleDateString("zh-CN")
 }
 
+function isFullyCompletedPlan(plan: GoalPlan): boolean {
+  return !plan.is_recurring && (plan.progress || 0) >= 1
+}
+
+function isQuadrantId(value: string | null): value is QuadrantId {
+  return QUADRANT_IDS.includes(value as QuadrantId)
+}
+
+function getEventPoint(event: Event): { x: number; y: number } | null {
+  if (event instanceof MouseEvent) {
+    return { x: event.clientX, y: event.clientY }
+  }
+
+  if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+    const touch = event.touches[0] ?? event.changedTouches[0]
+    return touch ? { x: touch.clientX, y: touch.clientY } : null
+  }
+
+  return null
+}
+
+function getQuadrantDropTarget(event: DragEndEvent): QuadrantId | null {
+  if (typeof document === "undefined") return null
+
+  const startPoint = getEventPoint(event.activatorEvent)
+  if (!startPoint) return null
+
+  const x = startPoint.x + event.delta.x
+  const y = startPoint.y + event.delta.y
+
+  for (const element of document.elementsFromPoint(x, y)) {
+    const target = element.closest("[data-quadrant-drop-id]")
+    const quadrantId = target?.getAttribute("data-quadrant-drop-id") ?? null
+    if (isQuadrantId(quadrantId)) return quadrantId
+  }
+
+  return null
+}
+
 function getDifficultyClass(difficulty?: string | null): string {
   switch (difficulty) {
     case "hard":
@@ -97,12 +140,14 @@ function SortablePlanRow({
   plan,
   index,
   disabled,
+  completed = false,
   onDetach,
   onOpenPlan,
 }: {
   plan: GoalPlan
   index: number
   disabled: boolean
+  completed?: boolean
   onDetach: (planId: string) => void
   onOpenPlan: (planId: string) => void
 }) {
@@ -119,26 +164,34 @@ function SortablePlanRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`grid grid-cols-[32px_64px_minmax(180px,320px)_72px_150px_100px_72px] justify-start items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
-        isDragging ? "bg-blue-50 opacity-80" : "bg-white dark:bg-gray-950"
-      }`}
+      className={cn(
+        "grid grid-cols-[32px_64px_minmax(180px,320px)_72px_150px_100px_72px] items-center justify-start gap-3 border-b px-3 py-2 text-sm last:border-b-0",
+        isDragging ? "bg-blue-50 opacity-80" : "bg-white dark:bg-gray-950",
+        completed && "bg-gray-50 text-gray-400 dark:bg-gray-900"
+      )}
     >
       <button
         type="button"
-        disabled={disabled}
-        className="flex h-8 w-8 items-center justify-center rounded border text-gray-500 hover:bg-gray-50"
+        disabled={disabled || completed}
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded border text-gray-500 hover:bg-gray-50",
+          completed && "cursor-not-allowed text-gray-300 hover:bg-transparent"
+        )}
         aria-label={`拖拽排序 ${plan.name}`}
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <span className="font-medium text-gray-700 dark:text-gray-200">第 {index + 1} 步</span>
+      <span className={cn("font-medium text-gray-700 dark:text-gray-200", completed && "text-gray-400 dark:text-gray-500")}>第 {index + 1} 步</span>
       <div className="min-w-0">
         <button
           type="button"
           disabled={disabled}
-          className="block w-full min-w-0 truncate rounded text-left font-medium text-blue-700 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:pointer-events-none disabled:text-gray-500 disabled:no-underline dark:text-blue-300 dark:hover:text-blue-200"
+          className={cn(
+            "block w-full min-w-0 truncate rounded text-left font-medium text-blue-700 hover:text-blue-800 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:pointer-events-none disabled:text-gray-500 disabled:no-underline dark:text-blue-300 dark:hover:text-blue-200",
+            completed && "text-gray-400 line-through hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+          )}
           onClick={() => onOpenPlan(plan.plan_id)}
           aria-label={`打开计划 ${plan.name}`}
         >
@@ -146,17 +199,21 @@ function SortablePlanRow({
         </button>
         <div className="mt-1 flex flex-wrap gap-1">
           {plan.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+            <span key={tag} className={cn("rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700", completed && "bg-gray-100 text-gray-400")}>
               {tag}
             </span>
           ))}
         </div>
       </div>
-      <span className={cn("inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap", getDifficultyClass(plan.difficulty))}>
+      <span className={cn(
+        "inline-flex justify-self-start rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        getDifficultyClass(plan.difficulty),
+        completed && "border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500"
+      )}>
         {plan.difficulty || "未设置"}
       </span>
-      <span className="whitespace-nowrap text-gray-700 dark:text-gray-200">{formatGoalPlanProgress(plan)}</span>
-      <span className="whitespace-nowrap text-gray-500">{formatRecentProgress(plan)}</span>
+      <span className={cn("whitespace-nowrap text-gray-700 dark:text-gray-200", completed && "text-gray-400 dark:text-gray-500")}>{formatGoalPlanProgress(plan)}</span>
+      <span className={cn("whitespace-nowrap text-gray-500", completed && "text-gray-400 dark:text-gray-500")}>{formatRecentProgress(plan)}</span>
       <Button
         type="button"
         size="sm"
@@ -185,6 +242,7 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [completedPlansOpen, setCompletedPlansOpen] = React.useState(false)
   const savingRef = React.useRef(false)
 
   const loadPlans = React.useCallback(async () => {
@@ -255,10 +313,43 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
     }
   }
 
+  async function schedulePlanToQuadrant(planId: string, targetQuadrant: QuadrantId) {
+    savingRef.current = true
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/plan/priority", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: planId,
+          priority_quadrant: targetQuadrant,
+          is_scheduled: true,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "安排到四象限失败"))
+      }
+      refreshQuadrantSidebar()
+    } catch (scheduleError) {
+      setError(scheduleError instanceof Error ? scheduleError.message : "安排到四象限失败")
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     if (savingRef.current) return
 
     const { active, over } = event
+    const planId = active.id as string
+    const quadrantDropTarget = getQuadrantDropTarget(event)
+    if (quadrantDropTarget) {
+      void schedulePlanToQuadrant(planId, quadrantDropTarget)
+      return
+    }
+
     if (!over || active.id === over.id) return
 
     const oldIndex = plans.findIndex(plan => plan.plan_id === active.id)
@@ -334,6 +425,10 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
     router.push(`/plans?goal_id=${encodeURIComponent(goalId)}&highlight=${encodeURIComponent(planId)}`)
   }
 
+  const activePlans = plans.filter(plan => !isFullyCompletedPlan(plan))
+  const completedPlans = plans.filter(isFullyCompletedPlan)
+  const visiblePlans = completedPlansOpen ? [...activePlans, ...completedPlans] : activePlans
+
   return (
     <div className="rounded-lg border bg-gray-50 p-3 dark:bg-gray-900">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -375,19 +470,42 @@ export function GoalPlanList({ goalId }: GoalPlanListProps) {
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={plans.map(plan => plan.plan_id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={visiblePlans.map(plan => plan.plan_id)} strategy={verticalListSortingStrategy}>
             <div className="overflow-x-auto rounded border bg-white dark:bg-gray-950">
               <div className="min-w-[790px]">
-                {plans.map((plan, index) => (
+                {activePlans.map(plan => (
                   <SortablePlanRow
                     key={plan.plan_id}
                     plan={plan}
-                    index={index}
+                    index={plans.findIndex(currentPlan => currentPlan.plan_id === plan.plan_id)}
                     disabled={saving}
                     onDetach={detachPlan}
                     onOpenPlan={openPlan}
                   />
                 ))}
+                {completedPlans.length > 0 ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 border-b bg-gray-50 px-3 py-2 text-left text-sm font-medium text-gray-500 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+                    onClick={() => setCompletedPlansOpen(current => !current)}
+                    aria-expanded={completedPlansOpen}
+                  >
+                    {completedPlansOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    已完成
+                    <span className="text-xs font-normal text-gray-400">{completedPlans.length} 项</span>
+                  </button>
+                ) : null}
+                {completedPlansOpen ? completedPlans.map(plan => (
+                  <SortablePlanRow
+                    key={plan.plan_id}
+                    plan={plan}
+                    index={plans.findIndex(currentPlan => currentPlan.plan_id === plan.plan_id)}
+                    disabled={saving}
+                    completed={isFullyCompletedPlan(plan)}
+                    onDetach={detachPlan}
+                    onOpenPlan={openPlan}
+                  />
+                )) : null}
               </div>
             </div>
           </SortableContext>

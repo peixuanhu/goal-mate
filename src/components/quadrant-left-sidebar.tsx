@@ -248,6 +248,7 @@ function QuadrantColumn({ quadrant, plans, onTaskDrop, onTaskClick, onRemoveTask
   return (
     <div
       ref={setNodeRef}
+      data-quadrant-drop-id={quadrant.id}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
