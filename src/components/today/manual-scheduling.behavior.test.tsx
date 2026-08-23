@@ -3,7 +3,7 @@
 import { DndContext } from "@dnd-kit/core"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import React from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type {
   PlanningPreferenceView,
@@ -399,6 +399,11 @@ describe("manual scheduling components", () => {
 })
 
 describe("TodayWorkspace manual scheduling orchestration", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-08-23T02:00:00.000Z"))
+  })
+
   it("creates from an 08:10-origin preference using the same valid relative grid", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date("2026-08-23T02:00:00.000Z"))
