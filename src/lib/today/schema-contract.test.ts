@@ -17,8 +17,9 @@ const normalizeSql = (sql: string) =>
 
 type DatabaseOnlyInvariant = {
   kind: "check" | "partial_unique_index"
+  table: string
   name: string
-  definition: string
+  expression: string
 }
 
 const findClosingParenthesis = (sql: string, expressionStart: number) => {
@@ -62,6 +63,23 @@ const findClosingParenthesis = (sql: string, expressionStart: number) => {
   throw new Error("Unclosed CHECK expression")
 }
 
+const findOwningTable = (sql: string, invariantStart: number) => {
+  const tablePattern = /(?:ALTER|CREATE)\s+TABLE\s+"([^"]+)"/gi
+  const sqlBeforeInvariant = sql.slice(0, invariantStart)
+  let owningTable: string | undefined
+
+  for (
+    let match = tablePattern.exec(sqlBeforeInvariant);
+    match;
+    match = tablePattern.exec(sqlBeforeInvariant)
+  ) {
+    owningTable = match[1]
+  }
+
+  if (!owningTable) throw new Error("CHECK constraint has no owning table")
+  return owningTable
+}
+
 const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => {
   const uncommentedSql = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "")
   const invariants: DatabaseOnlyInvariant[] = []
@@ -71,14 +89,15 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
     const expressionEnd = findClosingParenthesis(uncommentedSql, checkPattern.lastIndex)
     invariants.push({
       kind: "check",
+      table: findOwningTable(uncommentedSql, match.index),
       name: match[1],
-      definition: normalizeSql(uncommentedSql.slice(checkPattern.lastIndex, expressionEnd)),
+      expression: normalizeSql(uncommentedSql.slice(checkPattern.lastIndex, expressionEnd)),
     })
     checkPattern.lastIndex = expressionEnd + 1
   }
 
   const partialUniqueIndexPattern =
-    /CREATE\s+UNIQUE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+"([^"]+)"[\s\S]*?;/gi
+    /CREATE\s+UNIQUE\s+INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+"([^"]+)"\s+ON\s+"([^"]+)"[\s\S]*?;/gi
 
   for (
     let match = partialUniqueIndexPattern.exec(uncommentedSql);
@@ -89,8 +108,9 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
 
     invariants.push({
       kind: "partial_unique_index",
+      table: match[2],
       name: match[1],
-      definition: normalizeSql(
+      expression: normalizeSql(
         match[0].replace(
           /CREATE\s+UNIQUE\s+INDEX\s+IF\s+NOT\s+EXISTS/i,
           "CREATE UNIQUE INDEX",
@@ -308,6 +328,19 @@ describe("today workspace Prisma contract", () => {
     expect(() =>
       expectExactDatabaseOnlyInvariantParity(migrationWithExtraInvariant, sharedSql),
     ).toThrow()
+  })
+
+  it("rejects an identical check assigned to a different table", () => {
+    const planCheck = `
+      ALTER TABLE "Plan"
+      ADD CONSTRAINT "shared_check" CHECK ("estimated_minutes" > 0);
+    `
+    const actionItemCheck = `
+      ALTER TABLE "ActionItem"
+      ADD CONSTRAINT "shared_check" CHECK ("estimated_minutes" > 0);
+    `
+
+    expect(() => expectExactDatabaseOnlyInvariantParity(planCheck, actionItemCheck)).toThrow()
   })
 
   it("routes every schema deployment path through the integrity overlay", () => {
