@@ -56,9 +56,17 @@ describe("read-only Today workspace", () => {
 
   it("keeps the timeline visible when a mobile auxiliary panel opens", () => {
     const source = readProjectFile("src/components/today/today-workspace.tsx")
-    const timelineSection = source.slice(source.indexOf('className={cn("order-1'), source.indexOf("<DayTimeline"))
+    const timelineComponentIndex = source.indexOf("<DayTimeline")
+    const timelineSectionIndex = source.lastIndexOf("<section", timelineComponentIndex)
 
-    expect(timelineSection).not.toContain("max-lg:hidden")
+    expect(timelineComponentIndex).toBeGreaterThanOrEqual(0)
+    expect(timelineSectionIndex).toBeGreaterThanOrEqual(0)
+    expect(timelineSectionIndex).toBeLessThan(timelineComponentIndex)
+
+    const timelineSection = source.slice(timelineSectionIndex, timelineComponentIndex)
+
+    expect(timelineSection).toMatch(/className=(?:"[^"]*\border-1\b[^"]*"|\{cn\("[^"]*\border-1\b)/)
+    expect(timelineSection).not.toMatch(/\b(?:hidden|sm:hidden|md:hidden|max-(?:sm|md|lg):hidden)\b/)
   })
 
   it("keeps AI chat mounted while switching between check and chat", () => {
