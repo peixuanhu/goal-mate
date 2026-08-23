@@ -359,7 +359,10 @@ async function lockValue(db: Prisma.TransactionClient, namespace: number, value:
   await db.$executeRaw`SELECT pg_advisory_xact_lock(${namespace}::int, hashtext(${value})::int)`
 }
 
-async function lockLocalDates(db: Prisma.TransactionClient, dates: readonly string[]): Promise<void> {
+export async function lockScheduleLocalDates(
+  db: Prisma.TransactionClient,
+  dates: readonly string[],
+): Promise<void> {
   const sortedDates = [...new Set(dates)].sort()
   for (const date of sortedDates) {
     await lockValue(db, SCHEDULE_DATE_LOCK_NAMESPACE, date)
@@ -632,7 +635,7 @@ export async function createScheduleBlock(
 
       const preference = await loadPreference(tx)
       const localDate = localDateAndAssertBounds(input.startAt, input.endAt, preference)
-      await lockLocalDates(tx, [localDate])
+      await lockScheduleLocalDates(tx, [localDate])
       await assertPlanAndAction(tx, input.planId, input.actionId)
       throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt))
 
@@ -692,7 +695,7 @@ export async function updateScheduleBlock(
       throw new ScheduleServiceError("NOT_FOUND", "时间块不存在")
     }
     const oldLocalDate = formatUtcInTimeZone(snapshot.start_at, preference.timezone).date
-    await lockLocalDates(tx, [oldLocalDate, newLocalDate])
+    await lockScheduleLocalDates(tx, [oldLocalDate, newLocalDate])
     const planRow = await lockPlan(tx, snapshot.plan_id)
     if (!planRow) {
       throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
@@ -765,7 +768,7 @@ export async function cancelScheduleBlock(
       throw new ScheduleServiceError("NOT_FOUND", "时间块不存在")
     }
     const localDate = formatUtcInTimeZone(snapshot.start_at, preference.timezone).date
-    await lockLocalDates(tx, [localDate])
+    await lockScheduleLocalDates(tx, [localDate])
 
     const current = await findBlock(tx, input.blockId)
     if (!current) {

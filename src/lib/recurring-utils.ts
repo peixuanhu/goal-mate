@@ -11,6 +11,7 @@ export interface RecurringPlan {
   name?: string | null
   progressRecords: Array<{
     gmt_create: Date
+    counts_toward_recurrence?: boolean
   }>
 }
 
@@ -81,6 +82,9 @@ export function getCurrentPeriodCount(plan: RecurringPlan): number {
   const periodEnd = getCurrentPeriodEnd(recurrenceType)
   
   return plan.progressRecords.filter(record => {
+    if (record.counts_toward_recurrence === false) {
+      return false
+    }
     const recordDate = new Date(record.gmt_create)
     return recordDate >= periodStart && recordDate <= periodEnd
   }).length
