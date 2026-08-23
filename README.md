@@ -68,10 +68,10 @@ npm install
 
 ```bash
 # 生成 Prisma 客户端
-npx prisma generate
+npm run db:generate
 
-# 运行数据库迁移
-npx prisma db push
+# 同步数据库结构并应用完整性约束
+npm run db:push
 ```
 
 #### 4. 启动开发服务器

@@ -31,7 +31,7 @@ services:
         echo 'Setting npm registry to China mirror...' &&
         npm config set registry https://registry.npmmirror.com/ &&
         echo 'Initializing database schema...' &&
-        npx prisma db push &&
+        npm run db:deploy &&
         echo 'Starting application...' &&
         node server.js
       "
@@ -53,4 +53,4 @@ services:
 # 创建自定义网络
 networks:
   goal-mate-network:
-    driver: bridge 
+    driver: bridge

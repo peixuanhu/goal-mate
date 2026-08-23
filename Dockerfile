@@ -65,4 +65,4 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push && node server.js"] 
+CMD ["sh", "-c", "npm run db:deploy && node server.js"]
