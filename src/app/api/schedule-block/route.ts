@@ -70,7 +70,7 @@ function optionalStringOrNull(value: unknown, field: string): string | null | un
   return requiredString(value, field)
 }
 
-export function toScheduleErrorResponse(error: unknown): NextResponse | null {
+function toScheduleErrorResponse(error: unknown): NextResponse | null {
   if (!(error instanceof ScheduleServiceError)) {
     return null
   }
