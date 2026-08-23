@@ -156,4 +156,21 @@ describe("schedule validation", () => {
       }),
     ).toThrow("时间块不能跨本地日期")
   })
+
+  it("uses the next existing date boundary when a calendar date is skipped", () => {
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2011-12-30T09:00:00Z"),
+        end_at: new Date("2011-12-30T10:00:00Z"),
+        timezone: "Pacific/Apia",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2011-12-30T09:00:00Z"),
+        end_at: new Date("2011-12-30T10:00:00.001Z"),
+        timezone: "Pacific/Apia",
+      }),
+    ).toThrow("时间块不能跨本地日期")
+  })
 })

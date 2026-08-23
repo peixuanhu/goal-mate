@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatUtcInTimeZone, getUtcDayRange, zonedMinuteToUtc } from "./timezone"
+import { formatUtcInTimeZone, getUtcDayRange, zonedDateStartToUtc, zonedMinuteToUtc } from "./timezone"
 
 describe("today timezone conversion", () => {
   it("converts Shanghai wall-clock minutes to UTC", () => {
@@ -52,7 +52,14 @@ describe("today timezone conversion", () => {
   })
 
   it("reports a local date that has no valid instant", () => {
-    expect(() => getUtcDayRange("2011-12-30", "Pacific/Apia")).toThrow("本地日期不存在")
+    expect(() => zonedDateStartToUtc("2011-12-30", "Pacific/Apia")).toThrow("本地日期不存在")
+  })
+
+  it("ends before the first existing local date after a skipped calendar date", () => {
+    expect(getUtcDayRange("2011-12-29", "Pacific/Apia")).toEqual({
+      start: new Date("2011-12-29T10:00:00.000Z"),
+      endExclusive: new Date("2011-12-30T10:00:00.000Z"),
+    })
   })
 
   it("supports non-hour offsets and rejects invalid IANA timezones", () => {

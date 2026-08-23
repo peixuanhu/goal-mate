@@ -9,6 +9,7 @@ const formatterCache = new Map<string, Intl.DateTimeFormat>()
 const MINUTE_MS = 60_000
 const OFFSET_PROBE_RANGE_MINUTES = 36 * 60
 const OFFSET_PROBE_STEP_MINUTES = 30
+const MAX_NEXT_EXISTING_DATE_SEARCH_DAYS = 8
 
 function getFormatter(timezone: string): Intl.DateTimeFormat {
   const cached = formatterCache.get(timezone)
@@ -145,7 +146,7 @@ export function zonedMinuteToUtc(date: string, minutes: number, timezone: string
   return matches[0]
 }
 
-export function zonedDateStartToUtc(date: string, timezone: string): Date {
+function findZonedDateStartCandidate(date: string, timezone: string): Date | null {
   const parsedDate = parseDateOnly(date)
   getFormatter(timezone)
 
@@ -165,12 +166,35 @@ export function zonedDateStartToUtc(date: string, timezone: string): Date {
     }
   }
 
+  return null
+}
+
+export function zonedDateStartToUtc(date: string, timezone: string): Date {
+  const candidate = findZonedDateStartCandidate(date, timezone)
+  if (candidate) {
+    return candidate
+  }
+
   throw new Error("本地日期不存在")
+}
+
+export function nextExistingLocalDateStartToUtc(date: string, timezone: string): Date {
+  parseDateOnly(date)
+  getFormatter(timezone)
+
+  for (let daysAfter = 1; daysAfter <= MAX_NEXT_EXISTING_DATE_SEARCH_DAYS; daysAfter += 1) {
+    const candidate = findZonedDateStartCandidate(addDays(date, daysAfter), timezone)
+    if (candidate) {
+      return candidate
+    }
+  }
+
+  throw new Error(`未来 ${MAX_NEXT_EXISTING_DATE_SEARCH_DAYS} 天内没有存在的本地日期`)
 }
 
 export function getUtcDayRange(date: string, timezone: string): { start: Date; endExclusive: Date } {
   return {
     start: zonedDateStartToUtc(date, timezone),
-    endExclusive: zonedDateStartToUtc(addDays(date, 1), timezone),
+    endExclusive: nextExistingLocalDateStartToUtc(date, timezone),
   }
 }
