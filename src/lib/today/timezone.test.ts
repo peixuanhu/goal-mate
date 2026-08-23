@@ -35,6 +35,26 @@ describe("today timezone conversion", () => {
     })
   })
 
+  it("uses the first valid instant when a local date starts with a midnight gap", () => {
+    expect(() => zonedMinuteToUtc("2026-03-08", 0, "America/Havana")).toThrow("本地时间不存在")
+    expect(getUtcDayRange("2026-03-08", "America/Havana")).toEqual({
+      start: new Date("2026-03-08T05:00:00.000Z"),
+      endExclusive: new Date("2026-03-09T04:00:00.000Z"),
+    })
+  })
+
+  it("uses the earliest instant when local midnight is ambiguous", () => {
+    expect(() => zonedMinuteToUtc("2026-11-01", 0, "America/Havana")).toThrow("本地时间不明确")
+    expect(getUtcDayRange("2026-11-01", "America/Havana")).toEqual({
+      start: new Date("2026-11-01T04:00:00.000Z"),
+      endExclusive: new Date("2026-11-02T05:00:00.000Z"),
+    })
+  })
+
+  it("reports a local date that has no valid instant", () => {
+    expect(() => getUtcDayRange("2011-12-30", "Pacific/Apia")).toThrow("本地日期不存在")
+  })
+
   it("supports non-hour offsets and rejects invalid IANA timezones", () => {
     expect(zonedMinuteToUtc("2026-08-23", 9 * 60, "Asia/Kathmandu").toISOString()).toBe(
       "2026-08-23T03:15:00.000Z",

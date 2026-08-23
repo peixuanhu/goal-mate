@@ -71,21 +71,17 @@ export function formatUtcInTimeZone(date: Date, timezone: string): LocalMinute {
   return readLocalMinute(date, timezone)
 }
 
-export function zonedMinuteToUtc(date: string, minutes: number, timezone: string): Date {
-  const parsedDate = parseDateOnly(date)
-  if (!Number.isInteger(minutes) || minutes < 0 || minutes >= 1440) {
-    throw new Error("minutes must be an integer between 0 and 1439")
-  }
-
-  getFormatter(timezone)
-
-  const targetUtcLike = Date.UTC(
+function getUtcLikeTime(parsedDate: Date, minutes: number): number {
+  return Date.UTC(
     parsedDate.getUTCFullYear(),
     parsedDate.getUTCMonth(),
     parsedDate.getUTCDate(),
     Math.floor(minutes / 60),
     minutes % 60,
   )
+}
+
+function collectPlausibleOffsets(targetUtcLike: number, timezone: string): number[] {
   const offsets = new Set<number>()
 
   for (
@@ -102,13 +98,42 @@ export function zonedMinuteToUtc(date: string, minutes: number, timezone: string
     offsets.add(localUtcLike - probeTime)
   }
 
-  const matches = [...offsets]
+  return [...offsets]
+}
+
+function findUtcCandidates(
+  date: string,
+  minutes: number,
+  targetUtcLike: number,
+  timezone: string,
+  offsets: readonly number[],
+): Date[] {
+  return offsets
     .map(offset => new Date(targetUtcLike - offset))
     .filter(candidate => {
       const roundTrip = readLocalMinute(candidate, timezone)
       return roundTrip.date === date && roundTrip.minutes === minutes
     })
     .filter((candidate, index, all) => all.findIndex(other => other.getTime() === candidate.getTime()) === index)
+    .sort((left, right) => left.getTime() - right.getTime())
+}
+
+export function zonedMinuteToUtc(date: string, minutes: number, timezone: string): Date {
+  const parsedDate = parseDateOnly(date)
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes >= 1440) {
+    throw new Error("minutes must be an integer between 0 and 1439")
+  }
+
+  getFormatter(timezone)
+
+  const targetUtcLike = getUtcLikeTime(parsedDate, minutes)
+  const matches = findUtcCandidates(
+    date,
+    minutes,
+    targetUtcLike,
+    timezone,
+    collectPlausibleOffsets(targetUtcLike, timezone),
+  )
 
   if (matches.length === 0) {
     throw new Error("本地时间不存在")
@@ -120,9 +145,32 @@ export function zonedMinuteToUtc(date: string, minutes: number, timezone: string
   return matches[0]
 }
 
+export function zonedDateStartToUtc(date: string, timezone: string): Date {
+  const parsedDate = parseDateOnly(date)
+  getFormatter(timezone)
+
+  const midnightUtcLike = getUtcLikeTime(parsedDate, 0)
+  const offsets = collectPlausibleOffsets(midnightUtcLike, timezone)
+
+  for (let minutes = 0; minutes < 1440; minutes += 1) {
+    const matches = findUtcCandidates(
+      date,
+      minutes,
+      midnightUtcLike + minutes * MINUTE_MS,
+      timezone,
+      offsets,
+    )
+    if (matches.length > 0) {
+      return matches[0]
+    }
+  }
+
+  throw new Error("本地日期不存在")
+}
+
 export function getUtcDayRange(date: string, timezone: string): { start: Date; endExclusive: Date } {
   return {
-    start: zonedMinuteToUtc(date, 0, timezone),
-    endExclusive: zonedMinuteToUtc(addDays(date, 1), 0, timezone),
+    start: zonedDateStartToUtc(date, timezone),
+    endExclusive: zonedDateStartToUtc(addDays(date, 1), timezone),
   }
 }

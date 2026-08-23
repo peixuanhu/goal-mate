@@ -122,4 +122,38 @@ describe("schedule validation", () => {
       }),
     ).not.toThrow()
   })
+
+  it("uses the first valid instant as the next boundary after a midnight gap", () => {
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-03-08T04:00:00Z"),
+        end_at: new Date("2026-03-08T05:00:00Z"),
+        timezone: "America/Havana",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-03-08T04:00:00Z"),
+        end_at: new Date("2026-03-08T05:00:00.001Z"),
+        timezone: "America/Havana",
+      }),
+    ).toThrow("时间块不能跨本地日期")
+  })
+
+  it("only allows the earliest next boundary when local midnight repeats", () => {
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-11-01T03:00:00Z"),
+        end_at: new Date("2026-11-01T04:00:00Z"),
+        timezone: "America/Havana",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-11-01T03:00:00Z"),
+        end_at: new Date("2026-11-01T05:00:00Z"),
+        timezone: "America/Havana",
+      }),
+    ).toThrow("时间块不能跨本地日期")
+  })
 })

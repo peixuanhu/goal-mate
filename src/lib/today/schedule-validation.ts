@@ -1,8 +1,13 @@
 import { addDays } from "@/lib/focus-period-utils"
 
-import { formatUtcInTimeZone, zonedMinuteToUtc } from "./timezone"
+import type { ScheduleBlockStatus } from "./types"
+import { formatUtcInTimeZone, zonedDateStartToUtc } from "./timezone"
 
-export const BLOCKING_STATUSES = new Set(["scheduled", "completed", "partial"])
+export const BLOCKING_STATUSES: ReadonlySet<ScheduleBlockStatus> = new Set([
+  "scheduled",
+  "completed",
+  "partial",
+])
 
 export type SchedulableInterval = {
   start_at: Date
@@ -14,7 +19,7 @@ export type ScheduleBlockInterval = {
   block_id: string
   start_at: Date
   end_at: Date
-  status: string
+  status: ScheduleBlockStatus
 }
 
 export function assertSchedulableInterval({ start_at, end_at, timezone }: SchedulableInterval): void {
@@ -32,8 +37,8 @@ export function assertSchedulableInterval({ start_at, end_at, timezone }: Schedu
     return
   }
 
-  const nextMidnight = zonedMinuteToUtc(addDays(localStart.date, 1), 0, timezone)
-  if (end_at.getTime() !== nextMidnight.getTime()) {
+  const nextDateStart = zonedDateStartToUtc(addDays(localStart.date, 1), timezone)
+  if (end_at.getTime() !== nextDateStart.getTime()) {
     throw new Error("时间块不能跨本地日期")
   }
 }
