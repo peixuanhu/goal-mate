@@ -1,5 +1,5 @@
 "use client"
-import { type FormEvent, useEffect, useState } from 'react'
+import React, { Suspense, type FormEvent, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -33,6 +33,14 @@ interface ProgressRecord {
 }
 
 export default function ProgressPage() {
+  return (
+    <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">正在加载进展…</div>}>
+      <ProgressPageContent />
+    </Suspense>
+  )
+}
+
+function ProgressPageContent() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [planId, setPlanId] = useState('all') // 默认显示所有计划
   const [records, setRecords] = useState<ProgressRecord[]>([])
