@@ -1,6 +1,6 @@
 import { addDays } from "@/lib/focus-period-utils"
 
-import { formatUtcInTimeZone } from "./timezone"
+import { formatUtcInTimeZone, zonedMinuteToUtc } from "./timezone"
 
 export const BLOCKING_STATUSES = new Set(["scheduled", "completed", "partial"])
 
@@ -27,9 +27,13 @@ export function assertSchedulableInterval({ start_at, end_at, timezone }: Schedu
 
   const localStart = formatUtcInTimeZone(start_at, timezone)
   const localEnd = formatUtcInTimeZone(end_at, timezone)
-  const endsAtNextMidnight = localEnd.minutes === 0 && localEnd.date === addDays(localStart.date, 1)
 
-  if (localEnd.date !== localStart.date && !endsAtNextMidnight) {
+  if (localEnd.date === localStart.date) {
+    return
+  }
+
+  const nextMidnight = zonedMinuteToUtc(addDays(localStart.date, 1), 0, timezone)
+  if (end_at.getTime() !== nextMidnight.getTime()) {
     throw new Error("时间块不能跨本地日期")
   }
 }

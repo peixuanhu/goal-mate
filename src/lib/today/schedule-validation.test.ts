@@ -99,4 +99,27 @@ describe("schedule validation", () => {
       }),
     ).not.toThrow()
   })
+
+  it.each([
+    "2026-08-23T16:00:00.001Z",
+    "2026-08-23T16:00:59.999Z",
+  ])("rejects an end just after the next local midnight: %s", end_at => {
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-08-23T15:00:00Z"),
+        end_at: new Date(end_at),
+        timezone: "Asia/Shanghai",
+      }),
+    ).toThrow("时间块不能跨本地日期")
+  })
+
+  it("allows the exact next midnight across a DST-shortened local day", () => {
+    expect(() =>
+      assertSchedulableInterval({
+        start_at: new Date("2026-03-09T03:00:00Z"),
+        end_at: new Date("2026-03-09T04:00:00Z"),
+        timezone: "America/New_York",
+      }),
+    ).not.toThrow()
+  })
 })
