@@ -1,5 +1,6 @@
 "use client"
 
+import { useDraggable } from "@dnd-kit/core"
 import { CalendarClock, CircleDot, Flag, Layers3 } from "lucide-react"
 import React, { useId } from "react"
 
@@ -11,6 +12,7 @@ interface GoalCandidatePanelProps {
   candidates: SchedulableCandidate[]
   loading: boolean
   error: string | null
+  onSchedule: (candidate: SchedulableCandidate) => void
 }
 
 interface CandidateGroup {
@@ -82,15 +84,35 @@ function buildGoalGroups(
   })
 }
 
-function CandidateCard({ candidate }: { candidate: SchedulableCandidate }) {
+function CandidateCard({
+  candidate,
+  onSchedule,
+}: {
+  candidate: SchedulableCandidate
+  onSchedule: (candidate: SchedulableCandidate) => void
+}) {
   const isAction = candidate.kind === "action"
+  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
+    id: candidate.id,
+    data: { candidate },
+  })
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-3 shadow-xs">
+    <article
+      className={`rounded-xl border border-gray-200 bg-white p-3 shadow-xs ${isDragging ? "opacity-50" : ""}`}
+      ref={setNodeRef}
+      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
+    >
       <div className="flex items-start gap-2.5">
-        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${isAction ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-500"}`}>
+        <button
+          aria-label={`拖动 ${candidate.name}`}
+          className={`mt-0.5 flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-lg touch-none ${isAction ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-500"}`}
+          type="button"
+          {...attributes}
+          {...listeners}
+        >
           {isAction ? <CircleDot aria-hidden="true" className="h-3.5 w-3.5" /> : <Layers3 aria-hidden="true" className="h-3.5 w-3.5" />}
-        </span>
+        </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 text-sm font-medium leading-5 text-gray-800">{candidate.name}</p>
@@ -108,16 +130,13 @@ function CandidateCard({ candidate }: { candidate: SchedulableCandidate }) {
           </div>
         </div>
       </div>
-      {!isAction ? (
-        <button
-          className="mt-3 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-400"
-          disabled
-          title="排程功能将在下一阶段开放"
-          type="button"
-        >
-          直接安排计划
-        </button>
-      ) : null}
+      <button
+        className="mt-3 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs font-medium text-gray-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        onClick={() => onSchedule(candidate)}
+        type="button"
+      >
+        安排到今天
+      </button>
     </article>
   )
 }
@@ -132,9 +151,11 @@ function EmptyCandidates() {
 
 function PlanGroups({
   candidates,
+  onSchedule,
   planNamesById,
 }: {
   candidates: SchedulableCandidate[]
+  onSchedule: (candidate: SchedulableCandidate) => void
   planNamesById: ReadonlyMap<string, string>
 }) {
   const idPrefix = useId().replace(/[^A-Za-z0-9_-]/g, "") || "plan-group"
@@ -161,12 +182,12 @@ function PlanGroups({
             </div>
             <ul aria-label={`${planName}的行动项`} className="space-y-2">
               {group.actions.map(action => (
-                <li key={action.id}><CandidateCard candidate={action} /></li>
+                <li key={action.id}><CandidateCard candidate={action} onSchedule={onSchedule} /></li>
               ))}
             </ul>
             {group.plan ? (
               <div className={group.actions.length > 0 ? "mt-2" : undefined}>
-                <CandidateCard candidate={group.plan} />
+                <CandidateCard candidate={group.plan} onSchedule={onSchedule} />
               </div>
             ) : null}
           </section>
@@ -179,8 +200,10 @@ function PlanGroups({
 function GoalTree({
   candidates,
   focus,
+  onSchedule,
   planNamesById,
 }: Pick<GoalCandidatePanelProps, "candidates" | "focus"> & {
+  onSchedule: (candidate: SchedulableCandidate) => void
   planNamesById: ReadonlyMap<string, string>
 }) {
   const groups = buildGoalGroups(candidates, focus)
@@ -206,14 +229,14 @@ function GoalTree({
               </span>
             ) : null}
           </div>
-          <PlanGroups candidates={group.candidates} planNamesById={planNamesById} />
+          <PlanGroups candidates={group.candidates} onSchedule={onSchedule} planNamesById={planNamesById} />
         </section>
       ))}
     </div>
   )
 }
 
-export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCandidatePanelProps) {
+export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedule }: GoalCandidatePanelProps) {
   const planNamesById = new Map(
     candidates
       .filter(candidate => candidate.kind === "plan")
@@ -253,7 +276,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
           </div>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="goal-tree">
-            <GoalTree candidates={candidates} focus={focus} planNamesById={planNamesById} />
+            <GoalTree candidates={candidates} focus={focus} onSchedule={onSchedule} planNamesById={planNamesById} />
           </TabsContent>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="quadrant">
@@ -265,7 +288,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
                     <h3 id={`quadrant-${quadrant}`} className="mb-2 text-sm font-semibold text-gray-700">
                       {QUADRANT_LABELS[quadrant]}
                     </h3>
-                    <PlanGroups candidates={quadrantCandidates} planNamesById={planNamesById} />
+                    <PlanGroups candidates={quadrantCandidates} onSchedule={onSchedule} planNamesById={planNamesById} />
                   </section>
                 )
               })}
@@ -273,7 +296,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error }: GoalCa
           </TabsContent>
 
           <TabsContent className="m-0 min-h-0 flex-1 overflow-y-auto p-3" value="inbox">
-            <PlanGroups candidates={inboxCandidates} planNamesById={planNamesById} />
+            <PlanGroups candidates={inboxCandidates} onSchedule={onSchedule} planNamesById={planNamesById} />
           </TabsContent>
         </Tabs>
       )}

@@ -1,54 +1,94 @@
-import { Clock3 } from "lucide-react"
+"use client"
 
-import type { PlanningPreferenceView } from "@/lib/today/types"
+import { useDroppable } from "@dnd-kit/core"
+import { CheckCircle2, Clock3, Pencil } from "lucide-react"
+import React, { useEffect, useMemo, useState } from "react"
+
+import { formatUtcInTimeZone } from "@/lib/today/timezone"
+import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } from "@/lib/today/types"
+
+import { minuteToTimeInput, toLocalBlockRange } from "./scheduling-ui"
 
 interface DayTimelineProps {
   date: string
   preference: PlanningPreferenceView
+  blocks: ScheduleBlockView[]
   loading: boolean
   error: string | null
+  onEditBlock: (block: ScheduleBlockView) => void
+  onCompleteBlock: (block: ScheduleBlockView) => void
 }
 
 export const MAX_TIMELINE_MARKERS = 26
 
+const STATUS_LABELS: Record<ScheduleBlockStatus, string> = {
+  scheduled: "已安排",
+  completed: "已完成",
+  partial: "部分完成",
+  skipped: "已跳过",
+  cancelled: "已取消",
+}
+
+const STATUS_CLASSES: Record<ScheduleBlockStatus, string> = {
+  scheduled: "border-indigo-200 bg-indigo-100/95 text-indigo-950",
+  completed: "border-emerald-200 bg-emerald-100/95 text-emerald-950",
+  partial: "border-amber-200 bg-amber-100/95 text-amber-950",
+  skipped: "border-gray-200 bg-gray-100/95 text-gray-600",
+  cancelled: "border-gray-200 bg-white/85 text-gray-400 line-through",
+}
+
 function formatMinutes(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+  return minuteToTimeInput(totalMinutes)
 }
 
 function buildTimelineMarkers(dayStartMinutes: number, dayEndMinutes: number): number[] {
   const markers = [dayStartMinutes]
   let cursor = (Math.floor(dayStartMinutes / 60) + 1) * 60
-
   while (cursor < dayEndMinutes && markers.length < MAX_TIMELINE_MARKERS - 1) {
     markers.push(cursor)
     cursor += 60
   }
-
-  if (markers.at(-1) !== dayEndMinutes) {
-    markers.push(dayEndMinutes)
-  }
-
+  if (markers.at(-1) !== dayEndMinutes) markers.push(dayEndMinutes)
   return markers
 }
 
-export function DayTimeline({ date, preference, loading, error }: DayTimelineProps) {
-  const markers = buildTimelineMarkers(preference.day_start_minutes, preference.day_end_minutes)
+function useCurrentLocalMinute(date: string, timezone: string): number | null {
+  const [now, setNow] = useState<Date | null>(null)
+
+  useEffect(() => {
+    setNow(new Date())
+    const interval = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(interval)
+  }, [date, timezone])
+
+  if (now === null) return null
+  try {
+    const local = formatUtcInTimeZone(now, timezone)
+    return local.date === date ? local.minutes : null
+  } catch {
+    return null
+  }
+}
+
+export function DayTimeline({ date, preference, blocks, loading, error, onEditBlock, onCompleteBlock }: DayTimelineProps) {
+  const { isOver, setNodeRef } = useDroppable({ id: "today-timeline" })
+  const markers = useMemo(
+    () => buildTimelineMarkers(preference.day_start_minutes, preference.day_end_minutes),
+    [preference.day_end_minutes, preference.day_start_minutes],
+  )
   const durationMinutes = preference.day_end_minutes - preference.day_start_minutes
   const timelineHeight = Math.max(520, Math.round(durationMinutes * 1.1))
+  const currentMinute = useCurrentLocalMinute(date, preference.timezone)
+  const showCurrentTime = currentMinute !== null
+    && currentMinute >= preference.day_start_minutes
+    && currentMinute < preference.day_end_minutes
 
   return (
-    <section
-      aria-labelledby="today-timeline-heading"
-      className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-    >
+    <section aria-labelledby="today-timeline-heading" className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <header className="flex min-h-14 items-center justify-between border-b border-gray-100 px-5 py-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">今日时间线</p>
-          <h2 id="today-timeline-heading" className="mt-0.5 text-base font-semibold text-gray-900">
-            {date}
-          </h2>
+          <h2 id="today-timeline-heading" className="mt-0.5 text-base font-semibold text-gray-900">{date}</h2>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
           <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
@@ -57,44 +97,80 @@ export function DayTimeline({ date, preference, loading, error }: DayTimelinePro
       </header>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-gray-50/40">
-        <div className="relative" style={{ minHeight: timelineHeight }}>
+        <div className={`relative transition-colors ${isOver ? "bg-indigo-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
           {markers.map((minutes, index) => {
-            const top = durationMinutes === 0
-              ? 0
-              : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
-
+            const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
             return (
-              <div
-                className="absolute inset-x-0 flex items-start"
-                key={minutes}
-                style={{ top: `${top}%` }}
-              >
-                <time className="w-16 -translate-y-1/2 pr-3 text-right text-xs tabular-nums text-gray-400">
-                  {formatMinutes(minutes)}
-                </time>
+              <div className="absolute inset-x-0 flex items-start" key={minutes} style={{ top: `${top}%` }}>
+                <time className="w-16 -translate-y-1/2 pr-3 text-right text-xs tabular-nums text-gray-400">{formatMinutes(minutes)}</time>
                 <div className={`flex-1 border-t ${index === 0 || index === markers.length - 1 ? "border-gray-200" : "border-dashed border-gray-200/80"}`} />
               </div>
             )
           })}
 
-          <div className="absolute inset-y-8 left-20 right-5 flex items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white/65 px-6 text-center">
-            {loading ? (
-              <p className="text-sm text-gray-500" role="status">正在读取今天的安排…</p>
-            ) : error ? (
-              <div className="max-w-sm" role="alert">
-                <p className="font-medium text-red-700">时间线加载失败</p>
-                <p className="mt-1 text-sm text-red-600">{error}</p>
-              </div>
-            ) : (
-              <div className="max-w-sm">
-                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-                  <Clock3 aria-hidden="true" className="h-5 w-5" />
+          {blocks.map(block => {
+            let local
+            try {
+              local = toLocalBlockRange(block.start_at, block.end_at, preference.timezone, date)
+            } catch {
+              return null
+            }
+            const visibleStart = Math.max(local.start, preference.day_start_minutes)
+            const visibleEnd = Math.min(local.end, preference.day_end_minutes)
+            if (visibleEnd <= visibleStart || durationMinutes <= 0) return null
+            const top = ((visibleStart - preference.day_start_minutes) / durationMinutes) * 100
+            const height = ((visibleEnd - visibleStart) / durationMinutes) * 100
+            const editable = block.status === "scheduled"
+            return (
+              <article
+                aria-label={`${block.title}，${STATUS_LABELS[block.status]}`}
+                className={`absolute left-[4.5rem] right-3 z-10 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${STATUS_CLASSES[block.status]}`}
+                key={block.block_id}
+                style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{block.title}</p>
+                    <p className="mt-0.5 text-[11px] tabular-nums opacity-70">{formatMinutes(local.start)}–{formatMinutes(local.end)} · {STATUS_LABELS[block.status]}</p>
+                  </div>
+                  {editable ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button aria-label={`编辑 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={() => onEditBlock(block)} type="button">
+                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                      </button>
+                      <button aria-label={`完成 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={() => onCompleteBlock(block)} type="button">
+                        <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
+              </article>
+            )
+          })}
+
+          {showCurrentTime && currentMinute !== null ? (
+            <div aria-label={`当前时间 ${formatMinutes(currentMinute)}`} className="pointer-events-none absolute inset-x-16 z-20 border-t-2 border-rose-500" style={{ top: `${((currentMinute - preference.day_start_minutes) / durationMinutes) * 100}%` }}>
+              <span className="absolute -top-3 right-0 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-medium text-white">当前时间</span>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="absolute inset-y-8 left-20 right-5 grid place-items-center rounded-xl border border-dashed border-gray-300 bg-white/80">
+              <p className="text-sm text-gray-500" role="status">正在读取今天的安排…</p>
+            </div>
+          ) : error ? (
+            <div className="absolute inset-y-8 left-20 right-5 grid place-items-center rounded-xl border border-red-100 bg-red-50/90" role="alert">
+              <div className="max-w-sm text-center"><p className="font-medium text-red-700">时间线加载失败</p><p className="mt-1 text-sm text-red-600">{error}</p></div>
+            </div>
+          ) : blocks.length === 0 ? (
+            <div className="pointer-events-none absolute inset-y-8 left-20 right-5 flex items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white/65 px-6 text-center">
+              <div className="max-w-sm">
+                <Clock3 aria-hidden="true" className="mx-auto mb-3 h-9 w-9 text-gray-400" />
                 <p className="text-sm font-medium text-gray-700">把左侧计划或行动项拖到这里安排时间</p>
-                <p className="mt-1 text-xs text-gray-400">排程功能将在下一阶段开放</p>
+                <p className="mt-1 text-xs text-gray-400">也可以用候选事项上的“安排到今天”按钮</p>
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

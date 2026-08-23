@@ -6,11 +6,11 @@ import {
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
 import {
-  lockScheduleLocalDates,
   parseScheduleTerminalVersion,
   ScheduleServiceError,
-  toScheduleBlockView,
 } from "./schedule-service"
+import { lockScheduleLocalDates } from "./schedule-lock"
+import { SCHEDULE_BLOCK_RELATIONS, toScheduleBlockView } from "./schedule-block-view"
 import { formatUtcInTimeZone } from "./timezone"
 import type { ScheduleBlockView } from "./types"
 
@@ -61,25 +61,6 @@ const COMPLETION_FIELDS = new Set([
   "result_note",
   "plan_progress",
 ])
-const COMPLETION_RELATIONS = {
-  plan: {
-    select: {
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      goal: { select: { goal_id: true, name: true } },
-    },
-  },
-  action: {
-    select: {
-      action_id: true,
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      is_completed: true,
-    },
-  },
-} as const
 
 function validation(message: string): never {
   throw new ScheduleServiceError("VALIDATION", message)
@@ -274,7 +255,7 @@ export async function completeScheduleBlock(
 
       const row = await tx.scheduleBlock.findUnique({
         where: { block_id: input.blockId },
-        include: COMPLETION_RELATIONS,
+        include: SCHEDULE_BLOCK_RELATIONS,
       })
       if (!row) {
         throw new ScheduleServiceError("NOT_FOUND", "时间块不存在")

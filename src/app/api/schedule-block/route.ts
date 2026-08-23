@@ -11,10 +11,10 @@ import {
   parseScheduleTerminalVersion,
   parseScheduleUpdateVersion,
   ScheduleServiceError,
-  toScheduleBlockView,
   updateScheduleBlock,
   type CreateScheduleBlockInput,
 } from "@/lib/today/schedule-service"
+import { SCHEDULE_BLOCK_RELATIONS, toScheduleBlockView } from "@/lib/today/schedule-block-view"
 import { getUtcDayRange } from "@/lib/today/timezone"
 import type { ScheduleBlockSource } from "@/lib/today/types"
 import { parseDateKey } from "@/lib/today/validation"
@@ -25,25 +25,6 @@ const POST_FIELDS = new Set(["plan_id", "action_id", "start_at", "end_at", "stat
 const UPDATE_FIELDS = new Set(["operation", "block_id", "expected_version", "start_at", "end_at"])
 const CANCEL_FIELDS = new Set(["operation", "block_id", "expected_version"])
 const SOURCES = new Set<ScheduleBlockSource>(["manual", "ai_check", "ai_chat"])
-const SCHEDULE_RELATIONS = {
-  plan: {
-    select: {
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      goal: { select: { goal_id: true, name: true } },
-    },
-  },
-  action: {
-    select: {
-      action_id: true,
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      is_completed: true,
-    },
-  },
-} as const
 
 function routeValidation(message: string): never {
   throw new ScheduleServiceError("VALIDATION", message)
@@ -129,7 +110,7 @@ export async function GET(req: NextRequest) {
       start_at: { lt: endExclusive },
       end_at: { gt: start },
     },
-    include: SCHEDULE_RELATIONS,
+    include: SCHEDULE_BLOCK_RELATIONS,
     orderBy: [{ start_at: "asc" }, { block_id: "asc" }],
   })
   const list = rows.map(row => toScheduleBlockView(row))

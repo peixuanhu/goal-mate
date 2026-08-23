@@ -8,6 +8,12 @@ import {
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
 import { assertSchedulableInterval, findOverlappingBlocks } from "./schedule-validation"
+import { lockScheduleLocalDates } from "./schedule-lock"
+import {
+  SCHEDULE_BLOCK_RELATIONS,
+  toScheduleBlockView,
+  type ScheduleBlockProjectionRow,
+} from "./schedule-block-view"
 import {
   formatUtcInTimeZone,
   nextExistingLocalDateStartToUtc,
@@ -15,12 +21,14 @@ import {
   zonedMinuteToUtc,
 } from "./timezone"
 import type {
-  EnergyLevel,
   PlanningPreferenceView,
   ScheduleBlockSource,
   ScheduleBlockStatus,
   ScheduleBlockView,
 } from "./types"
+
+export { lockScheduleLocalDates } from "./schedule-lock"
+export { toScheduleBlockView } from "./schedule-block-view"
 
 export type ScheduleErrorCode =
   | "VALIDATION"
@@ -69,21 +77,6 @@ type CancelOptions = {
 
 type ScheduleDb = PrismaClient | Prisma.TransactionClient
 
-type SchedulePlan = {
-  plan_id: string
-  name: string
-  energy_level: string | null
-  goal: { goal_id: string; name: string } | null
-}
-
-type ScheduleAction = {
-  action_id: string
-  plan_id: string
-  name: string
-  energy_level: string | null
-  is_completed: boolean
-}
-
 type LockedActionRow = {
   action_id: string
   plan_id: string
@@ -104,19 +97,8 @@ type LockedScheduleBlockRow = {
   version: number
 }
 
-type ScheduleBlockRow = {
-  block_id: string
-  plan_id: string
-  action_id: string | null
-  start_at: Date
-  end_at: Date
-  status: string
-  source: string
-  result_note: string | null
+type ScheduleBlockRow = ScheduleBlockProjectionRow & {
   create_fingerprint: string | null
-  version: number
-  plan: SchedulePlan
-  action: ScheduleAction | null
 }
 
 type NormalizedCreate = {
@@ -143,7 +125,6 @@ type NormalizedCancel = {
 }
 
 const DEFAULT_PREFERENCE_ID = "default"
-const SCHEDULE_DATE_LOCK_NAMESPACE = 48_241
 const SCHEDULE_KEY_LOCK_NAMESPACE = 48_243
 const CREATE_FIELDS = new Set([
   "idempotency_key",
@@ -157,37 +138,11 @@ const CREATE_FIELDS = new Set([
 const UPDATE_FIELDS = new Set(["block_id", "expected_version", "start_at", "end_at"])
 const CANCEL_FIELDS = new Set(["block_id", "expected_version"])
 const SOURCES = new Set<ScheduleBlockSource>(["manual", "ai_check", "ai_chat"])
-const STATUSES = new Set<ScheduleBlockStatus>([
-  "scheduled",
-  "completed",
-  "partial",
-  "skipped",
-  "cancelled",
-])
-const ENERGY_LEVELS = new Set<EnergyLevel>(["low", "medium", "high"])
 const POSTGRESQL_INT_MAX = 2_147_483_647
 export const MAX_SCHEDULE_UPDATE_EXPECTED_VERSION = POSTGRESQL_INT_MAX - 2
 export const MAX_SCHEDULE_TERMINAL_EXPECTED_VERSION = POSTGRESQL_INT_MAX - 1
 const ISO_INSTANT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/
-const SCHEDULE_RELATIONS = {
-  plan: {
-    select: {
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      goal: { select: { goal_id: true, name: true } },
-    },
-  },
-  action: {
-    select: {
-      action_id: true,
-      plan_id: true,
-      name: true,
-      energy_level: true,
-      is_completed: true,
-    },
-  },
-} as const
+const SCHEDULE_RELATIONS = SCHEDULE_BLOCK_RELATIONS
 
 function validation(message: string): never {
   throw new ScheduleServiceError("VALIDATION", message)
@@ -387,16 +342,6 @@ async function lockValue(db: Prisma.TransactionClient, namespace: number, value:
   await db.$executeRaw`SELECT pg_advisory_xact_lock(${namespace}::int, hashtext(${value})::int)`
 }
 
-export async function lockScheduleLocalDates(
-  db: Prisma.TransactionClient,
-  dates: readonly string[],
-): Promise<void> {
-  const sortedDates = [...new Set(dates)].sort()
-  for (const date of sortedDates) {
-    await lockValue(db, SCHEDULE_DATE_LOCK_NAMESPACE, date)
-  }
-}
-
 async function lockActionItem(
   db: Prisma.TransactionClient,
   actionId: string,
@@ -457,35 +402,6 @@ function localDateAndAssertBounds(
     validation("时间块必须位于已配置的计划日范围内")
   }
   return localStart.date
-}
-
-function energy(value: string | null): EnergyLevel | null {
-  return value !== null && ENERGY_LEVELS.has(value as EnergyLevel) ? value as EnergyLevel : null
-}
-
-export function toScheduleBlockView(row: ScheduleBlockRow): ScheduleBlockView {
-  if (!STATUSES.has(row.status as ScheduleBlockStatus)) {
-    validation("stored schedule block status is invalid")
-  }
-  if (!SOURCES.has(row.source as ScheduleBlockSource)) {
-    validation("stored schedule block source is invalid")
-  }
-
-  return {
-    block_id: row.block_id,
-    plan_id: row.plan_id,
-    action_id: row.action_id,
-    title: row.action?.name ?? row.plan.name,
-    goal_id: row.plan.goal?.goal_id ?? null,
-    goal_name: row.plan.goal?.name ?? null,
-    energy_level: energy(row.action?.energy_level ?? row.plan.energy_level),
-    start_at: row.start_at.toISOString(),
-    end_at: row.end_at.toISOString(),
-    status: row.status as ScheduleBlockStatus,
-    source: row.source as ScheduleBlockSource,
-    result_note: row.result_note,
-    version: row.version,
-  }
 }
 
 function legacyCreateFieldsMatch(row: ScheduleBlockRow, input: NormalizedCreate): boolean {

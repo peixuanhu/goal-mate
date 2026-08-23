@@ -246,6 +246,8 @@ describe("TodayWorkspace behavior", () => {
     ["version", { version: 1.5 }],
     ["ISO instant", { start_at: "2026-08-23 09:00" }],
     ["impossible ISO instant", { start_at: "2026-02-30T01:00:00.000Z" }],
+    ["reversed interval", { start_at: "2026-08-23T03:00:00.000Z", end_at: "2026-08-23T02:00:00.000Z" }],
+    ["zero-duration interval", { start_at: "2026-08-23T02:00:00.000Z", end_at: "2026-08-23T02:00:00.000Z" }],
     ["required field", { title: null }],
   ])("rejects a response containing a schedule block with malformed %s", async (_label, malformed) => {
     const fetchMock = vi.fn((request: RequestInfo | URL) => {

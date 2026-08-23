@@ -9,7 +9,7 @@ import {
   toPlanningPreferenceView,
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
-import { toScheduleBlockView } from "./schedule-service"
+import { SCHEDULE_BLOCK_RELATIONS, toScheduleBlockView } from "./schedule-block-view"
 import { getUtcDayRange } from "./timezone"
 import type {
   EnergyLevel,
@@ -144,25 +144,7 @@ export interface TodayQueryDb {
         start_at: { lt: Date }
         end_at: { gt: Date }
       }
-      include: {
-        plan: {
-          select: {
-            plan_id: true
-            name: true
-            energy_level: true
-            goal: { select: { goal_id: true; name: true } }
-          }
-        }
-        action: {
-          select: {
-            action_id: true
-            plan_id: true
-            name: true
-            energy_level: true
-            is_completed: true
-          }
-        }
-      }
+      include: typeof SCHEDULE_BLOCK_RELATIONS
       orderBy: [{ start_at: "asc" }, { block_id: "asc" }]
     }): PromiseLike<ScheduleBlockRow[]>
   }
@@ -305,25 +287,7 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
         start_at: { lt: endExclusive },
         end_at: { gt: start },
       },
-      include: {
-        plan: {
-          select: {
-            plan_id: true,
-            name: true,
-            energy_level: true,
-            goal: { select: { goal_id: true, name: true } },
-          },
-        },
-        action: {
-          select: {
-            action_id: true,
-            plan_id: true,
-            name: true,
-            energy_level: true,
-            is_completed: true,
-          },
-        },
-      },
+      include: SCHEDULE_BLOCK_RELATIONS,
       orderBy: [{ start_at: "asc" }, { block_id: "asc" }],
     }),
   ])

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import React from "react"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { SchedulableCandidate } from "@/lib/today/types"
 
@@ -76,6 +76,7 @@ describe("GoalCandidatePanel hierarchy", () => {
           version: "2026-08-23T00:00:00.000Z",
         }}
         loading={false}
+        onSchedule={vi.fn()}
       />,
     )
 
@@ -93,8 +94,9 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect(within(otherActions).queryByText("聚焦行动")).toBeNull()
 
     const focusAction = within(focusActions).getByText("聚焦行动")
-    const directPlanControl = within(focusPlan).getByRole("button", { name: "直接安排计划" })
-    expect(focusAction.compareDocumentPosition(directPlanControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const directPlanControl = within(focusPlan).getAllByRole("button", { name: "安排到今天" }).at(-1)
+    expect(directPlanControl).toBeTruthy()
+    expect(focusAction.compareDocumentPosition(directPlanControl as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     const labelledHeadingId = focusPlan.getAttribute("aria-labelledby")
     expect(labelledHeadingId).toMatch(/^[A-Za-z0-9_-]+$/)
@@ -120,7 +122,7 @@ describe("GoalCandidatePanel hierarchy", () => {
     ]
 
     render(
-      <GoalCandidatePanel candidates={candidates} error={null} focus={null} loading={false} />,
+      <GoalCandidatePanel candidates={candidates} error={null} focus={null} loading={false} onSchedule={vi.fn()} />,
     )
 
     const quadrantTab = screen.getByRole("tab", { name: "四象限" })
