@@ -16,6 +16,7 @@ export type ActionItemInput = PlanningFields & {
 
 const ENERGY_LEVELS = new Set<EnergyLevel>(["low", "medium", "high"])
 const QUADRANT_IDS = new Set<QuadrantId>(["q1", "q2", "q3", "q4"])
+const POSTGRESQL_INT_MAX = 2_147_483_647
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object") {
@@ -72,6 +73,12 @@ export function parsePlanningFields(value: unknown): PlanningFields {
     const estimatedMinutes = value.estimated_minutes
     if (estimatedMinutes === null || estimatedMinutes === "") {
       result.estimated_minutes = null
+    } else if (
+      typeof estimatedMinutes === "number"
+      && Number.isInteger(estimatedMinutes)
+      && estimatedMinutes > POSTGRESQL_INT_MAX
+    ) {
+      throw new Error("estimated_minutes must be a positive PostgreSQL Int or null")
     } else if (typeof estimatedMinutes === "number" && Number.isInteger(estimatedMinutes) && estimatedMinutes > 0) {
       result.estimated_minutes = estimatedMinutes
     } else {

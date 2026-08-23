@@ -82,6 +82,12 @@ describe("today validation", () => {
       )
     })
 
+    it("rejects estimates outside the PostgreSQL Int range", () => {
+      expect(() => parsePlanningFields({ estimated_minutes: 2_147_483_648 })).toThrow(
+        "estimated_minutes must be a positive PostgreSQL Int or null",
+      )
+    })
+
     it("rejects rollover dates", () => {
       expect(() => parsePlanningFields({ due_date: "2026-02-30" })).toThrow(
         "due_date must be a valid yyyy-mm-dd value or null",
