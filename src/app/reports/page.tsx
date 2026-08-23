@@ -118,10 +118,7 @@ export default function ReportsPage() {
     <AuthGuard>
       <MainLayout>
         <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/">返回首页</Link>
-            </Button>
+          <div className="flex justify-end">
             <Button type="button" variant="outline" onClick={fetchWeeklySummary} disabled={loadingSummary} className="w-full sm:w-auto">
               <RefreshCcw className="mr-2 h-4 w-4" />
               {loadingSummary ? "刷新中..." : "刷新本周回顾"}

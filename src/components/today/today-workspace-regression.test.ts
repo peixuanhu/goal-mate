@@ -19,43 +19,26 @@ describe("read-only Today workspace", () => {
     expect(source).not.toContain("<MainLayout")
   })
 
-  it("uses a desktop three-column workspace with the timeline first on mobile", () => {
+  it("places the timeline inside the shared application shell", () => {
     const source = readProjectFile("src/components/today/today-workspace.tsx")
 
-    expect(source).toContain("lg:grid-cols-[300px_minmax(0,1fr)_340px]")
-    expect(source).toContain("<GoalCandidatePanel")
+    expect(source).toContain("<MainLayout")
+    expect(source).toContain("workspaceSnapshot=")
+    expect(source).toContain("onWorkspaceDragEnd={handleDragEnd}")
     expect(source).toContain("<DayTimeline")
-    expect(source).toContain("<AiWorkspace")
-    expect(source).toMatch(/order-1[^\"]*lg:col-start-2/)
-    expect(source).toMatch(/order-2[^\"]*lg:col-start-1/)
-    expect(source).toMatch(/order-3[^\"]*lg:col-start-3/)
+    expect(source).not.toContain("<GoalCandidatePanel")
+    expect(source).not.toContain("<AiWorkspace")
+    expect(source).not.toContain("lg:grid-cols-[300px_minmax(0,1fr)_340px]")
   })
 
-  it("offers accessible mobile panel toggles and date navigation", () => {
+  it("keeps date navigation while delegating auxiliary panels to the shell", () => {
     const source = readProjectFile("src/components/today/today-workspace.tsx")
 
     expect(source).toContain('aria-label="前一天"')
     expect(source).toContain('aria-label="后一天"')
     expect(source).toContain("回到今天")
-    expect(source).toContain('aria-controls="today-candidates"')
-    expect(source).toContain('aria-controls="today-ai"')
-    expect(source).toContain("显示候选任务")
-    expect(source).toContain("显示 AI 工作区")
-  })
-
-  it("keeps the timeline visible when a mobile auxiliary panel opens", () => {
-    const source = readProjectFile("src/components/today/today-workspace.tsx")
-    const timelineComponentIndex = source.indexOf("<DayTimeline")
-    const timelineSectionIndex = source.lastIndexOf("<section", timelineComponentIndex)
-
-    expect(timelineComponentIndex).toBeGreaterThanOrEqual(0)
-    expect(timelineSectionIndex).toBeGreaterThanOrEqual(0)
-    expect(timelineSectionIndex).toBeLessThan(timelineComponentIndex)
-
-    const timelineSection = source.slice(timelineSectionIndex, timelineComponentIndex)
-
-    expect(timelineSection).toMatch(/className=(?:"[^"]*\border-1\b[^"]*"|\{cn\("[^"]*\border-1\b)/)
-    expect(timelineSection).not.toMatch(/\b(?:hidden|sm:hidden|md:hidden|max-(?:sm|md|lg):hidden)\b/)
+    expect(source).not.toContain('aria-controls="today-candidates"')
+    expect(source).not.toContain('aria-controls="today-ai"')
   })
 
   it("lays out AI check and chat tabs around the chat workspace", () => {

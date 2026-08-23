@@ -245,12 +245,6 @@ function ProgressPageContent() {
     <AuthGuard>
       <MainLayout>
         <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <div className="mb-2 sm:mb-4">
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/">返回首页</Link>
-            </Button>
-          </div>
-          
           <Card className="min-w-0 overflow-hidden">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="flex flex-col gap-3 text-lg sm:flex-row sm:items-center sm:justify-between sm:text-xl">

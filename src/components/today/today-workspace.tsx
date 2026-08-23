@@ -1,11 +1,10 @@
 "use client"
 
-import { DndContext, type DragEndEvent } from "@dnd-kit/core"
-import { Bot, CalendarDays, ChevronLeft, ChevronRight, ListTree } from "lucide-react"
-import Link from "next/link"
+import { type DragEndEvent } from "@dnd-kit/core"
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import UserMenu from "@/components/UserMenu"
+import { MainLayout } from "@/components/main-layout"
 import { Button } from "@/components/ui/button"
 import { addDays, normalizeLocalDateInput, parseDateOnly } from "@/lib/focus-period-utils"
 import { getDefaultPlanningPreference } from "@/lib/today/planning-preference"
@@ -15,11 +14,8 @@ import type {
   SchedulableCandidate,
   TodayView,
 } from "@/lib/today/types"
-import { cn } from "@/lib/utils"
 
-import { AiWorkspace } from "./ai-workspace"
 import { DayTimeline } from "./day-timeline"
-import { GoalCandidatePanel } from "./goal-candidate-panel"
 import { ScheduleBlockEditor, type ScheduleEditorSubmit } from "./schedule-block-editor"
 import { ScheduleCompletionSheet, type ScheduleCompletionPayload } from "./schedule-completion-sheet"
 import {
@@ -162,8 +158,6 @@ export function TodayWorkspace() {
   const [view, setView] = useState<TodayView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showCandidates, setShowCandidates] = useState(false)
-  const [showAi, setShowAi] = useState(false)
   const [editorIntent, setEditorIntent] = useState<EditorIntent | null>(null)
   const [completionBlock, setCompletionBlock] = useState<ScheduleBlockView | null>(null)
   const [editorError, setEditorError] = useState<string | null>(null)
@@ -173,6 +167,7 @@ export function TodayWorkspace() {
   const requestIdRef = useRef(0)
   const activeRequestControllerRef = useRef<AbortController | null>(null)
   const dateRef = useRef<string | null>(null)
+  const mutationLoadingRef = useRef(false)
   const defaultPreference = useMemo(() => getDefaultPlanningPreference(), [])
 
   useEffect(() => {
@@ -230,6 +225,21 @@ export function TodayWorkspace() {
       activeRequestControllerRef.current?.abort()
     }
   }, [date, loadToday])
+
+  useEffect(() => {
+    const refreshAfterSharedMutation = (event: Event) => {
+      const detail = (event as CustomEvent<{ entity?: string }>).detail
+      const selectedDate = dateRef.current
+      if (detail?.entity !== "schedule-block" || selectedDate === null || mutationLoadingRef.current) return
+
+      activeRequestControllerRef.current?.abort()
+      const controller = new AbortController()
+      void loadToday(selectedDate, controller, true)
+    }
+
+    window.addEventListener("goal-mate:data-changed", refreshAfterSharedMutation)
+    return () => window.removeEventListener("goal-mate:data-changed", refreshAfterSharedMutation)
+  }, [loadToday])
 
   const visibleView = date !== null && view?.date === date ? view : null
   const preference = visibleView?.preference ?? defaultPreference
@@ -297,6 +307,7 @@ export function TodayWorkspace() {
 
   async function submitEditor(payload: ScheduleEditorSubmit) {
     if (editorIntent === null || mutationLoading) return
+    mutationLoadingRef.current = true
     setMutationLoading(true)
     setEditorError(null)
     try {
@@ -327,12 +338,14 @@ export function TodayWorkspace() {
     } catch (mutationError) {
       setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "保存时间块失败")
     } finally {
+      mutationLoadingRef.current = false
       setMutationLoading(false)
     }
   }
 
   async function cancelEditorBlock(payload: { block_id: string; expected_version: number }) {
     if (mutationLoading) return
+    mutationLoadingRef.current = true
     setMutationLoading(true)
     setEditorError(null)
     try {
@@ -346,12 +359,14 @@ export function TodayWorkspace() {
     } catch (mutationError) {
       setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "取消时间块失败")
     } finally {
+      mutationLoadingRef.current = false
       setMutationLoading(false)
     }
   }
 
   async function submitCompletion(payload: ScheduleCompletionPayload) {
     if (mutationLoading) return
+    mutationLoadingRef.current = true
     setMutationLoading(true)
     setCompletionError(null)
     try {
@@ -365,34 +380,19 @@ export function TodayWorkspace() {
     } catch (mutationError) {
       setCompletionError(mutationError instanceof Error && mutationError.message ? mutationError.message : "记录时间块结果失败")
     } finally {
+      mutationLoadingRef.current = false
       setMutationLoading(false)
     }
   }
 
   return (
-    <main className="min-h-dvh bg-[#f5f5f4] text-gray-900">
-      <header className="border-b border-gray-200/80 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[1720px] items-center gap-5 px-4 sm:px-6">
-          <Link aria-label="Goal Mate 今日首页" className="flex shrink-0 items-center gap-2" href="/">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gray-950 text-sm font-bold text-white">G</span>
-            <span className="hidden font-semibold tracking-tight sm:inline">Goal Mate</span>
-          </Link>
-
-          <nav aria-label="主导航" className="hidden items-center gap-1 md:flex">
-            <Link className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900" href="/">今天</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/goals">目标</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/plans">计划</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/progress">进展</Link>
-            <Link className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900" href="/reports">回顾</Link>
-          </nav>
-
-          <div className="ml-auto">
-            <UserMenu />
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-[1720px] px-3 py-4 sm:px-5 sm:py-5">
+    <MainLayout
+      onScheduleCandidate={scheduleCandidate}
+      onWorkspaceDragEnd={handleDragEnd}
+      workspaceDate={date}
+      workspaceSnapshot={{ candidates, error, focus, loading }}
+    >
+      <div className="h-full min-h-0 px-3 py-4 sm:px-5 sm:py-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">Today workspace</p>
@@ -429,29 +429,6 @@ export function TodayWorkspace() {
           </div>
         </div>
 
-        <div className="mb-3 grid grid-cols-2 gap-2 lg:hidden" aria-label="辅助面板开关">
-          <Button
-            aria-controls="today-candidates"
-            aria-expanded={showCandidates}
-            onClick={() => setShowCandidates(current => !current)}
-            type="button"
-            variant="outline"
-          >
-            <ListTree aria-hidden="true" />
-            {showCandidates ? "隐藏候选任务" : "显示候选任务"}
-          </Button>
-          <Button
-            aria-controls="today-ai"
-            aria-expanded={showAi}
-            onClick={() => setShowAi(current => !current)}
-            type="button"
-            variant="outline"
-          >
-            <Bot aria-hidden="true" />
-            {showAi ? "隐藏 AI 工作区" : "显示 AI 工作区"}
-          </Button>
-        </div>
-
         {scheduleError ? (
           <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800" role="alert">
             {scheduleError}
@@ -459,13 +436,12 @@ export function TodayWorkspace() {
         ) : null}
 
         {date === null ? (
-          <div className="grid min-h-[620px] place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500 shadow-sm" role="status">
+          <div className="grid min-h-[520px] place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500 shadow-sm" role="status">
             正在准备本地日期…
           </div>
         ) : (
-          <DndContext onDragEnd={handleDragEnd}>
-            <div className="grid min-h-0 gap-4 lg:h-[calc(100dvh-9.75rem)] lg:grid-cols-[300px_minmax(0,1fr)_340px] lg:grid-rows-1">
-              <section className="order-1 min-h-0 lg:col-start-2 lg:row-start-1">
+          <>
+            <section className="min-h-0 lg:h-[calc(100dvh-10.5rem)]">
                 <DayTimeline
                   blocks={blocks}
                   date={date}
@@ -489,16 +465,7 @@ export function TodayWorkspace() {
                   }}
                   preference={preference}
                 />
-              </section>
-
-              <section className={cn("order-2 hidden min-h-0 lg:col-start-1 lg:row-start-1 lg:block", showCandidates && "max-lg:block")} id="today-candidates">
-                <GoalCandidatePanel candidates={candidates} error={error} focus={focus} loading={loading} onSchedule={scheduleCandidate} />
-              </section>
-
-              <section className={cn("order-3 hidden min-h-0 lg:col-start-3 lg:row-start-1 lg:block", showAi && "max-lg:block")} id="today-ai">
-                <AiWorkspace />
-              </section>
-            </div>
+            </section>
 
             {editorIntent ? (
               <ScheduleBlockEditor
@@ -544,9 +511,9 @@ export function TodayWorkspace() {
                 onSubmit={submitCompletion}
               />
             ) : null}
-          </DndContext>
+          </>
         )}
       </div>
-    </main>
+    </MainLayout>
   )
 }

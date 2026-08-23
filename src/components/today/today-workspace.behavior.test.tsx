@@ -240,6 +240,25 @@ describe("TodayWorkspace behavior", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  it("refreshes the selected date after the shared sidebar schedules a block", async () => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      const candidateName = fetchMock.mock.calls.length === 1 ? "排程前候选" : "共享排程后候选"
+      return Promise.resolve(jsonResponse(todayView(date, candidateName)))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect(await screen.findByText("排程前候选")).toBeTruthy()
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
+    })
+
+    expect(await screen.findByText("共享排程后候选")).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
     ["status", { status: "queued" }],
     ["source", { source: "robot" }],

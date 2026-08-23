@@ -9,6 +9,15 @@ function readProjectFile(relativePath: string) {
 }
 
 describe("table action layout regression", () => {
+  it("uses the shared application shell without redundant home buttons on every primary page", () => {
+    for (const page of ["goals", "plans", "progress", "reports"]) {
+      const source = readProjectFile(`src/app/${page}/page.tsx`)
+
+      expect(source).toContain("<MainLayout>")
+      expect(source).not.toContain("返回首页")
+    }
+  })
+
   it("lets expanded goal routes fill the full table width", () => {
     const source = readProjectFile("src/app/goals/page.tsx")
 

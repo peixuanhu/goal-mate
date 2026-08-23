@@ -244,7 +244,7 @@ export function GoalCandidatePanel({ focus, candidates, loading, error, onSchedu
   return (
     <aside
       aria-labelledby="candidate-panel-heading"
-      className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
     >
       <div className="border-b border-gray-100 px-4 py-4">
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">待安排</p>

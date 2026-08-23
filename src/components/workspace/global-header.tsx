@@ -16,7 +16,7 @@ const NAV_ITEMS = [
 ] as const
 
 export function GlobalHeader() {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? "/"
 
   return (
     <header className="z-30 shrink-0 border-b border-gray-200 bg-white/95 backdrop-blur">

@@ -14,6 +14,12 @@ vi.mock("./workspace/workspace-sidebar-controller", () => ({
   WorkspaceSidebarController: ({ date }: { date?: string | null }) => <aside>共享工作台 {date}</aside>,
 }))
 
+vi.mock("./today/goal-candidate-panel", () => ({
+  GoalCandidatePanel: ({ candidates }: { candidates: Array<{ name: string }> }) => (
+    <aside>今日共享快照 {candidates.map(candidate => candidate.name).join("、")}</aside>
+  ),
+}))
+
 vi.mock("./today/ai-workspace", () => ({
   AiWorkspace: () => <aside>共享 AI</aside>,
 }))
@@ -34,5 +40,23 @@ describe("MainLayout", () => {
     expect(screen.getByText("共享 AI")).toBeTruthy()
     expect(screen.getByRole("button", { name: "打开目标工作台" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "打开 AI 助手" })).toBeTruthy()
+  })
+
+  it("uses a page-provided workspace snapshot without starting the shared controller", () => {
+    render(
+      <MainLayout
+        workspaceSnapshot={{
+          candidates: [{ name: "今日候选" }] as never,
+          error: null,
+          focus: null,
+          loading: false,
+        }}
+      >
+        <section>今日时间轴</section>
+      </MainLayout>,
+    )
+
+    expect(screen.getByText("今日共享快照 今日候选")).toBeTruthy()
+    expect(screen.queryByText(/共享工作台/)).toBeNull()
   })
 })

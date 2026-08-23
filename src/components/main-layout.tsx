@@ -4,17 +4,35 @@ import { DndContext, type DragEndEvent } from "@dnd-kit/core"
 import { Bot, ChevronLeft, ChevronRight, ListTree, X } from "lucide-react"
 import React, { useEffect, useState, type ReactNode } from "react"
 
+import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
+
 import { AiWorkspace } from "./today/ai-workspace"
+import { GoalCandidatePanel } from "./today/goal-candidate-panel"
 import { GlobalHeader } from "./workspace/global-header"
 import { WorkspaceSidebarController } from "./workspace/workspace-sidebar-controller"
+
+interface WorkspaceSnapshot {
+  candidates: SchedulableCandidate[]
+  error: string | null
+  focus: TodayView["focus"]
+  loading: boolean
+}
 
 interface MainLayoutProps {
   children: ReactNode
   workspaceDate?: string | null
+  workspaceSnapshot?: WorkspaceSnapshot
+  onScheduleCandidate?: (candidate: SchedulableCandidate) => void
   onWorkspaceDragEnd?: (event: DragEndEvent) => void
 }
 
-export function MainLayout({ children, workspaceDate, onWorkspaceDragEnd }: MainLayoutProps) {
+export function MainLayout({
+  children,
+  workspaceDate,
+  workspaceSnapshot,
+  onScheduleCandidate,
+  onWorkspaceDragEnd,
+}: MainLayoutProps) {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [mobilePanel, setMobilePanel] = useState<"workspace" | "ai" | null>(null)
@@ -28,6 +46,18 @@ export function MainLayout({ children, workspaceDate, onWorkspaceDragEnd }: Main
     return () => document.removeEventListener("keydown", closeOnEscape)
   }, [mobilePanel])
 
+  const workspace = workspaceSnapshot ? (
+    <GoalCandidatePanel
+      candidates={workspaceSnapshot.candidates}
+      error={workspaceSnapshot.error}
+      focus={workspaceSnapshot.focus}
+      loading={workspaceSnapshot.loading}
+      onSchedule={onScheduleCandidate ?? (() => undefined)}
+    />
+  ) : (
+    <WorkspaceSidebarController date={workspaceDate} />
+  )
+
   return (
     <div className="flex min-h-dvh flex-col bg-[#f5f5f4] text-gray-900">
       <GlobalHeader />
@@ -38,7 +68,7 @@ export function MainLayout({ children, workspaceDate, onWorkspaceDragEnd }: Main
             className={`relative hidden shrink-0 border-r border-gray-200 bg-white transition-[width,opacity] duration-200 lg:block ${leftOpen ? "w-[300px] opacity-100 xl:w-[320px]" : "w-0 overflow-hidden opacity-0"}`}
           >
             <div className="h-full min-h-0 p-2">
-              <WorkspaceSidebarController date={workspaceDate} />
+              {workspace}
             </div>
             <button
               aria-label="收起目标工作台"
@@ -129,7 +159,7 @@ export function MainLayout({ children, workspaceDate, onWorkspaceDragEnd }: Main
               <X aria-hidden="true" className="h-4 w-4" />
             </button>
             <div className="min-h-0 flex-1">
-              {mobilePanel === "workspace" ? <WorkspaceSidebarController date={workspaceDate} /> : <AiWorkspace />}
+              {mobilePanel === "workspace" ? workspace : <AiWorkspace />}
             </div>
           </section>
         </div>

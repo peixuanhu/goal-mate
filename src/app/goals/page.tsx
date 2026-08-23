@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
-import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
 import { TextPreview } from "@/components/ui/text-preview"
@@ -107,11 +106,6 @@ export default function GoalsPage() {
     <AuthGuard>
       <MainLayout>
         <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-3 py-4 sm:space-y-8 sm:px-4 sm:py-6">
-          <div className="mb-2 sm:mb-4">
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/">返回首页</Link>
-            </Button>
-          </div>
           <Card className="min-w-0 overflow-hidden">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="text-lg sm:text-xl">目标管理</CardTitle>
