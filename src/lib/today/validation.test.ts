@@ -22,15 +22,13 @@ describe("today validation", () => {
     })
 
     it("uses a stable message for a missing date", () => {
-      expect(captureError(() => parseDateKey(null)).message).toBe("date is required")
+      expect(captureError(() => parseDateKey(null)).message).toBe("date required")
     })
 
     it.each(["2026-02-30", "23-08-2026", "2026-8-23", "", undefined, 20260823, false])(
       "uses a stable message for invalid date value %j",
       value => {
-        expect(captureError(() => parseDateKey(value)).message).toBe(
-          "date must be a valid calendar date in YYYY-MM-DD format",
-        )
+        expect(captureError(() => parseDateKey(value)).message).toBe("date must be a valid yyyy-mm-dd value")
       },
     )
   })

@@ -32,17 +32,17 @@ function hasOwn(input: Record<string, unknown>, key: string): boolean {
 
 export function parseDateKey(value: unknown): string {
   if (value === null) {
-    throw new Error("date is required")
+    throw new Error("date required")
   }
 
   if (typeof value !== "string") {
-    throw new Error("date must be a valid calendar date in YYYY-MM-DD format")
+    throw new Error("date must be a valid yyyy-mm-dd value")
   }
 
   try {
     return parseDateOnly(value).toISOString().slice(0, 10)
   } catch {
-    throw new Error("date must be a valid calendar date in YYYY-MM-DD format")
+    throw new Error("date must be a valid yyyy-mm-dd value")
   }
 }
 
