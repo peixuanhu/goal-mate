@@ -389,7 +389,7 @@ Common issues and their resolutions:
 
 ### Database Connectivity
 - **Connection errors**: Verify DATABASE_URL format and PostgreSQL server accessibility
-- **Migration issues**: Run `npx prisma db push` after schema changes
+- **Migration issues**: Run `npm run db:push` after schema changes
 - **Query performance**: Monitor slow queries and consider adding appropriate indexes
 
 ### AI Integration Problems

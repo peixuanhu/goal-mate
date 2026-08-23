@@ -318,7 +318,7 @@ References:
 - [DEPLOYMENT.md:134-143](file://DEPLOYMENT.md#L134-L143)
 
 ### B. Quick Start Commands
-- Local dev: npm install → npx prisma generate → npx prisma db push → npm run dev
+- Local dev: npm install → npm run db:generate → npm run db:push → npm run dev
   - References: [README.md:61-83](file://README.md#L61-L83), [setup.md:65-74](file://setup.md#L65-L74)
 
 - Docker: ./deploy.sh start or docker-compose up -d

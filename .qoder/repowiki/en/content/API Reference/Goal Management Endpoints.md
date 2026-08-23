@@ -379,7 +379,7 @@ The goal management API is designed for efficient operation with several built-i
 
 **Solutions**:
 - Verify database connectivity and credentials
-- Run Prisma migrations: `npx prisma db push`
+- Synchronize the schema and integrity rules: `npm run db:push`
 - Check Prisma client generation: `npx prisma generate`
 
 #### Validation Errors

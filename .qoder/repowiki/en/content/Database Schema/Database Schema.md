@@ -334,7 +334,7 @@ Compare --> |No| Incomplete["Remain incomplete for current period"]
 
 ## Dependency Analysis
 - Prisma client generation and database connectivity:
-  - Scripts for generating Prisma client and pushing schema to the database are defined in package.json.
+  - Scripts for generating Prisma client, synchronizing the schema, and applying the integrity overlay are defined in package.json.
   - The datasource provider is PostgreSQL and the connection URL is sourced from environment variables.
 - Migration lock:
   - A migration lock file indicates migration tooling is configured for PostgreSQL.
@@ -342,11 +342,13 @@ Compare --> |No| Incomplete["Remain incomplete for current period"]
 ```mermaid
 graph LR
 PKG["package.json scripts"] --> GEN["prisma generate"]
-PKG --> PUSH["prisma db push"]
+PKG --> PUSH["npm run db:push"]
 GEN --> CLIENT["@prisma/client"]
-PUSH --> DB["PostgreSQL"]
+PUSH --> SYNC["Synchronize Prisma schema"]
+SYNC --> INTEGRITY["Apply integrity overlay"]
+INTEGRITY --> DB["PostgreSQL"]
 SCHEMA["schema.prisma"] --> CLIENT
-SCHEMA --> DB
+SCHEMA --> SYNC
 ```
 
 **Diagram sources**

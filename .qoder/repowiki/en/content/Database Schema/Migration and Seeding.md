@@ -94,15 +94,21 @@ sequenceDiagram
 participant Dev as "Developer"
 participant NPM as "npm Scripts"
 participant CLI as "Prisma CLI"
+participant Integrity as "Integrity Overlay"
 participant DB as "PostgreSQL"
 Dev->>NPM : Run "db : generate"
 NPM->>CLI : prisma generate
 CLI-->>Dev : Generate Prisma Client
-Dev->>NPM : Run "db : push"
-NPM->>CLI : prisma db push
+Dev->>NPM : Run "npm run db:push"
+NPM->>CLI : Synchronize Prisma schema
 CLI->>DB : Apply schema changes
-DB-->>CLI : Confirmation
-CLI-->>Dev : Success
+DB-->>CLI : Schema confirmation
+CLI-->>NPM : Schema synchronized
+NPM->>Integrity : Run db:integrity
+Integrity->>DB : Apply CHECK constraints and partial unique index
+DB-->>Integrity : Integrity confirmation
+Integrity-->>NPM : Integrity applied
+NPM-->>Dev : Success
 ```
 
 **Diagram sources**

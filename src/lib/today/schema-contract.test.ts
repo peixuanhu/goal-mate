@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -128,6 +129,46 @@ const expectExactDatabaseOnlyInvariantParity = (formalSql: string, overlaySql: s
   expect(extractDatabaseOnlyInvariants(overlaySql)).toEqual(
     extractDatabaseOnlyInvariants(formalSql),
   )
+}
+
+const findUnapprovedTrackedRawPushes = () => {
+  const result = spawnSync(
+    "git",
+    [
+      "grep",
+      "-n",
+      "-I",
+      "-E",
+      "(npx[[:space:]]+)?prisma[[:space:]]+db[[:space:]]+push",
+      "--",
+      ".",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" },
+  )
+
+  if (result.error) throw result.error
+  if (result.status !== 0 && result.status !== 1) {
+    throw new Error(`git grep failed: ${result.stderr}`)
+  }
+
+  const allowedPackageInternals = new Set([
+    '"db:push:schema": "prisma db push",',
+    '"db:reset": "prisma db push --force-reset && npm run db:integrity",',
+  ])
+
+  return result.stdout
+    .split("\n")
+    .filter(Boolean)
+    .filter((occurrence) => {
+      const match = occurrence.match(/^(.*?):(\d+):(.*)$/)
+      if (!match) throw new Error(`Unexpected git grep output: ${occurrence}`)
+
+      const [, filePath, , content] = match
+      if (filePath === "src/lib/today/schema-contract.test.ts") return false
+      if (filePath.startsWith("docs/superpowers/plans/")) return false
+      if (filePath === "package.json" && allowedPackageInternals.has(content.trim())) return false
+      return true
+    })
 }
 
 const schema = readRootFile("prisma/schema.prisma")
@@ -386,5 +427,9 @@ describe("today workspace Prisma contract", () => {
   it("routes the China Docker deployment guide through the integrity overlay", () => {
     expect(chinaDeployGuide).toContain("docker exec goal-mate-app npm run db:deploy")
     expect(chinaDeployGuide).not.toMatch(/\b(?:npx\s+)?prisma\s+db\s+push\b/)
+  })
+
+  it("rejects unapproved raw Prisma schema pushes in every tracked file", () => {
+    expect(findUnapprovedTrackedRawPushes()).toEqual([])
   })
 })
