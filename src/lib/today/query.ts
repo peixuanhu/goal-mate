@@ -3,6 +3,7 @@ import {
   normalizeDateInput,
   parseDateOnly,
 } from "@/lib/focus-period-utils"
+import { isPlanCompleted } from "@/lib/plan-completion"
 
 import {
   getDefaultPlanningPreference,
@@ -87,6 +88,8 @@ type PlanCandidateRow = {
   name: string
   progress: number
   is_recurring: boolean
+  recurrence_type: string | null
+  recurrence_value: string | null
   due_date: Date | null
   estimated_minutes: number | null
   energy_level: string | null
@@ -95,6 +98,10 @@ type PlanCandidateRow = {
   gmt_modified: Date
   goal: CandidateGoalRow | null
   tags: Array<{ tag: string }>
+  progressRecords: Array<{
+    gmt_create: Date
+    counts_toward_recurrence: boolean
+  }>
   actionItems: ActionCandidateRow[]
 }
 
@@ -120,10 +127,19 @@ export interface TodayQueryDb {
   }
   plan: {
     findMany(args: {
-      where: { progress: { lt: number } }
+      where: {
+        OR: [
+          { is_recurring: true },
+          { is_recurring: false; progress: { lt: number } },
+        ]
+      }
       include: {
         goal: { select: { goal_id: true; name: true } }
         tags: true
+        progressRecords: {
+          select: { gmt_create: true; counts_toward_recurrence: true }
+          orderBy: { gmt_create: "desc" }
+        }
         actionItems: {
           where: { is_completed: false }
           include: {
@@ -244,7 +260,7 @@ function compareActions(a: ActionCandidateRow, b: ActionCandidateRow): number {
 
 function buildCandidates(plans: PlanCandidateRow[]): SchedulableCandidate[] {
   return plans
-    .filter(plan => plan.progress < 1)
+    .filter(plan => !isPlanCompleted(plan))
     .flatMap(plan => {
       const actions = plan.is_recurring
         ? []
@@ -265,10 +281,19 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
   const [focus, plans, blockRows] = await Promise.all([
     loadFocus(db, dateKey),
     db.plan.findMany({
-      where: { progress: { lt: 1 } },
+      where: {
+        OR: [
+          { is_recurring: true },
+          { is_recurring: false, progress: { lt: 1 } },
+        ],
+      },
       include: {
         goal: { select: { goal_id: true, name: true } },
         tags: true,
+        progressRecords: {
+          select: { gmt_create: true, counts_toward_recurrence: true },
+          orderBy: { gmt_create: "desc" },
+        },
         actionItems: {
           where: { is_completed: false },
           include: {

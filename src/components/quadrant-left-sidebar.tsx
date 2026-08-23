@@ -22,7 +22,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getCurrentPeriodCount, getTargetCount } from "@/lib/recurring-utils";
+import { isPlanCompleted } from "@/lib/plan-completion";
 
 interface ProgressRecord {
   gmt_create: string;
@@ -103,14 +103,7 @@ interface TaskCardProps {
 
 // 判断任务是否已完成（周期性任务按周期完成次数判断，普通任务按进度判断）
 export function isQuadrantPlanCompleted(plan: Plan): boolean {
-  if (plan.is_recurring && plan.recurrence_type) {
-    const recurringPlan = { ...plan, progressRecords: plan.progressRecords ?? [] };
-    const currentCount = getCurrentPeriodCount(recurringPlan);
-    const targetCount = getTargetCount(recurringPlan);
-    return currentCount >= targetCount;
-  } else {
-    return plan.progress >= 1; // progress is 0-1, not 0-100
-  }
+  return isPlanCompleted({ ...plan, progressRecords: plan.progressRecords ?? [] });
 }
 
 // 排序任务：未完成的在前，已完成的在后，各自按名称排序

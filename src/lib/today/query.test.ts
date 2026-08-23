@@ -27,6 +27,8 @@ const openPlan = {
   name: "准备发布",
   progress: 0.5,
   is_recurring: false,
+  recurrence_type: null,
+  recurrence_value: null,
   due_date: new Date("2026-09-03T00:00:00.000Z"),
   estimated_minutes: 120,
   energy_level: "high",
@@ -35,6 +37,7 @@ const openPlan = {
   gmt_modified: new Date("2026-08-23T02:00:00.000Z"),
   goal: launchGoal,
   tags: [{ tag: "launch" }],
+  progressRecords: [],
   actionItems: [
     {
       action_id: "action_copy",
@@ -152,10 +155,19 @@ describe("loadTodayView", () => {
       select: { goal_id: true, name: true, tag: true },
     })
     expect(db.plan.findMany).toHaveBeenCalledWith({
-      where: { progress: { lt: 1 } },
+      where: {
+        OR: [
+          { is_recurring: true },
+          { is_recurring: false, progress: { lt: 1 } },
+        ],
+      },
       include: {
         goal: { select: { goal_id: true, name: true } },
         tags: true,
+        progressRecords: {
+          select: { gmt_create: true, counts_toward_recurrence: true },
+          orderBy: { gmt_create: "desc" },
+        },
         actionItems: {
           where: { is_completed: false },
           include: {
@@ -386,6 +398,28 @@ describe("loadTodayView", () => {
     }))
   })
 
+  it("hides a recurring plan after its current period target is complete", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-08-24T08:00:00.000Z"))
+    const completedRecurringPlan = {
+      ...openPlan,
+      plan_id: "plan_daily",
+      name: "每日复盘",
+      is_recurring: true,
+      recurrence_type: "daily",
+      recurrence_value: "1",
+      progressRecords: [{
+        gmt_create: new Date("2026-08-24T01:00:00.000Z"),
+        counts_toward_recurrence: true,
+      }],
+      actionItems: [],
+    }
+    const db = makeDb({ plans: [completedRecurringPlan] })
+
+    expect((await loadTodayView(db, "2026-08-24")).candidates).toEqual([])
+    vi.useRealTimers()
+  })
+
   it("preserves open plans with no goal or planning metadata", async () => {
     const unassigned = {
       ...openPlan,
@@ -436,7 +470,12 @@ describe("loadTodayView", () => {
 
     expect(view.candidates.map(candidate => candidate.id)).toEqual(["action_copy", "plan_launch"])
     expect(db.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { progress: { lt: 1 } },
+      where: {
+        OR: [
+          { is_recurring: true },
+          { is_recurring: false, progress: { lt: 1 } },
+        ],
+      },
       include: expect.objectContaining({
         actionItems: expect.objectContaining({ where: { is_completed: false } }),
       }),
