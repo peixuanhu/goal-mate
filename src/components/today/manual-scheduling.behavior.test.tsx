@@ -190,6 +190,45 @@ describe("manual scheduling components", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it("keeps a scheduled block above overlapping terminal history without terminal pointer interception", () => {
+    const onEditBlock = vi.fn()
+    const onCompleteBlock = vi.fn()
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[
+            scheduledBlock({ block_id: "a", title: "当前安排" }),
+            scheduledBlock({ block_id: "z-cancelled", title: "已取消历史", status: "cancelled" }),
+            scheduledBlock({ block_id: "z-skipped", title: "已跳过历史", status: "skipped" }),
+            scheduledBlock({ block_id: "z-completed", title: "已完成历史", status: "completed" }),
+            scheduledBlock({ block_id: "z-partial", title: "部分完成历史", status: "partial" }),
+          ]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={onCompleteBlock}
+          onEditBlock={onEditBlock}
+          preference={preference}
+        />
+      </DndContext>,
+    )
+
+    const scheduled = screen.getByRole("article", { name: "当前安排，已安排" })
+    expect(scheduled.className).toContain("z-20")
+    expect(scheduled.className).toContain("pointer-events-auto")
+
+    for (const name of ["已取消历史，已取消", "已跳过历史，已跳过", "已完成历史，已完成", "部分完成历史，部分完成"]) {
+      const terminal = screen.getByRole("article", { name })
+      expect(terminal.className).toContain("z-10")
+      expect(terminal.className).toContain("pointer-events-none")
+      expect(terminal.getAttribute("tabindex")).toBeNull()
+      expect(within(terminal).queryByRole("button")).toBeNull()
+    }
+
+    fireEvent.click(within(scheduled).getByRole("button", { name: "编辑 当前安排" }))
+    expect(onEditBlock).toHaveBeenCalledWith(expect.objectContaining({ block_id: "a" }))
+  })
+
   it("validates create time locally and submits normalized UTC only after confirmation", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined)
     render(

@@ -124,7 +124,7 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
             return (
               <article
                 aria-label={`${block.title}，${STATUS_LABELS[block.status]}`}
-                className={`absolute left-[4.5rem] right-3 z-10 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${STATUS_CLASSES[block.status]}`}
+                className={`absolute overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${editable ? "pointer-events-auto left-[4.5rem] right-3 z-20" : "pointer-events-none left-[4.75rem] right-2 z-10 opacity-75"} ${STATUS_CLASSES[block.status]}`}
                 key={block.block_id}
                 style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
               >
