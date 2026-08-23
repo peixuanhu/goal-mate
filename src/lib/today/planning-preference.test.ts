@@ -107,6 +107,16 @@ describe("planning preference", () => {
         "capacity_warning_minutes must be a positive integer",
       )
     })
+
+    it.each([
+      { buffer_minutes: 2_147_483_648 },
+      { default_block_minutes: 2_147_483_648 },
+      { capacity_warning_minutes: 2_147_483_648 },
+    ])("rejects persisted integers above the PostgreSQL Int maximum %j", override => {
+      expect(() => normalizePlanningPreference({ ...validPreference, ...override })).toThrow(
+        /must be a (non-negative|positive) integer/,
+      )
+    })
   })
 
   describe("toPlanningPreferenceView", () => {

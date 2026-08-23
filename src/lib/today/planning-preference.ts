@@ -1,5 +1,7 @@
 import type { PlanningPreferenceView } from "./types"
 
+const POSTGRESQL_INT_MAX = 2_147_483_647
+
 export type PersistedPlanningPreferenceRow = {
   preference_id: string
   timezone: string
@@ -98,17 +100,17 @@ export function normalizePlanningPreference(value: unknown): PlanningPreferenceV
   }
 
   const bufferMinutes = value.buffer_minutes
-  if (!isInteger(bufferMinutes) || bufferMinutes < 0) {
+  if (!isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > POSTGRESQL_INT_MAX) {
     throw new Error("buffer_minutes must be a non-negative integer")
   }
 
   const defaultBlockMinutes = value.default_block_minutes
-  if (!isInteger(defaultBlockMinutes) || defaultBlockMinutes <= 0) {
+  if (!isInteger(defaultBlockMinutes) || defaultBlockMinutes <= 0 || defaultBlockMinutes > POSTGRESQL_INT_MAX) {
     throw new Error("default_block_minutes must be a positive integer")
   }
 
   const capacityWarningMinutes = value.capacity_warning_minutes
-  if (!isInteger(capacityWarningMinutes) || capacityWarningMinutes <= 0) {
+  if (!isInteger(capacityWarningMinutes) || capacityWarningMinutes <= 0 || capacityWarningMinutes > POSTGRESQL_INT_MAX) {
     throw new Error("capacity_warning_minutes must be a positive integer")
   }
 
