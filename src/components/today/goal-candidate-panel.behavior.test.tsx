@@ -24,30 +24,53 @@ afterEach(cleanup)
 function candidate(
   overrides: Partial<SchedulableCandidate> & Pick<SchedulableCandidate, "id" | "kind" | "name" | "plan_id">,
 ): SchedulableCandidate {
-  return {
+  const defaults: SchedulableCandidate = {
+    id: overrides.id,
+    kind: overrides.kind,
+    name: overrides.name,
+    plan_id: overrides.plan_id,
     action_id: overrides.kind === "action" ? overrides.id : null,
     goal_id: null,
     goal_name: null,
     due_date: null,
     estimated_minutes: 30,
+    effective_default_block_minutes: 30,
+    invested_minutes: 0,
+    remaining_minutes: 30,
+    reserved_action_minutes: 0,
+    available_minutes: 30,
+    suggested_block_minutes: 30,
+    budget_status: "ok",
+    can_schedule: true,
+    schedule_reason: null,
     energy_level: null,
     effective_quadrant: null,
     is_recurring: false,
     version: "2026-08-23T00:00:00.000Z",
-    ...overrides,
-    effective_default_block_minutes: overrides.effective_default_block_minutes ?? 30,
-    invested_minutes: overrides.invested_minutes ?? 0,
-    remaining_minutes: overrides.remaining_minutes ?? 30,
-    reserved_action_minutes: overrides.reserved_action_minutes ?? 0,
-    available_minutes: overrides.available_minutes ?? 30,
-    suggested_block_minutes: overrides.suggested_block_minutes ?? 30,
-    budget_status: overrides.budget_status ?? "ok",
-    can_schedule: overrides.can_schedule ?? true,
-    schedule_reason: overrides.schedule_reason ?? null,
   }
+
+  return { ...defaults, ...overrides }
 }
 
 describe("GoalCandidatePanel hierarchy", () => {
+  it("preserves explicit nullable budget overrides in candidate fixtures", () => {
+    expect(candidate({
+      id: "plan-recurring",
+      kind: "plan",
+      name: "周期计划",
+      plan_id: "plan-recurring",
+      remaining_minutes: null,
+      available_minutes: null,
+      suggested_block_minutes: null,
+      schedule_reason: null,
+    })).toEqual(expect.objectContaining({
+      remaining_minutes: null,
+      available_minutes: null,
+      suggested_block_minutes: null,
+      schedule_reason: null,
+    }))
+  })
+
   it("labels each plan group, nests its actions, and puts the focus goal first", () => {
     const candidates: SchedulableCandidate[] = [
       candidate({

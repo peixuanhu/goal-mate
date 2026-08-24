@@ -574,23 +574,41 @@ describe("loadTodayView", () => {
     expect(JSON.parse(JSON.stringify(view))).toEqual(view)
   })
 
-  it.each(["completed", "partial", "skipped", "cancelled"])(
+  it.each([
+    ["completed", 30],
+    ["partial", 30],
+    ["skipped", 0],
+    ["cancelled", 0],
+  ] as const)(
     "keeps an action candidate when its only block is %s",
-    async status => {
+    async (status, expectedInvestedMinutes) => {
       const db = makeDb({
         plans: [{
           ...openPlan,
-          actionItems: [{
-            ...openPlan.actionItems[0],
-            scheduleBlocks: [{ block_id: `block_${status}`, status }],
+          scheduleBlocks: [{
+            block_id: `block_${status}`,
+            action_id: "action_copy",
+            start_at: new Date("2026-08-20T00:00:00.000Z"),
+            end_at: new Date("2026-08-20T00:30:00.000Z"),
+            status,
           }],
         }],
       })
 
-      expect((await loadTodayView(db, "2026-08-23")).candidates.map(item => item.id)).toEqual([
+      const candidates = (await loadTodayView(db, "2026-08-23")).candidates
+      expect(candidates.map(item => item.id)).toEqual([
         "action_copy",
         "plan_launch",
       ])
+      expect(candidates[0]).toEqual(expect.objectContaining({
+        invested_minutes: expectedInvestedMinutes,
+        remaining_minutes: 60 - expectedInvestedMinutes,
+        suggested_block_minutes: 60 - expectedInvestedMinutes,
+      }))
+      expect(candidates[1]).toEqual(expect.objectContaining({
+        invested_minutes: expectedInvestedMinutes,
+        remaining_minutes: 120 - expectedInvestedMinutes,
+      }))
     },
   )
 

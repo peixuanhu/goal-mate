@@ -293,6 +293,34 @@ describe("TodayWorkspace behavior", () => {
     expect(screen.queryByText("不应显示的候选")).toBeNull()
   })
 
+  it.each<[string, (candidate: Record<string, unknown>) => void]>([
+    ["missing budget field", candidate => { delete candidate.invested_minutes }],
+    ["default duration type", candidate => { candidate.effective_default_block_minutes = "60" }],
+    ["non-positive default duration", candidate => { candidate.effective_default_block_minutes = 0 }],
+    ["negative invested duration", candidate => { candidate.invested_minutes = -1 }],
+    ["fractional reserved duration", candidate => { candidate.reserved_action_minutes = 1.5 }],
+    ["negative remaining duration", candidate => { candidate.remaining_minutes = -1 }],
+    ["negative available duration", candidate => { candidate.available_minutes = -1 }],
+    ["zero suggested duration", candidate => { candidate.suggested_block_minutes = 0 }],
+    ["budget status enum", candidate => { candidate.budget_status = "warning" }],
+    ["schedulable flag type", candidate => { candidate.can_schedule = "yes" }],
+    ["schedule reason type", candidate => { candidate.schedule_reason = 42 }],
+  ])("rejects a response containing a candidate with malformed %s", async (_label, mutate) => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      const payload = todayView(date, "不应显示的预算候选")
+      const malformedCandidate: Record<string, unknown> = { ...payload.candidates[0] }
+      mutate(malformedCandidate)
+      return Promise.resolve(jsonResponse({ ...payload, candidates: [malformedCandidate] }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("今日数据格式无效")
+    expect(screen.queryByText("不应显示的预算候选")).toBeNull()
+  })
+
   it("aborts the active request when the workspace unmounts", async () => {
     const pending = deferred<Response>()
     const fetchMock = vi.fn((request: RequestInfo | URL, options?: RequestInit) => {
