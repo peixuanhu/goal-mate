@@ -264,6 +264,22 @@ describe("/api/action-item", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it("POST rejects estimated_minutes outside 15-minute increments", async () => {
+    const response = await POST(request("http://localhost/api/action-item", {
+      method: "POST",
+      headers: { "Idempotency-Key": "action-unaligned-estimate" },
+      body: JSON.stringify({
+        plan_id: "plan_launch",
+        name: "写发布说明",
+        estimated_minutes: 50,
+      }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "estimated_minutes must use 15-minute increments" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("POST returns an existing action for the same normalized immutable payload", async () => {
     const key = "action-copy-repeat"
     const existing = {
@@ -479,6 +495,17 @@ describe("/api/action-item", () => {
       },
     })
     expect(events).toEqual(["action-row-lock", "update"])
+  })
+
+  it("PUT rejects estimated_minutes outside 15-minute increments", async () => {
+    const response = await PUT(request("http://localhost/api/action-item", {
+      method: "PUT",
+      body: JSON.stringify({ action_id: "action_copy", estimated_minutes: 50 }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "estimated_minutes must use 15-minute increments" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   it("PUT clears completed_at when reopening", async () => {
