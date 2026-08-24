@@ -104,11 +104,9 @@ describe("/api/plan", () => {
   it("GET filters strictly by Plan.goal_id", async () => {
     prismaMock.plan.findMany.mockResolvedValue([basePlan])
     prismaMock.plan.count.mockResolvedValue(1)
-    const {
-      actionItems: _ignoredActions,
-      scheduleBlocks: _ignoredBlocks,
-      ...publicBasePlan
-    } = basePlan
+    const publicBasePlan = Object.fromEntries(
+      Object.entries(basePlan).filter(([key]) => key !== "actionItems" && key !== "scheduleBlocks"),
+    )
 
     const response = await GET(request("http://localhost/api/plan?goal_id=goal_arch&pageSize=1000"))
 
