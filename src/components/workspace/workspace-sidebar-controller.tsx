@@ -85,7 +85,11 @@ export function WorkspaceSidebarController({ date }: { date?: string | null }) {
 
   const schedule = useCallback((candidate: SchedulableCandidate) => {
     if (resolvedDate === null) return
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const start = findNextFreeStart(resolvedDate, duration, preference, view?.blocks ?? [])
     if (start === null) {
       setError("当天规划范围内没有足够的无冲突时间")

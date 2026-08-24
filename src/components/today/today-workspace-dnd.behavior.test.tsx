@@ -95,6 +95,50 @@ function response(
 }
 
 describe("TodayWorkspace drop orchestration", () => {
+  it("guards drag scheduling for a server-blocked candidate", async () => {
+    const blocked = {
+      ...candidate,
+      remaining_minutes: 0,
+      available_minutes: 0,
+      suggested_block_minutes: null,
+      budget_status: "exhausted" as const,
+      can_schedule: false,
+      schedule_reason: "总预计投入已用尽",
+    }
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const date = new URL(String(url), "http://localhost").searchParams.get("date")
+      if (!date) throw new Error("missing date")
+      const view: TodayView = {
+        date,
+        preference: {
+          preference_id: "default",
+          timezone: "Asia/Shanghai",
+          day_start_minutes: 490,
+          day_end_minutes: 610,
+          high_energy_start_minutes: null,
+          high_energy_end_minutes: null,
+          buffer_minutes: 15,
+          default_block_minutes: 60,
+          capacity_warning_minutes: 480,
+          version: null,
+        },
+        focus: null,
+        candidates: [blocked],
+        blocks: [],
+        checks: [],
+      }
+      return Promise.resolve(new Response(JSON.stringify(view), { headers: { "Content-Type": "application/json" } }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findAllByText("拖放计划")).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole("button", { name: "模拟拖放候选" }))
+    expect(screen.getByRole("alert").textContent).toContain("总预计投入已用尽")
+    expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it("opens the same editor intent at the dropped 15-minute slot without writing", async () => {
     vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "drop-key") })
     const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {

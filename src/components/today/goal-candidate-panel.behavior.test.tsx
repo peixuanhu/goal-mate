@@ -53,6 +53,134 @@ function candidate(
 }
 
 describe("GoalCandidatePanel hierarchy", () => {
+  it("shows ordinary-plan budget progress and the next suggested block", () => {
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-budget",
+          kind: "plan",
+          name: "预算计划",
+          plan_id: "plan-budget",
+          goal_id: "goal-budget",
+          goal_name: "预算目标",
+          estimated_minutes: 300,
+          invested_minutes: 60,
+          remaining_minutes: 240,
+          reserved_action_minutes: 90,
+          available_minutes: 150,
+          suggested_block_minutes: 60,
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("已投入 60 / 300 分钟")).toBeTruthy()
+    expect(screen.getByText("剩余 240 分钟")).toBeTruthy()
+    expect(screen.getByText("下次 60 分钟")).toBeTruthy()
+  })
+
+  it("shows only the per-occurrence duration for a recurring plan", () => {
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-recurring",
+          kind: "plan",
+          name: "周期计划",
+          plan_id: "plan-recurring",
+          goal_id: "goal-recurring",
+          goal_name: "周期目标",
+          estimated_minutes: null,
+          effective_default_block_minutes: 45,
+          remaining_minutes: null,
+          available_minutes: null,
+          suggested_block_minutes: 45,
+          is_recurring: true,
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("每次 45 分钟")).toBeTruthy()
+    expect(screen.queryByText(/已投入/)).toBeNull()
+    expect(screen.queryByText(/剩余/)).toBeNull()
+    expect(document.body.textContent).not.toContain("null 分钟")
+  })
+
+  it("disables scheduling and dragging for an overrun candidate while keeping its group visible", () => {
+    const onSchedule = vi.fn()
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-overrun",
+          kind: "plan",
+          name: "超支计划",
+          plan_id: "plan-overrun",
+          goal_id: "goal-overrun",
+          goal_name: "超支目标",
+          estimated_minutes: 60,
+          invested_minutes: 75,
+          remaining_minutes: 0,
+          available_minutes: 0,
+          suggested_block_minutes: null,
+          budget_status: "overrun",
+          can_schedule: false,
+          schedule_reason: "总预计投入已超支",
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={onSchedule}
+      />,
+    )
+
+    expect(screen.getByRole("region", { name: "超支计划" })).toBeTruthy()
+    expect(screen.getByText("预算已超出")).toBeTruthy()
+    expect(screen.getByText("总预计投入已超支")).toBeTruthy()
+    const scheduleButton = screen.getByRole("button", { name: "安排到今天" }) as HTMLButtonElement
+    const dragButton = screen.getByRole("button", { name: "拖动 超支计划" }) as HTMLButtonElement
+    expect(scheduleButton.disabled).toBe(true)
+    expect(dragButton.disabled).toBe(true)
+    fireEvent.click(scheduleButton)
+    fireEvent.pointerDown(dragButton)
+    expect(onSchedule).not.toHaveBeenCalled()
+  })
+
+  it("labels an exhausted candidate and disables scheduling", () => {
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-exhausted",
+          kind: "plan",
+          name: "用尽计划",
+          plan_id: "plan-exhausted",
+          goal_id: "goal-exhausted",
+          estimated_minutes: 60,
+          invested_minutes: 60,
+          remaining_minutes: 0,
+          available_minutes: 0,
+          suggested_block_minutes: null,
+          budget_status: "exhausted",
+          can_schedule: false,
+          schedule_reason: "总预计投入已用尽",
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("预算已用尽")).toBeTruthy()
+    expect(screen.getByText("总预计投入已用尽")).toBeTruthy()
+    expect((screen.getByRole("button", { name: "安排到今天" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it("preserves explicit nullable budget overrides in candidate fixtures", () => {
     expect(candidate({
       id: "plan-recurring",

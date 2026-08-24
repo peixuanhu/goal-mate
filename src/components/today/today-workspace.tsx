@@ -274,7 +274,11 @@ export function TodayWorkspace() {
 
   const openCandidateAt = useCallback((candidate: SchedulableCandidate, startMinutes: number) => {
     if (date === null) return
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const validStart = findValidStartAtOrAfter(date, startMinutes, duration, preference)
     if (validStart === null) {
       setScheduleError("当天规划范围内没有足够的无冲突时间")
@@ -293,7 +297,11 @@ export function TodayWorkspace() {
 
   const scheduleCandidate = useCallback((candidate: SchedulableCandidate) => {
     if (date === null) return
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const start = findNextFreeStart(date, duration, preference, blocks)
     if (start === null) {
       setScheduleError("当天规划范围内没有足够的无冲突时间")
@@ -306,11 +314,15 @@ export function TodayWorkspace() {
     if (event.over?.id !== "today-timeline" || date === null) return
     const candidate = event.active.data.current?.candidate
     if (!isCandidate(candidate)) return
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
     const translated = event.active.rect.current.translated
     const clientY = translated
       ? translated.top + translated.height / 2
       : event.over.rect.top + event.over.rect.height / 2
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const start = minuteFromTimelinePoint(clientY, event.over.rect, preference, duration)
     openCandidateAt(candidate, start)
   }

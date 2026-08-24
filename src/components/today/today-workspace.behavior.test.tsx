@@ -24,14 +24,20 @@ vi.mock("./goal-candidate-panel", () => ({
     candidates,
     error,
     loading,
+    onSchedule,
   }: {
     candidates: SchedulableCandidate[]
     error: string | null
     loading: boolean
+    onSchedule: (candidate: SchedulableCandidate) => void
   }) => (
     <aside aria-label="候选面板" data-loading={String(loading)}>
       {error ? <p role="alert">{error}</p> : null}
-      {candidates.map(candidate => <p key={candidate.id}>{candidate.name}</p>)}
+      {candidates.map(candidate => (
+        <button key={candidate.id} onClick={() => onSchedule(candidate)} type="button">
+          {candidate.name}
+        </button>
+      ))}
     </aside>
   ),
 }))
@@ -266,6 +272,33 @@ describe("TodayWorkspace behavior", () => {
 
     expect(await screen.findByText("共享排程后候选")).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("guards direct scheduling for a server-blocked candidate", async () => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      const view = todayView(date, "预算阻断候选")
+      return Promise.resolve(jsonResponse({
+        ...view,
+        candidates: [{
+          ...view.candidates[0],
+          remaining_minutes: 0,
+          available_minutes: 0,
+          suggested_block_minutes: null,
+          budget_status: "exhausted",
+          can_schedule: false,
+          schedule_reason: "总预计投入已用尽",
+        }],
+      }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "预算阻断候选" }))
+    expect(screen.getByRole("alert").textContent).toContain("总预计投入已用尽")
+    expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
