@@ -143,7 +143,17 @@ describe("plan timing input", () => {
         { is_recurring: true, default_block_minutes: 45 },
         { mode: "create" },
       ),
-    ).toEqual({ is_recurring: true, default_block_minutes: 45 })
+    ).toEqual({
+      is_recurring: true,
+      estimated_minutes: null,
+      default_block_minutes: 45,
+    })
+    expect(
+      normalizePlanTiming(
+        { is_recurring: true, estimated_minutes: null },
+        { mode: "create" },
+      ),
+    ).toEqual({ is_recurring: true, estimated_minutes: null })
     expect(
       normalizePlanTiming(
         { estimated_minutes: null },

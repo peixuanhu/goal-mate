@@ -81,7 +81,11 @@ export function normalizePlanTiming(
       throw new Error("周期计划不能设置总预计投入")
     }
 
-    if (hasEstimated || (context.mode === "update" && hasRecurring && !currentIsRecurring)) {
+    if (
+      context.mode === "create"
+      || hasEstimated
+      || (hasRecurring && !currentIsRecurring)
+    ) {
       result.estimated_minutes = null
     }
     return result
