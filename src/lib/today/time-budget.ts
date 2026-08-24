@@ -58,6 +58,13 @@ function validatePositiveSafeInteger(value: number, label: string): void {
   }
 }
 
+function validateSlotAlignedPositiveSafeInteger(value: number, label: string): void {
+  validatePositiveSafeInteger(value, label)
+  if (value % 15 !== 0) {
+    throw new Error(`${label} must use 15-minute increments`)
+  }
+}
+
 function countedBlockMinutes(block: BudgetBlock): number {
   const start = block.start_at.getTime()
   const end = block.end_at.getTime()
@@ -69,21 +76,20 @@ function countedBlockMinutes(block: BudgetBlock): number {
     throw new Error(`Schedule block ${block.block_id} must end after it starts`)
   }
 
-  const minutes = (end - start) / 60_000
-  if (!Number.isFinite(minutes) || !Number.isInteger(minutes) || minutes <= 0) {
-    throw new Error(`Schedule block ${block.block_id} must span a positive whole number of minutes`)
-  }
-
-  return minutes
+  const roundedWholeMinutes = Math.round((end - start) / 60_000)
+  return Math.max(15, Math.ceil(roundedWholeMinutes / 15) * 15)
 }
 
 export function calculatePlanTimeBudget(
   input: PlanTimeBudgetInput,
   preferenceDefaultBlockMinutes: number,
 ): PlanTimeBudget {
-  validatePositiveSafeInteger(preferenceDefaultBlockMinutes, "Preference default block minutes")
+  validateSlotAlignedPositiveSafeInteger(
+    preferenceDefaultBlockMinutes,
+    "Preference default block minutes",
+  )
   if (input.default_block_minutes !== null) {
-    validatePositiveSafeInteger(input.default_block_minutes, "Plan default block minutes")
+    validateSlotAlignedPositiveSafeInteger(input.default_block_minutes, "Plan default block minutes")
   }
 
   if (input.is_recurring) {
@@ -91,7 +97,7 @@ export function calculatePlanTimeBudget(
       throw new Error("Recurring plan estimated minutes must be null")
     }
   } else {
-    validatePositiveSafeInteger(input.estimated_minutes, "Ordinary plan estimated minutes")
+    validateSlotAlignedPositiveSafeInteger(input.estimated_minutes, "Ordinary plan estimated minutes")
   }
 
   const effectiveDefaultBlockMinutes = input.default_block_minutes ?? preferenceDefaultBlockMinutes
@@ -101,7 +107,7 @@ export function calculatePlanTimeBudget(
       throw new Error(`Duplicate action ID: ${action.action_id}`)
     }
     if (action.estimated_minutes !== null) {
-      validatePositiveSafeInteger(
+      validateSlotAlignedPositiveSafeInteger(
         action.estimated_minutes,
         `Action ${action.action_id} estimated minutes`,
       )

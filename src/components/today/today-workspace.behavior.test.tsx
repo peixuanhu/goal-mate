@@ -330,6 +330,7 @@ describe("TodayWorkspace behavior", () => {
     ["missing budget field", candidate => { delete candidate.invested_minutes }],
     ["default duration type", candidate => { candidate.effective_default_block_minutes = "60" }],
     ["non-positive default duration", candidate => { candidate.effective_default_block_minutes = 0 }],
+    ["off-slot default duration", candidate => { candidate.effective_default_block_minutes = 50 }],
     ["negative invested duration", candidate => { candidate.invested_minutes = -1 }],
     ["fractional reserved duration", candidate => { candidate.reserved_action_minutes = 1.5 }],
     ["negative remaining duration", candidate => { candidate.remaining_minutes = -1 }],

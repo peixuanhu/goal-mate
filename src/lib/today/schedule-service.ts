@@ -7,7 +7,10 @@ import {
   toPlanningPreferenceView,
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
-import { assertSchedulableInterval, findOverlappingBlocks } from "./schedule-validation"
+import {
+  assertPlanningSlotInterval,
+  findOverlappingBlocks,
+} from "./schedule-validation"
 import { lockScheduleLocalDates } from "./schedule-lock"
 import {
   SCHEDULE_BLOCK_RELATIONS,
@@ -379,13 +382,17 @@ function localDateAndAssertBounds(
   endAt: Date,
   preference: PlanningPreferenceView,
 ): string {
+  let localStart: ReturnType<typeof assertPlanningSlotInterval>
   try {
-    assertSchedulableInterval({ start_at: startAt, end_at: endAt, timezone: preference.timezone })
+    localStart = assertPlanningSlotInterval({
+      start_at: startAt,
+      end_at: endAt,
+      timezone: preference.timezone,
+      day_start_minutes: preference.day_start_minutes,
+    })
   } catch (error) {
-    validation(error instanceof Error ? error.message : "invalid schedule interval")
+    validation(error instanceof Error ? error.message : "invalid schedule slot")
   }
-
-  const localStart = formatUtcInTimeZone(startAt, preference.timezone)
   let planningStart: Date
   let planningEnd: Date
   try {

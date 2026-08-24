@@ -209,6 +209,71 @@ describe("ScheduleBlock service", () => {
     })
   })
 
+  it.each([
+    ["sub-minute endpoint", {
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:00:00.001Z",
+    }, /整分钟/],
+    ["off-slot local endpoints", {
+      start_at: "2026-08-23T01:05:00.000Z",
+      end_at: "2026-08-23T02:05:00.000Z",
+    }, /15 分钟/],
+  ])("rejects create with %s", async (_label, interval, message) => {
+    const db = makeDb()
+
+    await expect(createScheduleBlock(db, {
+      ...validCreate,
+      ...interval,
+    })).rejects.toMatchObject({ code: "VALIDATION", message: expect.stringMatching(message) })
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["sub-minute endpoint", {
+      start_at: "2026-08-23T03:00:00.001Z",
+      end_at: "2026-08-23T04:00:00.000Z",
+    }, /整分钟/],
+    ["off-slot local endpoints", {
+      start_at: "2026-08-23T03:05:00.000Z",
+      end_at: "2026-08-23T04:05:00.000Z",
+    }, /15 分钟/],
+  ])("rejects update with %s", async (_label, interval, message) => {
+    const db = makeDb()
+
+    await expect(updateScheduleBlock(db, {
+      block_id: "block_existing",
+      expected_version: 1,
+      ...interval,
+    })).rejects.toMatchObject({ code: "VALIDATION", message: expect.stringMatching(message) })
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["a spring-forward wall-clock mismatch", {
+      start_at: "2026-03-08T06:30:00.000Z",
+      end_at: "2026-03-08T07:30:00.000Z",
+    }, /夏令时转换/],
+    ["an ambiguous fall-back endpoint", {
+      start_at: "2026-11-01T05:30:00.000Z",
+      end_at: "2026-11-01T05:45:00.000Z",
+    }, /本地时间不明确/],
+  ])("rejects create across %s", async (_label, interval, message) => {
+    const db = makeDb()
+    db.planningPreference.findUnique.mockResolvedValue({
+      ...preference,
+      timezone: "America/New_York",
+      day_start_minutes: 0,
+      day_end_minutes: 1440,
+    })
+
+    await expect(createScheduleBlock(db, {
+      ...validCreate,
+      idempotency_key: `dst-${interval.start_at}`,
+      ...interval,
+    })).rejects.toMatchObject({ code: "VALIDATION", message: expect.stringMatching(message) })
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+  })
+
   it("waits for the Plan FOR UPDATE query before requesting an Action lock or creating", async () => {
     const db = makeDb()
     const planLock = deferred<Array<{ plan_id: string }>>()

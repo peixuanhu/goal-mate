@@ -72,6 +72,7 @@ function isCandidate(value: unknown): value is SchedulableCandidate {
     && isNullableString(value.due_date)
     && (value.estimated_minutes === null || typeof value.estimated_minutes === "number")
     && isPositiveInteger(value.effective_default_block_minutes)
+    && value.effective_default_block_minutes % 15 === 0
     && isNonNegativeInteger(value.invested_minutes)
     && isNullableNonNegativeInteger(value.remaining_minutes)
     && isNonNegativeInteger(value.reserved_action_minutes)

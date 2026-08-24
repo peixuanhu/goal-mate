@@ -108,6 +108,9 @@ export function normalizePlanningPreference(value: unknown): PlanningPreferenceV
   if (!isInteger(defaultBlockMinutes) || defaultBlockMinutes <= 0 || defaultBlockMinutes > POSTGRESQL_INT_MAX) {
     throw new Error("default_block_minutes must be a positive integer")
   }
+  if (defaultBlockMinutes % 15 !== 0) {
+    throw new Error("default_block_minutes must use 15-minute increments")
+  }
 
   const capacityWarningMinutes = value.capacity_warning_minutes
   if (!isInteger(capacityWarningMinutes) || capacityWarningMinutes <= 0 || capacityWarningMinutes > POSTGRESQL_INT_MAX) {

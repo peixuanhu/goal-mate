@@ -158,6 +158,16 @@ describe("/api/planning-preference", () => {
     expect(prismaMock.planningPreference.upsert).not.toHaveBeenCalled()
   })
 
+  it("PUT rejects a default block outside the 15-minute lattice before persistence", async () => {
+    const response = await PUT(request({ ...preferenceFields, default_block_minutes: 50 }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({
+      error: "default_block_minutes must use 15-minute increments",
+    })
+    expect(prismaMock.planningPreference.upsert).not.toHaveBeenCalled()
+  })
+
   it("PUT does not misclassify persistence failures as validation errors", async () => {
     prismaMock.planningPreference.upsert.mockRejectedValue(new Error("database unavailable"))
 

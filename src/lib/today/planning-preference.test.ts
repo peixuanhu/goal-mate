@@ -102,6 +102,13 @@ describe("planning preference", () => {
       )
     })
 
+    it("rejects a positive default block that is not aligned to 15-minute increments", () => {
+      expect(() => normalizePlanningPreference({
+        ...validPreference,
+        default_block_minutes: 50,
+      })).toThrow("default_block_minutes must use 15-minute increments")
+    })
+
     it.each([0, -1, 1.5, "480", null])("rejects invalid capacity %j", capacity_warning_minutes => {
       expect(() => normalizePlanningPreference({ ...validPreference, capacity_warning_minutes })).toThrow(
         "capacity_warning_minutes must be a positive integer",

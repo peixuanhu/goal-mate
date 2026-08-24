@@ -364,6 +364,30 @@ describe("/api/schedule-block", () => {
     })
   })
 
+  it("maps slot validation failures to a stable 400 response", async () => {
+    mocks.updateScheduleBlock.mockRejectedValue(new ScheduleServiceError(
+      "VALIDATION",
+      "时间必须对齐 15 分钟刻度",
+    ))
+
+    const response = await PUT(request("http://localhost/api/schedule-block", {
+      method: "PUT",
+      body: JSON.stringify({
+        operation: "update",
+        block_id: "block_copy",
+        expected_version: 1,
+        start_at: "2026-08-23T01:05:00.000Z",
+        end_at: "2026-08-23T02:05:00.000Z",
+      }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({
+      error: "时间必须对齐 15 分钟刻度",
+      code: "VALIDATION",
+    })
+  })
+
   it("returns a stable 409 response when a Plan already has an active direct block", async () => {
     mocks.createScheduleBlock.mockRejectedValue(new ScheduleServiceError(
       "PLAN_ALREADY_SCHEDULED",

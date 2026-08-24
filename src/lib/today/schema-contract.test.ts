@@ -276,6 +276,15 @@ const databaseOnlyChecks: DatabaseOnlyCheck[] = [
   },
   {
     table: "ScheduleBlock",
+    name: "ScheduleBlock_slot_alignment_check",
+    expression: `
+      "start_at" = date_trunc('minute', "start_at")
+      AND "end_at" = date_trunc('minute', "end_at")
+      AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
+    `,
+  },
+  {
+    table: "ScheduleBlock",
     name: "ScheduleBlock_status_check",
     expression:
       '"status" IN (\'scheduled\', \'completed\', \'partial\', \'skipped\', \'cancelled\')',
@@ -313,7 +322,7 @@ const databaseOnlyChecks: DatabaseOnlyCheck[] = [
   {
     table: "PlanningPreference",
     name: "PlanningPreference_default_block_minutes_check",
-    expression: '"default_block_minutes" > 0',
+    expression: '"default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0',
   },
   {
     table: "PlanningPreference",
@@ -327,6 +336,7 @@ const replacedMinuteChecks = databaseOnlyChecks.filter((check) =>
     "Plan_estimated_minutes_check",
     "Plan_default_block_minutes_check",
     "ActionItem_estimated_minutes_check",
+    "PlanningPreference_default_block_minutes_check",
   ].includes(check.name),
 )
 
@@ -399,6 +409,20 @@ describe("today workspace Prisma contract", () => {
         'ALTER TABLE "ActionItem" DROP CONSTRAINT IF EXISTS "ActionItem_estimated_minutes_check";',
       ),
     )
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "PlanningPreference" DROP CONSTRAINT IF EXISTS "PlanningPreference_default_block_minutes_check";',
+      ),
+    )
+    expect(normalizedTimeBudgetMigration).toContain(normalizeSql(`
+      ALTER TABLE "ScheduleBlock"
+      ADD CONSTRAINT "ScheduleBlock_slot_alignment_check"
+      CHECK (
+        "start_at" = date_trunc('minute', "start_at")
+        AND "end_at" = date_trunc('minute', "end_at")
+        AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
+      ) NOT VALID;
+    `))
   })
 
   it("applies the time budget migration atomically after safe preflight checks", () => {
@@ -414,19 +438,27 @@ describe("today workspace Prisma contract", () => {
     const actionOverflowPreflightIndex = timeBudgetMigration.search(
       /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
     )
+    const preferenceOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"PlanningPreference"\s+WHERE\s+"default_block_minutes"\s*>\s*2147483640/i,
+    )
 
     expect(firstMutationIndex).toBeGreaterThanOrEqual(0)
     expect(duplicatePreflightIndex).toBeGreaterThanOrEqual(0)
     expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
     expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(preferenceOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
     expect(duplicatePreflightIndex).toBeLessThan(firstMutationIndex)
     expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
     expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(preferenceOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
     expect(timeBudgetMigration).toContain(
       "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
     )
     expect(timeBudgetMigration).toContain(
       "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(timeBudgetMigration).toContain(
+      "PlanningPreference.default_block_minutes exceeds maximum safe 15-minute rounding value",
     )
 
     const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
@@ -435,6 +467,22 @@ describe("today workspace Prisma contract", () => {
     expect(normalizedTimeBudgetMigration.split(normalizeSql(safeRoundingExpression))).toHaveLength(
       4,
     )
+    expect(normalizedTimeBudgetMigration).toContain(normalizeSql(`
+      UPDATE "PlanningPreference"
+      SET "default_block_minutes" = ((("default_block_minutes"::bigint + 14) / 15) * 15)::integer
+      WHERE "default_block_minutes" % 15 <> 0;
+    `))
+
+    const preferenceUpdateIndex = timeBudgetMigration.indexOf('UPDATE "PlanningPreference"')
+    const preferenceDropIndex = timeBudgetMigration.indexOf(
+      'ALTER TABLE "PlanningPreference" DROP CONSTRAINT IF EXISTS "PlanningPreference_default_block_minutes_check";',
+    )
+    const preferenceAddIndex = timeBudgetMigration.indexOf(
+      'ADD CONSTRAINT "PlanningPreference_default_block_minutes_check"',
+    )
+    expect(preferenceUpdateIndex).toBeGreaterThan(firstMutationIndex)
+    expect(preferenceDropIndex).toBeGreaterThan(preferenceUpdateIndex)
+    expect(preferenceAddIndex).toBeGreaterThan(preferenceDropIndex)
   })
 
   it("reapplies database-only integrity rules idempotently after schema push", () => {
@@ -451,7 +499,7 @@ describe("today workspace Prisma contract", () => {
       expect(normalizedOverlay).toContain(
         normalizeSql(`
           ALTER TABLE "${check.table}"
-          ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
+          ADD CONSTRAINT "${check.name}" CHECK (${check.expression})
         `),
       )
     }
@@ -487,6 +535,20 @@ describe("today workspace Prisma contract", () => {
           AND "estimated_minutes" % 15 <> 0;
       `),
     )
+    expect(normalizedOverlay).toContain(normalizeSql(`
+      UPDATE "PlanningPreference"
+      SET "default_block_minutes" = ((("default_block_minutes"::bigint + 14) / 15) * 15)::integer
+      WHERE "default_block_minutes" % 15 <> 0;
+    `))
+    expect(normalizedOverlay).toContain(normalizeSql(`
+      ALTER TABLE "ScheduleBlock"
+      ADD CONSTRAINT "ScheduleBlock_slot_alignment_check"
+      CHECK (
+        "start_at" = date_trunc('minute', "start_at")
+        AND "end_at" = date_trunc('minute', "end_at")
+        AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
+      ) NOT VALID;
+    `))
 
     const firstMutationIndex = integrityOverlay.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
     const planOverflowPreflightIndex = integrityOverlay.search(
@@ -495,24 +557,32 @@ describe("today workspace Prisma contract", () => {
     const actionOverflowPreflightIndex = integrityOverlay.search(
       /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
     )
+    const preferenceOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"PlanningPreference"\s+WHERE\s+"default_block_minutes"\s*>\s*2147483640/i,
+    )
     expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
     expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(preferenceOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
     expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
     expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(preferenceOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
     expect(integrityOverlay).toContain(
       "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
     )
     expect(integrityOverlay).toContain(
       "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
     )
+    expect(integrityOverlay).toContain(
+      "PlanningPreference.default_block_minutes exceeds maximum safe 15-minute rounding value",
+    )
 
     for (const check of replacedMinuteChecks) {
       expectConditionalConstraintUpgrade(integrityOverlay, check)
     }
 
-    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 1)
+    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 2)
     expect(integrityOverlay.match(/EXCEPTION\s+WHEN duplicate_object THEN NULL;/g)).toHaveLength(
-      databaseOnlyChecks.length - 3,
+      databaseOnlyChecks.length - 4,
     )
     expect(integrityOverlay.match(/ADD\s+CONSTRAINT/gi)).toHaveLength(databaseOnlyChecks.length)
     expect(integrityOverlay).not.toMatch(/CREATE\s+TABLE|ADD\s+COLUMN|FOREIGN\s+KEY/i)

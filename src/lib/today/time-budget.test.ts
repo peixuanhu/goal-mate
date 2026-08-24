@@ -207,9 +207,43 @@ describe("plan time budgets", () => {
       actions: [],
       blocks: [{
         ...block(30, "partial"),
-        end_at: new Date(start.getTime() + 30_001),
+        end_at: start,
       }],
-    }, 30)).toThrow(/partial-plan-30.*whole number of minutes/i)
+    }, 30)).toThrow(/partial-plan-30.*end after it starts/i)
+  })
+
+  it("normalizes invested legacy elapsed time conservatively onto the 15-minute lattice", () => {
+    const result = calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 180,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [
+        {
+          ...block(60, "completed"),
+          block_id: "legacy-millisecond-drift",
+          end_at: new Date(start.getTime() + 60 * 60_000 + 1),
+        },
+        {
+          ...block(50, "partial"),
+          block_id: "legacy-off-slot-duration",
+        },
+      ],
+    }, 60)
+
+    expect(result).toMatchObject({
+      invested_minutes: 120,
+      remaining_minutes: 60,
+      unallocated_remaining_minutes: 60,
+      suggested_block_minutes: 60,
+    })
+    expect([
+      result.effective_default_block_minutes,
+      result.invested_minutes,
+      result.remaining_minutes,
+      result.unallocated_remaining_minutes,
+      result.suggested_block_minutes,
+    ].every(value => value === null || value % 15 === 0)).toBe(true)
   })
 
   it("rejects blocks that reference an unknown action", () => {
@@ -234,6 +268,39 @@ describe("plan time budgets", () => {
     expect(() => calculatePlanTimeBudget(input, 30)).toThrow(/plan default block minutes.*positive safe integer/i)
     expect(() => calculatePlanTimeBudget({ ...input, default_block_minutes: null }, 22.5))
       .toThrow(/preference default block minutes.*positive safe integer/i)
+  })
+
+  it("rejects inherited and plan default blocks outside 15-minute increments", () => {
+    const input = {
+      is_recurring: false,
+      estimated_minutes: 60,
+      default_block_minutes: null,
+      actions: [],
+      blocks: [],
+    } satisfies PlanTimeBudgetInput
+
+    expect(() => calculatePlanTimeBudget(input, 50))
+      .toThrow(/preference default block minutes.*15-minute increments/i)
+    expect(() => calculatePlanTimeBudget({ ...input, default_block_minutes: 50 }, 60))
+      .toThrow(/plan default block minutes.*15-minute increments/i)
+  })
+
+  it("rejects plan and action estimates outside the 15-minute lattice", () => {
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 50,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [],
+    }, 60)).toThrow(/ordinary plan estimated minutes.*15-minute increments/i)
+
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 120,
+      default_block_minutes: 60,
+      actions: [{ action_id: "off-slot", estimated_minutes: 50, is_completed: false }],
+      blocks: [],
+    }, 60)).toThrow(/action off-slot estimated minutes.*15-minute increments/i)
   })
 
   it("rejects duplicate action IDs before they can overwrite and reserve twice", () => {
