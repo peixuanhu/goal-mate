@@ -30,6 +30,7 @@ describe("PlanTimeBudgetFields", () => {
     expect((screen.getByLabelText("默认单块时长（分钟）") as HTMLInputElement).value).toBe("60")
     expect(screen.getByLabelText("总预计投入（分钟）").hasAttribute("required")).toBe(true)
     expect(screen.getByText("已投入 105 分钟")).toBeTruthy()
+    expect(screen.getByText("剩余 195 分钟")).toBeTruthy()
     expect(screen.getByText("行动项已预留 90 分钟")).toBeTruthy()
     expect(screen.getByText("继承全局默认 60 分钟")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "恢复全局默认" })).toBeNull()
@@ -94,6 +95,7 @@ describe("PlanTimeBudgetFields", () => {
       />,
     )
 
+    expect(screen.getByText("剩余 0 分钟")).toBeTruthy()
     expect(screen.getByText("已投入时间超过当前预估")).toBeTruthy()
     expect(screen.queryByText("行动项预留时间超过剩余预算")).toBeNull()
   })
@@ -111,17 +113,21 @@ describe("PlanTimeBudgetFields", () => {
     expect(screen.getByText("行动项预留时间超过剩余预算")).toBeTruthy()
   })
 
-  it("uses 15-minute positive number inputs without treating blank totals as zero", () => {
-    render(<PlanTimeBudgetFields {...ordinaryProps} estimatedMinutes="" />)
+  it.each(["", "invalid", "50"])(
+    "uses 15-minute positive number inputs without inventing a remainder for invalid total %j",
+    estimatedMinutes => {
+      render(<PlanTimeBudgetFields {...ordinaryProps} estimatedMinutes={estimatedMinutes} />)
 
-    expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("type")).toBe("number")
-    expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("min")).toBe("15")
-    expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("step")).toBe("15")
-    expect(screen.getByLabelText("默认单块时长（分钟）").getAttribute("min")).toBe("15")
-    expect(screen.getByLabelText("默认单块时长（分钟）").getAttribute("step")).toBe("15")
-    expect(screen.queryByText("已投入时间超过当前预估")).toBeNull()
-    expect(screen.queryByText("行动项预留时间超过剩余预算")).toBeNull()
-  })
+      expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("type")).toBe("number")
+      expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("min")).toBe("15")
+      expect(screen.getByLabelText("总预计投入（分钟）").getAttribute("step")).toBe("15")
+      expect(screen.getByLabelText("默认单块时长（分钟）").getAttribute("min")).toBe("15")
+      expect(screen.getByLabelText("默认单块时长（分钟）").getAttribute("step")).toBe("15")
+      expect(screen.queryByText(/^剩余 \d+ 分钟$/)).toBeNull()
+      expect(screen.queryByText("已投入时间超过当前预估")).toBeNull()
+      expect(screen.queryByText("行动项预留时间超过剩余预算")).toBeNull()
+    },
+  )
 
   it("connects inputs to inherited guidance and a polite budget status region", () => {
     render(<PlanTimeBudgetFields {...ordinaryProps} estimatedMinutes="90" />)

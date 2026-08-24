@@ -371,7 +371,7 @@ describe("loadTodayView", () => {
     })
     expect(view.candidates[1]).toEqual(expect.objectContaining({
       due_date: null,
-      estimated_minutes: null,
+      estimated_minutes: 60,
       energy_level: null,
       effective_quadrant: "q2",
     }))
@@ -710,6 +710,26 @@ describe("loadTodayView", () => {
       budget_status: "ok",
       can_schedule: true,
       schedule_reason: null,
+    }))
+  })
+
+  it("exposes an inherited action estimate consistently with its budget remainder", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        default_block_minutes: 75,
+        actionItems: [{ ...openPlan.actionItems[0], estimated_minutes: null }],
+      }],
+    })
+
+    const action = (await loadTodayView(db, "2026-08-23")).candidates.find(
+      candidate => candidate.id === "action_copy",
+    )
+
+    expect(action).toEqual(expect.objectContaining({
+      kind: "action",
+      estimated_minutes: 75,
+      remaining_minutes: 75,
     }))
   })
 

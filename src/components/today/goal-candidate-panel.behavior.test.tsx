@@ -82,6 +82,34 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect(screen.getByText("下次 60 分钟")).toBeTruthy()
   })
 
+  it("shows an inherited action estimate consistently without a placeholder", () => {
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "action-inherited",
+          kind: "action",
+          name: "继承预算行动",
+          plan_id: "plan-budget",
+          goal_id: "goal-budget",
+          goal_name: "预算目标",
+          estimated_minutes: 75,
+          invested_minutes: 0,
+          remaining_minutes: 75,
+          available_minutes: 75,
+          suggested_block_minutes: 75,
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("已投入 0 / 75 分钟")).toBeTruthy()
+    expect(screen.getByText("剩余 75 分钟")).toBeTruthy()
+    expect(document.body.textContent).not.toContain("—")
+  })
+
   it("shows only the per-occurrence duration for a recurring plan", () => {
     render(
       <GoalCandidatePanel

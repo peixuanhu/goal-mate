@@ -269,7 +269,7 @@ function actionCandidate(
     goal_name: plan.goal?.name ?? null,
     name: action.name,
     due_date: action.due_date === null ? null : normalizeDateInput(action.due_date),
-    estimated_minutes: action.estimated_minutes,
+    estimated_minutes: actionBudget.estimated_minutes,
     effective_default_block_minutes: budget.effective_default_block_minutes,
     invested_minutes: actionBudget.invested_minutes,
     remaining_minutes: actionBudget.remaining_minutes,

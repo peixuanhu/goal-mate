@@ -241,7 +241,7 @@ function mapMutationError(error: unknown): NextResponse | null {
     return NextResponse.json({ error: "幂等键已用于不同的行动项内容" }, { status: 409 })
   }
   if (error instanceof ProtectedActionItemError) {
-    return NextResponse.json({ error: "行动项存在未来已排期时间块" }, { status: 409 })
+    return NextResponse.json({ error: "行动项存在待执行时间块" }, { status: 409 })
   }
   if (error instanceof ActionPositionExhaustedError) {
     return NextResponse.json({ error: "行动项排序空间已用尽" }, { status: 409 })
@@ -383,14 +383,13 @@ export async function DELETE(req: NextRequest) {
         throw new ActionItemNotFoundError()
       }
 
-      const futureScheduledBlocks = await tx.scheduleBlock.count({
+      const scheduledBlocks = await tx.scheduleBlock.count({
         where: {
           action_id: actionId,
           status: "scheduled",
-          start_at: { gt: new Date() },
         },
       })
-      if (futureScheduledBlocks > 0) {
+      if (scheduledBlocks > 0) {
         throw new ProtectedActionItemError()
       }
 
