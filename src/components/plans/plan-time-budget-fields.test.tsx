@@ -28,6 +28,7 @@ describe("PlanTimeBudgetFields", () => {
 
     expect((screen.getByLabelText("总预计投入（分钟）") as HTMLInputElement).value).toBe("300")
     expect((screen.getByLabelText("默认单块时长（分钟）") as HTMLInputElement).value).toBe("60")
+    expect(screen.getByLabelText("总预计投入（分钟）").hasAttribute("required")).toBe(true)
     expect(screen.getByText("已投入 105 分钟")).toBeTruthy()
     expect(screen.getByText("行动项已预留 90 分钟")).toBeTruthy()
     expect(screen.getByText("继承全局默认 60 分钟")).toBeTruthy()
@@ -120,5 +121,23 @@ describe("PlanTimeBudgetFields", () => {
     expect(screen.getByLabelText("默认单块时长（分钟）").getAttribute("step")).toBe("15")
     expect(screen.queryByText("已投入时间超过当前预估")).toBeNull()
     expect(screen.queryByText("行动项预留时间超过剩余预算")).toBeNull()
+  })
+
+  it("connects inputs to inherited guidance and a polite budget status region", () => {
+    render(<PlanTimeBudgetFields {...ordinaryProps} estimatedMinutes="90" />)
+
+    const totalInput = screen.getByLabelText("总预计投入（分钟）")
+    const totalDescriptionId = totalInput.getAttribute("aria-describedby")
+    expect(totalDescriptionId).toBeTruthy()
+    expect(document.getElementById(String(totalDescriptionId))?.textContent).toContain("已投入 105 分钟")
+
+    const status = screen.getByRole("status")
+    expect(status.getAttribute("aria-live")).toBe("polite")
+    expect(status.textContent).toContain("已投入时间超过当前预估")
+
+    const blockInput = screen.getByLabelText("默认单块时长（分钟）")
+    const blockDescriptionId = blockInput.getAttribute("aria-describedby")
+    expect(blockDescriptionId).toBeTruthy()
+    expect(document.getElementById(String(blockDescriptionId))?.textContent).toContain("继承全局默认 60 分钟")
   })
 })

@@ -53,6 +53,8 @@ interface Plan {
 const DIFFICULTY = ['easy', 'medium', 'hard']
 const DEFAULT_PLAN_TOTAL_MINUTES = 60
 const DEFAULT_GLOBAL_BLOCK_MINUTES = 60
+const POSTGRES_INTEGER_MAX = 2_147_483_647
+const RECURRENCE_LOCK_DESCRIPTION_ID = 'recurrence-lock-description'
 
 type PlanForm = {
   id?: number;
@@ -76,6 +78,64 @@ type BudgetSummary = {
   investedMinutes: number;
   reservedActionMinutes: number;
 };
+
+type TimingPayload = {
+  estimated_minutes: number | null;
+  default_block_minutes: number | null;
+};
+
+type TimingValidation =
+  | { ok: true; value: TimingPayload }
+  | { ok: false; error: string };
+
+function parsePositiveQuarterHour(value: string, label: string): number | string {
+  const parsed = Number(value)
+  if (
+    !Number.isFinite(parsed)
+    || !Number.isInteger(parsed)
+    || parsed <= 0
+    || parsed > POSTGRES_INTEGER_MAX
+    || parsed % 15 !== 0
+  ) {
+    return `${label}必须是 15 分钟的正整数，且不超过 ${POSTGRES_INTEGER_MAX}`
+  }
+  return parsed
+}
+
+function validateTiming(form: PlanForm): TimingValidation {
+  let estimatedMinutes: number | null = null
+  if (!form.is_recurring) {
+    const totalValue = form.estimated_minutes.trim()
+    if (totalValue === '') {
+      return { ok: false, error: '请输入总预计投入' }
+    }
+
+    const parsedTotal = parsePositiveQuarterHour(totalValue, '总预计投入')
+    if (typeof parsedTotal === 'string') {
+      return { ok: false, error: parsedTotal }
+    }
+    estimatedMinutes = parsedTotal
+  }
+
+  const blockValue = form.default_block_minutes?.trim() ?? ''
+  let defaultBlockMinutes: number | null = null
+  if (blockValue !== '') {
+    const blockLabel = form.is_recurring ? '每次时长' : '默认单块时长'
+    const parsedBlock = parsePositiveQuarterHour(blockValue, blockLabel)
+    if (typeof parsedBlock === 'string') {
+      return { ok: false, error: parsedBlock }
+    }
+    defaultBlockMinutes = parsedBlock
+  }
+
+  return {
+    ok: true,
+    value: {
+      estimated_minutes: estimatedMinutes,
+      default_block_minutes: defaultBlockMinutes,
+    },
+  }
+}
 
 function createEmptyPlanForm(goalId: string | null): PlanForm {
   return {
@@ -463,21 +523,15 @@ function PlansPageContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setSubmitError(null)
-    const timingPayload = form.is_recurring
-      ? {
-          estimated_minutes: null,
-          default_block_minutes: form.default_block_minutes === null
-            ? null
-            : Number(form.default_block_minutes),
-        }
-      : {
-          estimated_minutes: Number(form.estimated_minutes || DEFAULT_PLAN_TOTAL_MINUTES),
-          default_block_minutes: form.default_block_minutes === null
-            ? null
-            : Number(form.default_block_minutes),
-        }
+    const timing = validateTiming(form)
+    if (!timing.ok) {
+      setSubmitError(timing.error)
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
     const submitData = {
       name: form.name,
       description: form.description,
@@ -490,29 +544,40 @@ function PlansPageContent() {
       tags: form.tags,
       priority_quadrant: form.priority_quadrant,
       is_scheduled: form.is_scheduled,
-      ...timingPayload,
+      ...timing.value,
     }
 
+    let response: Response
     try {
-      const response = await fetch('/api/plan', {
+      response = await fetch('/api/plan', {
         method: editingId ? 'PUT' : 'POST',
         body: JSON.stringify(editingId ? { ...submitData, plan_id: editingId } : submitData),
         headers: { 'Content-Type': 'application/json' },
       })
-      if (!response.ok) {
-        setSubmitError(await readApiError(response))
-        setLoading(false)
-        return
-      }
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? `：${error.message}` : ''
+      setSubmitError(`保存计划失败${detail}`)
+      setLoading(false)
+      return
+    }
 
-      setForm(createEmptyPlanForm(goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null))
-      setEditingId(null)
-      setRecurrenceLocked(false)
-      setBudgetSummary({ investedMinutes: 0, reservedActionMinutes: 0 })
+    if (!response.ok) {
+      setSubmitError(`保存计划失败：${await readApiError(response)}`)
+      setLoading(false)
+      return
+    }
+
+    setForm(createEmptyPlanForm(goalFilter !== 'all' && goalFilter !== 'unassigned' ? goalFilter : null))
+    setEditingId(null)
+    setRecurrenceLocked(false)
+    setBudgetSummary({ investedMinutes: 0, reservedActionMinutes: 0 })
+
+    try {
       await fetchPlans()
       refreshQuadrantSidebar()
-    } catch (error) {
-      setSubmitError(error instanceof Error && error.message ? error.message : '保存计划失败')
+      setLoading(false)
+    } catch {
+      setSubmitError('计划已保存，但列表刷新失败，请手动刷新')
       setLoading(false)
     }
   }
@@ -549,6 +614,18 @@ function PlansPageContent() {
     setLoading(false)
   }
 
+  const handleInvalid = (event: React.InvalidEvent<HTMLFormElement>) => {
+    const target = event.target as unknown as HTMLInputElement
+    if (target.id !== 'estimated_minutes' && target.id !== 'default_block_minutes') return
+
+    const timing = validateTiming(form)
+    if (!timing.ok) {
+      event.preventDefault()
+      setSubmitError(timing.error)
+      setLoading(false)
+    }
+  }
+
   return (
     <MainLayout>
       <AppPage contentClassName="max-w-7xl space-y-6 sm:space-y-8">
@@ -562,7 +639,7 @@ function PlansPageContent() {
             <CardTitle className="text-lg sm:text-xl">计划清单与编辑</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 px-4 sm:px-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} onInvalid={handleInvalid} className="space-y-6">
               {submitError && (
                 <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
                   {submitError}
@@ -666,6 +743,7 @@ function PlansPageContent() {
                     className="rounded"
                     checked={form.is_recurring}
                     disabled={Boolean(editingId && recurrenceLocked)}
+                    aria-describedby={editingId && recurrenceLocked ? RECURRENCE_LOCK_DESCRIPTION_ID : undefined}
                     title={editingId && recurrenceLocked ? '已有执行记录，不能切换周期类型' : undefined}
                     onChange={e => setForm(f => ({ 
                       ...f, 
@@ -675,6 +753,11 @@ function PlansPageContent() {
                     }))}
                   />
                   <Label htmlFor="is_recurring" className="text-sm font-medium">这是一个周期性任务</Label>
+                  {editingId && recurrenceLocked && (
+                    <p id={RECURRENCE_LOCK_DESCRIPTION_ID} className="text-xs text-amber-700 dark:text-amber-300">
+                      已有执行记录，不能切换周期类型
+                    </p>
+                  )}
                 </div>
                 
                 {form.is_recurring && (

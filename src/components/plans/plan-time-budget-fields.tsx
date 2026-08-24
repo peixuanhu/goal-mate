@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useId } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +27,9 @@ export function PlanTimeBudgetFields({
   onEstimatedMinutesChange,
   onDefaultBlockMinutesChange,
 }: PlanTimeBudgetFieldsProps) {
+  const descriptionId = useId()
+  const totalDescriptionId = `${descriptionId}-total-description`
+  const blockDescriptionId = `${descriptionId}-block-description`
   const total = Number(estimatedMinutes)
   const hasNumericTotal = estimatedMinutes !== "" && Number.isFinite(total)
   const isOverInvested = hasNumericTotal && total < investedMinutes
@@ -45,6 +48,8 @@ export function PlanTimeBudgetFields({
             type="number"
             min={15}
             step={15}
+            required
+            aria-describedby={totalDescriptionId}
             value={estimatedMinutes}
             onChange={event => onEstimatedMinutesChange(event.target.value)}
           />
@@ -58,11 +63,12 @@ export function PlanTimeBudgetFields({
           type="number"
           min={15}
           step={15}
+          aria-describedby={defaultBlockMinutes === null ? blockDescriptionId : undefined}
           value={displayedBlockMinutes}
           onChange={event => onDefaultBlockMinutesChange(event.target.value)}
         />
         {defaultBlockMinutes === null ? (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p id={blockDescriptionId} className="text-xs text-gray-500 dark:text-gray-400">
             继承全局默认 {globalDefaultBlockMinutes} 分钟
           </p>
         ) : (
@@ -79,15 +85,17 @@ export function PlanTimeBudgetFields({
       </div>
 
       {!isRecurring && (
-        <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300 md:col-span-2">
+        <div id={totalDescriptionId} className="space-y-1 text-sm text-gray-600 dark:text-gray-300 md:col-span-2">
           <p>已投入 {investedMinutes} 分钟</p>
           <p>行动项已预留 {reservedActionMinutes} 分钟</p>
-          {isOverInvested && (
-            <p className="text-amber-700 dark:text-amber-300">已投入时间超过当前预估</p>
-          )}
-          {isOverReserved && (
-            <p className="text-amber-700 dark:text-amber-300">行动项预留时间超过剩余预算</p>
-          )}
+          <div role="status" aria-live="polite">
+            {isOverInvested && (
+              <p className="text-amber-700 dark:text-amber-300">已投入时间超过当前预估</p>
+            )}
+            {isOverReserved && (
+              <p className="text-amber-700 dark:text-amber-300">行动项预留时间超过剩余预算</p>
+            )}
+          </div>
         </div>
       )}
     </div>

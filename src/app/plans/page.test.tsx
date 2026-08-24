@@ -57,7 +57,7 @@ const planFixture = {
   priority_quadrant: null,
   is_scheduled: false,
   estimated_minutes: 300,
-  default_block_minutes: null,
+  default_block_minutes: null as number | null,
   has_execution_history: false,
   time_budget: {
     effective_default_block_minutes: 45,
@@ -83,14 +83,20 @@ function setupFetch(options: {
   plans?: Array<typeof planFixture>
   preference?: unknown
   writeResponse?: Response | ((method: string) => Response)
+  rejectRefresh?: boolean
 } = {}) {
   const plans = options.plans ?? []
   const preference = options.preference ?? { default_block_minutes: 45 }
+  let planReadCount = 0
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? "GET"
 
     if (url.startsWith("/api/plan?") && method === "GET") {
+      planReadCount += 1
+      if (options.rejectRefresh && planReadCount > 1) {
+        throw new Error("refresh unavailable")
+      }
       return jsonResponse({ list: plans, total: plans.length })
     }
     if (url === "/api/planning-preference") {
@@ -199,7 +205,12 @@ describe("PlansPage", () => {
     expect((screen.getByLabelText("默认单块时长（分钟）") as HTMLInputElement).value).toBe("45")
     expect(screen.getByText("已投入 105 分钟")).toBeTruthy()
     expect(screen.getByText("行动项已预留 90 分钟")).toBeTruthy()
-    expect((screen.getByLabelText("这是一个周期性任务") as HTMLInputElement).disabled).toBe(true)
+    const recurrenceCheckbox = screen.getByLabelText("这是一个周期性任务") as HTMLInputElement
+    expect(recurrenceCheckbox.disabled).toBe(true)
+    expect(screen.getByText("已有执行记录，不能切换周期类型")).toBeTruthy()
+    const recurrenceDescriptionId = recurrenceCheckbox.getAttribute("aria-describedby")
+    expect(recurrenceDescriptionId).toBeTruthy()
+    expect(document.getElementById(String(recurrenceDescriptionId))?.textContent).toBe("已有执行记录，不能切换周期类型")
   })
 
   it("keeps a new form open and shows the API error after a failed POST", async () => {
@@ -249,5 +260,47 @@ describe("PlansPage", () => {
     expect(body).not.toHaveProperty("progressRecords")
     expect(body).not.toHaveProperty("has_execution_history")
     expect(body).not.toHaveProperty("time_budget")
+  })
+
+  it("does not submit an edit with a blank ordinary total", async () => {
+    const fetchMock = setupFetch({ plans: [planFixture] })
+    await renderLoadedPage()
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+    fireEvent.change(screen.getByLabelText("总预计投入（分钟）"), { target: { value: "" } })
+
+    fireEvent.click(screen.getByRole("button", { name: "更新" }))
+
+    expect((await screen.findByRole("alert")).textContent).toContain("请输入总预计投入")
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false)
+    expect(screen.getByRole("button", { name: "更新" })).toBeTruthy()
+  })
+
+  it("treats a cleared explicit block length as inherited null", async () => {
+    const fetchMock = setupFetch({
+      plans: [{ ...planFixture, default_block_minutes: 45 }],
+    })
+    await renderLoadedPage()
+    fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+    fireEvent.change(screen.getByLabelText("默认单块时长（分钟）"), { target: { value: "" } })
+
+    fireEvent.submit(screen.getByRole("button", { name: "更新" }).closest("form") as HTMLFormElement)
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true))
+    expect(findWriteBody(fetchMock, "PUT")).toEqual(expect.objectContaining({
+      default_block_minutes: null,
+    }))
+  })
+
+  it("separates a successful write from a failed list refresh", async () => {
+    const fetchMock = setupFetch({ rejectRefresh: true })
+    await renderLoadedPage()
+    fireEvent.change(screen.getByLabelText("名称"), { target: { value: "已保存计划" } })
+
+    fireEvent.click(screen.getByRole("button", { name: "新增" }))
+
+    expect((await screen.findByRole("alert")).textContent).toContain("已保存")
+    expect((screen.getByLabelText("名称") as HTMLInputElement).value).toBe("")
+    expect(screen.getByRole("button", { name: "新增" })).toBeTruthy()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
   })
 })
