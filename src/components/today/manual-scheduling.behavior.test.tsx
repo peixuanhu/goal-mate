@@ -350,7 +350,9 @@ describe("manual scheduling components", () => {
 
     expect(screen.queryByText("本次安排将超出可用预计时间 30 分钟")).toBeNull()
     fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: "10:00" } })
-    expect(screen.getByText("本次安排将超出可用预计时间 30 分钟")).toBeTruthy()
+    const warning = screen.getByRole("status")
+    expect(warning.textContent).toContain("本次安排将超出可用预计时间 30 分钟")
+    expect(warning.getAttribute("aria-live")).toBe("polite")
     const submit = screen.getByRole("button", { name: "确认安排" }) as HTMLButtonElement
     expect(submit.disabled).toBe(false)
     fireEvent.click(submit)
@@ -358,6 +360,42 @@ describe("manual scheduling components", () => {
       start_at: "2026-08-23T01:00:00.000Z",
       end_at: "2026-08-23T02:00:00.000Z",
     }))
+  })
+
+  it.each([
+    ["未对齐刻度", "09:01", "10:01", "时间必须对齐 15 分钟刻度"],
+    ["超出规划范围", "21:30", "22:30", "时间必须位于当天规划范围内"],
+  ])("does not show a budget warning for %s input and keeps the validation error", async (_label, start, end, message) => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ScheduleBlockEditor
+        block={null}
+        candidate={{
+          ...planCandidate,
+          estimated_minutes: 300,
+          remaining_minutes: 30,
+          available_minutes: 30,
+          suggested_block_minutes: 30,
+        }}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={570}
+        initialStartMinutes={540}
+        loading={false}
+        onCancelBlock={vi.fn()}
+        onClose={vi.fn()}
+        onIntentChange={vi.fn()}
+        onSubmit={onSubmit}
+        preference={preference}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText("开始时间"), { target: { value: start } })
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: end } })
+    expect(screen.queryByText(/本次安排将超出可用预计时间/)).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
+    expect((await screen.findByRole("alert")).textContent).toContain(message)
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   it("does not show a plan-budget warning for a recurring candidate", () => {

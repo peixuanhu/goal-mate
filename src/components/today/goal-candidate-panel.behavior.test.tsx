@@ -181,6 +181,35 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect((screen.getByRole("button", { name: "安排到今天" }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it("disables scheduling when the server provides no suggested block despite an enabled flag", () => {
+    const onSchedule = vi.fn()
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-no-suggestion",
+          kind: "plan",
+          name: "暂无建议计划",
+          plan_id: "plan-no-suggestion",
+          goal_id: "goal-no-suggestion",
+          can_schedule: true,
+          suggested_block_minutes: null,
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={onSchedule}
+      />,
+    )
+
+    const scheduleButton = screen.getByRole("button", { name: "安排到今天" }) as HTMLButtonElement
+    const dragButton = screen.getByRole("button", { name: "拖动 暂无建议计划" }) as HTMLButtonElement
+    expect(scheduleButton.disabled).toBe(true)
+    expect(dragButton.disabled).toBe(true)
+    fireEvent.click(scheduleButton)
+    fireEvent.pointerDown(dragButton)
+    expect(onSchedule).not.toHaveBeenCalled()
+  })
+
   it("preserves explicit nullable budget overrides in candidate fixtures", () => {
     expect(candidate({
       id: "plan-recurring",

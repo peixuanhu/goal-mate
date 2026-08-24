@@ -86,7 +86,7 @@ function CandidateCard({
   onSchedule: (candidate: SchedulableCandidate) => void
 }) {
   const isAction = candidate.kind === "action"
-  const schedulingDisabled = !candidate.can_schedule
+  const schedulingDisabled = !candidate.can_schedule || candidate.suggested_block_minutes === null
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: candidate.id,
     data: { candidate },
