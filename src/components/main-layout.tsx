@@ -69,7 +69,7 @@ export function MainLayout({
         <div className="relative flex min-h-0 flex-1">
           <aside
             aria-label="目标工作台"
-            className={`relative hidden shrink-0 border-r border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${leftOpen ? "w-[300px] opacity-100 xl:w-[320px]" : "w-0 overflow-hidden opacity-0"}`}
+            className={`relative hidden shrink-0 border-r border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${leftOpen ? "w-[380px] opacity-100 xl:w-[400px]" : "w-0 overflow-hidden opacity-0"}`}
           >
             <div className="h-full min-h-0 p-2">{renderWorkspace()}</div>
             <button

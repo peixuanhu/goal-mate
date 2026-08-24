@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -40,6 +40,14 @@ describe("MainLayout", () => {
     expect(screen.getByText("共享 AI")).toBeTruthy()
     expect(screen.getByRole("button", { name: "打开目标工作台" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "打开 AI 助手" })).toBeTruthy()
+
+    const desktopWorkspace = screen.getByRole("complementary", { name: "目标工作台" })
+    expect(desktopWorkspace.className).toContain("w-[380px]")
+    expect(desktopWorkspace.className).toContain("xl:w-[400px]")
+
+    fireEvent.click(screen.getByRole("button", { name: "打开目标工作台" }))
+    const mobileWorkspace = screen.getByRole("dialog", { name: "目标工作台" })
+    expect(mobileWorkspace.className).toContain("w-[min(92vw,400px)]")
   })
 
   it("uses a page-provided workspace snapshot without starting the shared controller", () => {
