@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { calculatePlanTimeBudget } from "./time-budget"
+import {
+  calculatePlanTimeBudget,
+  type PlanTimeBudgetInput,
+} from "./time-budget"
 
 const start = new Date("2026-08-25T00:00:00.000Z")
 const block = (
@@ -56,6 +59,11 @@ describe("plan time budgets", () => {
       invested_minutes: 30,
       remaining_minutes: 90,
       suggested_block_minutes: 60,
+    })
+    expect(result.actions.done).toMatchObject({
+      invested_minutes: 45,
+      remaining_minutes: 45,
+      suggested_block_minutes: null,
     })
     expect(result.reserved_action_minutes).toBe(90)
     expect(result.unallocated_remaining_minutes).toBe(135)
@@ -221,10 +229,85 @@ describe("plan time budgets", () => {
       default_block_minutes: 0,
       actions: [],
       blocks: [],
-    }
+    } satisfies PlanTimeBudgetInput
 
-    expect(() => calculatePlanTimeBudget(input, 30)).toThrow(/plan default block minutes.*positive integer/i)
+    expect(() => calculatePlanTimeBudget(input, 30)).toThrow(/plan default block minutes.*positive safe integer/i)
     expect(() => calculatePlanTimeBudget({ ...input, default_block_minutes: null }, 22.5))
-      .toThrow(/preference default block minutes.*positive integer/i)
+      .toThrow(/preference default block minutes.*positive safe integer/i)
+  })
+
+  it("rejects duplicate action IDs before they can overwrite and reserve twice", () => {
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 180,
+      default_block_minutes: 60,
+      actions: [
+        { action_id: "duplicate-action", estimated_minutes: 60, is_completed: false },
+        { action_id: "duplicate-action", estimated_minutes: 90, is_completed: false },
+      ],
+      blocks: [],
+    }, 60)).toThrow(/duplicate action id.*duplicate-action/i)
+  })
+
+  it("rejects duplicate block IDs before they can count invested time twice", () => {
+    const duplicateBlock = block(30, "completed")
+
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 120,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [duplicateBlock, { ...duplicateBlock }],
+    }, 60)).toThrow(/duplicate block id.*completed-plan-30/i)
+  })
+
+  it("rejects totals that disagree with the plan recurrence type at runtime", () => {
+    const ordinaryWithoutTotal = {
+      is_recurring: false,
+      estimated_minutes: null,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [],
+    } as unknown as PlanTimeBudgetInput
+    const recurringWithTotal = {
+      is_recurring: true,
+      estimated_minutes: 120,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [],
+    } as unknown as PlanTimeBudgetInput
+
+    expect(() => calculatePlanTimeBudget(ordinaryWithoutTotal, 60))
+      .toThrow(/ordinary plan estimated minutes.*positive safe integer/i)
+    expect(() => calculatePlanTimeBudget(recurringWithTotal, 60))
+      .toThrow(/recurring plan estimated minutes.*null/i)
+  })
+
+  it("rejects unsafe or non-positive estimates", () => {
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: Number.MAX_SAFE_INTEGER + 1,
+      default_block_minutes: 60,
+      actions: [],
+      blocks: [],
+    }, 60)).toThrow(/ordinary plan estimated minutes.*positive safe integer/i)
+
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 120,
+      default_block_minutes: 60,
+      actions: [{ action_id: "invalid-estimate", estimated_minutes: 0, is_completed: false }],
+      blocks: [],
+    }, 60)).toThrow(/action invalid-estimate estimated minutes.*positive safe integer/i)
+  })
+
+  it("rejects unsafe default duration candidates", () => {
+    expect(() => calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 120,
+      default_block_minutes: Number.MAX_SAFE_INTEGER + 1,
+      actions: [],
+      blocks: [],
+    }, 60)).toThrow(/plan default block minutes.*positive safe integer/i)
   })
 })

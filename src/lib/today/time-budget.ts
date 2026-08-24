@@ -14,13 +14,21 @@ export type BudgetAction = {
   is_completed: boolean
 }
 
-export type PlanTimeBudgetInput = {
-  is_recurring: boolean
-  estimated_minutes: number | null
+type PlanTimeBudgetInputBase = {
   default_block_minutes: number | null
   actions: BudgetAction[]
   blocks: BudgetBlock[]
 }
+
+export type PlanTimeBudgetInput =
+  | (PlanTimeBudgetInputBase & {
+    is_recurring: true
+    estimated_minutes: null
+  })
+  | (PlanTimeBudgetInputBase & {
+    is_recurring: false
+    estimated_minutes: number
+  })
 
 export type ActionTimeBudget = {
   estimated_minutes: number
@@ -44,9 +52,9 @@ export type PlanTimeBudget = {
 
 const INVESTED_STATUSES = new Set(["completed", "partial"])
 
-function validateDefaultBlockMinutes(value: number, label: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${label} must be a positive integer`)
+function validatePositiveSafeInteger(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive safe integer`)
   }
 }
 
@@ -73,13 +81,45 @@ export function calculatePlanTimeBudget(
   input: PlanTimeBudgetInput,
   preferenceDefaultBlockMinutes: number,
 ): PlanTimeBudget {
-  validateDefaultBlockMinutes(preferenceDefaultBlockMinutes, "Preference default block minutes")
+  validatePositiveSafeInteger(preferenceDefaultBlockMinutes, "Preference default block minutes")
   if (input.default_block_minutes !== null) {
-    validateDefaultBlockMinutes(input.default_block_minutes, "Plan default block minutes")
+    validatePositiveSafeInteger(input.default_block_minutes, "Plan default block minutes")
+  }
+
+  if (input.is_recurring) {
+    if (input.estimated_minutes !== null) {
+      throw new Error("Recurring plan estimated minutes must be null")
+    }
+  } else {
+    validatePositiveSafeInteger(input.estimated_minutes, "Ordinary plan estimated minutes")
   }
 
   const effectiveDefaultBlockMinutes = input.default_block_minutes ?? preferenceDefaultBlockMinutes
-  const actionInputs = new Map(input.actions.map(action => [action.action_id, action]))
+  const actionInputs = new Map<string, BudgetAction>()
+  for (const action of input.actions) {
+    if (actionInputs.has(action.action_id)) {
+      throw new Error(`Duplicate action ID: ${action.action_id}`)
+    }
+    if (action.estimated_minutes !== null) {
+      validatePositiveSafeInteger(
+        action.estimated_minutes,
+        `Action ${action.action_id} estimated minutes`,
+      )
+    }
+    actionInputs.set(action.action_id, action)
+  }
+
+  const blockIds = new Set<string>()
+  for (const block of input.blocks) {
+    if (blockIds.has(block.block_id)) {
+      throw new Error(`Duplicate block ID: ${block.block_id}`)
+    }
+    blockIds.add(block.block_id)
+    if (block.action_id !== null && !actionInputs.has(block.action_id)) {
+      throw new Error(`Schedule block ${block.block_id} references unknown action ${block.action_id}`)
+    }
+  }
+
   const actionInvestedMinutes = new Map(input.actions.map(action => [action.action_id, 0]))
 
   let investedMinutes = 0
@@ -87,10 +127,6 @@ export function calculatePlanTimeBudget(
   const actionsWithScheduledBlocks = new Set<string>()
 
   for (const block of input.blocks) {
-    if (block.action_id !== null && !actionInputs.has(block.action_id)) {
-      throw new Error(`Schedule block ${block.block_id} references unknown action ${block.action_id}`)
-    }
-
     if (block.status === "scheduled") {
       if (block.action_id === null) {
         hasScheduledDirectBlock = true
@@ -122,7 +158,7 @@ export function calculatePlanTimeBudget(
       estimated_minutes: estimatedMinutes,
       invested_minutes: actionInvested,
       remaining_minutes: remainingMinutes,
-      suggested_block_minutes: hasScheduledBlock || remainingMinutes === 0
+      suggested_block_minutes: action.is_completed || hasScheduledBlock || remainingMinutes === 0
         ? null
         : Math.min(effectiveDefaultBlockMinutes, remainingMinutes),
       has_scheduled_block: hasScheduledBlock,
@@ -147,7 +183,7 @@ export function calculatePlanTimeBudget(
     }
   }
 
-  const estimatedMinutes = input.estimated_minutes ?? 0
+  const estimatedMinutes = input.estimated_minutes
   const remainingMinutes = Math.max(estimatedMinutes - investedMinutes, 0)
   const unallocatedRemainingMinutes = Math.max(remainingMinutes - reservedActionMinutes, 0)
   const budgetStatus: TimeBudgetStatus = investedMinutes > estimatedMinutes
