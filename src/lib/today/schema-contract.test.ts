@@ -120,7 +120,12 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
     })
   }
 
-  return invariants.sort((left, right) =>
+  const latest = new Map<string, DatabaseOnlyInvariant>()
+  for (const invariant of invariants) {
+    latest.set(`${invariant.kind}:${invariant.table}:${invariant.name}`, invariant)
+  }
+
+  return [...latest.values()].sort((left, right) =>
     JSON.stringify(left).localeCompare(JSON.stringify(right)),
   )
 }
@@ -185,6 +190,10 @@ const schema = readRootFile("prisma/schema.prisma")
 const migration = readRootFile(
   "prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql",
 )
+const timeBudgetMigration = readRootFile(
+  "prisma/migrations/20260825120000_add_plan_time_budget/migration.sql",
+)
+const formalIntegritySql = `${migration}\n${timeBudgetMigration}`
 const integrityOverlay = readRootFile("prisma/today-workspace-integrity.sql")
 const packageJson = JSON.parse(readRootFile("package.json")) as {
   scripts: Record<string, string>
@@ -200,7 +209,14 @@ const databaseOnlyChecks = [
   {
     table: "Plan",
     name: "Plan_estimated_minutes_check",
-    expression: '"estimated_minutes" IS NULL OR "estimated_minutes" > 0',
+    expression:
+      '"estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0)',
+  },
+  {
+    table: "Plan",
+    name: "Plan_default_block_minutes_check",
+    expression:
+      '"default_block_minutes" IS NULL OR ("default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0)',
   },
   {
     table: "Plan",
@@ -210,7 +226,8 @@ const databaseOnlyChecks = [
   {
     table: "ActionItem",
     name: "ActionItem_estimated_minutes_check",
-    expression: '"estimated_minutes" IS NULL OR "estimated_minutes" > 0',
+    expression:
+      '"estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0)',
   },
   {
     table: "ActionItem",
@@ -279,6 +296,7 @@ describe("today workspace Prisma contract", () => {
   it("adds planning fields and schedulable entities", () => {
     expect(schema).toMatch(/due_date\s+DateTime\?\s+@db\.Date/)
     expect(schema).toMatch(/estimated_minutes\s+Int\?/)
+    expect(schema).toMatch(/default_block_minutes\s+Int\?/)
     expect(schema).toMatch(/energy_level\s+String\?/)
     expect(schema).toContain("model ActionItem")
     expect(schema).toContain("model ScheduleBlock")
@@ -292,7 +310,7 @@ describe("today workspace Prisma contract", () => {
   })
 
   it("records the complete database integrity contract in the formal migration", () => {
-    const normalizedMigration = normalizeSql(migration)
+    const normalizedMigration = normalizeSql(formalIntegritySql)
 
     for (const check of databaseOnlyChecks) {
       expect(normalizedMigration).toContain(
@@ -305,6 +323,13 @@ describe("today workspace Prisma contract", () => {
         CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_per_action_idx"
         ON "ScheduleBlock"("action_id")
         WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
+      `),
+    )
+    expect(normalizedMigration).toContain(
+      normalizeSql(`
+        CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_direct_per_plan_idx"
+        ON "ScheduleBlock"("plan_id")
+        WHERE "action_id" IS NULL AND "status" = 'scheduled';
       `),
     )
     expect(normalizedMigration).toContain(
@@ -330,20 +355,17 @@ describe("today workspace Prisma contract", () => {
     expect(integrityOverlay).toContain(
       "Formal source of truth: prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql",
     )
+    expect(integrityOverlay).toContain(
+      "prisma/migrations/20260825120000_add_plan_time_budget/migration.sql",
+    )
 
     const normalizedOverlay = normalizeSql(integrityOverlay)
 
     for (const check of databaseOnlyChecks) {
       expect(normalizedOverlay).toContain(
         normalizeSql(`
-          DO $$
-          BEGIN
-            ALTER TABLE "${check.table}"
-            ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
-          EXCEPTION
-            WHEN duplicate_object THEN NULL;
-          END
-          $$;
+          ALTER TABLE "${check.table}"
+          ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
         `),
       )
     }
@@ -355,18 +377,25 @@ describe("today workspace Prisma contract", () => {
         WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
       `),
     )
-    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length)
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx"
+        ON "ScheduleBlock"("plan_id")
+        WHERE "action_id" IS NULL AND "status" = 'scheduled';
+      `),
+    )
+    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 2)
     expect(integrityOverlay.match(/EXCEPTION\s+WHEN duplicate_object THEN NULL;/g)).toHaveLength(
-      databaseOnlyChecks.length,
+      databaseOnlyChecks.length - 3,
     )
     expect(integrityOverlay.match(/ADD\s+CONSTRAINT/gi)).toHaveLength(databaseOnlyChecks.length)
     expect(integrityOverlay).not.toMatch(/CREATE\s+TABLE|ADD\s+COLUMN|FOREIGN\s+KEY/i)
-    expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(1)
-    expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(1)
+    expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(2)
+    expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(2)
   })
 
   it("keeps the complete formal and deployed database-only invariant sets identical", () => {
-    expectExactDatabaseOnlyInvariantParity(migration, integrityOverlay)
+    expectExactDatabaseOnlyInvariantParity(formalIntegritySql, integrityOverlay)
   })
 
   it("rejects a migration-only invariant in synthetic SQL", () => {

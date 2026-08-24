@@ -1,14 +1,53 @@
 -- Idempotent database-only integrity overlay for Prisma db push deployments.
 -- Formal source of truth: prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql
+-- Extended by: prisma/migrations/20260825120000_add_plan_time_budget/migration.sql
+
+UPDATE "Plan"
+SET
+    "default_block_minutes" = (("estimated_minutes" + 14) / 15) * 15,
+    "estimated_minutes" = NULL
+WHERE "is_recurring" = true AND "estimated_minutes" IS NOT NULL;
+
+UPDATE "Plan"
+SET "estimated_minutes" = (("estimated_minutes" + 14) / 15) * 15
+WHERE "is_recurring" = false AND "estimated_minutes" IS NOT NULL;
+
+UPDATE "Plan"
+SET "estimated_minutes" = 60
+WHERE "is_recurring" = false AND "estimated_minutes" IS NULL;
+
+UPDATE "ActionItem"
+SET "estimated_minutes" = (("estimated_minutes" + 14) / 15) * 15
+WHERE "estimated_minutes" IS NOT NULL;
 
 DO $$
+DECLARE duplicate_plan_ids text;
 BEGIN
-    ALTER TABLE "Plan"
-    ADD CONSTRAINT "Plan_estimated_minutes_check" CHECK ("estimated_minutes" IS NULL OR "estimated_minutes" > 0);
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
+    SELECT string_agg("plan_id", ', ' ORDER BY "plan_id")
+    INTO duplicate_plan_ids
+    FROM (
+        SELECT "plan_id"
+        FROM "ScheduleBlock"
+        WHERE "action_id" IS NULL AND "status" = 'scheduled'
+        GROUP BY "plan_id"
+        HAVING count(*) > 1
+    ) duplicates;
+
+    IF duplicate_plan_ids IS NOT NULL THEN
+        RAISE EXCEPTION 'plans have multiple active direct schedule blocks: %', duplicate_plan_ids;
+    END IF;
 END
 $$;
+
+ALTER TABLE "Plan" DROP CONSTRAINT IF EXISTS "Plan_estimated_minutes_check";
+ALTER TABLE "Plan"
+ADD CONSTRAINT "Plan_estimated_minutes_check"
+CHECK ("estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0));
+
+ALTER TABLE "Plan" DROP CONSTRAINT IF EXISTS "Plan_default_block_minutes_check";
+ALTER TABLE "Plan"
+ADD CONSTRAINT "Plan_default_block_minutes_check"
+CHECK ("default_block_minutes" IS NULL OR ("default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0));
 
 DO $$
 BEGIN
@@ -19,14 +58,10 @@ EXCEPTION
 END
 $$;
 
-DO $$
-BEGIN
-    ALTER TABLE "ActionItem"
-    ADD CONSTRAINT "ActionItem_estimated_minutes_check" CHECK ("estimated_minutes" IS NULL OR "estimated_minutes" > 0);
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END
-$$;
+ALTER TABLE "ActionItem" DROP CONSTRAINT IF EXISTS "ActionItem_estimated_minutes_check";
+ALTER TABLE "ActionItem"
+ADD CONSTRAINT "ActionItem_estimated_minutes_check"
+CHECK ("estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0));
 
 DO $$
 BEGIN
@@ -130,3 +165,7 @@ $$;
 CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_per_action_idx"
 ON "ScheduleBlock"("action_id")
 WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
+
+CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx"
+ON "ScheduleBlock"("plan_id")
+WHERE "action_id" IS NULL AND "status" = 'scheduled';
