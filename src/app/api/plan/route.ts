@@ -369,6 +369,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const plan = await prisma.$transaction(async tx => {
+      if (hasGoalId && nextGoalId) {
+        await lockGoalRoute(tx, nextGoalId)
+      }
+
       const lockedPlan = await lockPlanForMutation(tx, plan_id)
       if (!lockedPlan) {
         throw new PlanNotFoundError()
@@ -407,7 +411,6 @@ export async function PUT(req: NextRequest) {
             updateData.goal_id = null
             updateData.goal_position = null
           } else if (nextGoalId) {
-            await lockGoalRoute(tx, nextGoalId)
             const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
             if (!existingGoal) {
               throw new GoalNotFoundError()
@@ -445,7 +448,6 @@ export async function PUT(req: NextRequest) {
           updateData.goal_id = null
           updateData.goal_position = null
         } else if (nextGoalId && nextGoalId !== existingPlan.goal_id) {
-          await lockGoalRoute(tx, nextGoalId)
           const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
           if (!existingGoal) {
             throw new GoalNotFoundError()

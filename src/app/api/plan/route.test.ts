@@ -502,6 +502,35 @@ describe("/api/plan", () => {
     expect(prismaMock.actionItem.count).not.toHaveBeenCalled()
   })
 
+  it("PUT locks the goal route before the plan row for an expected-goal CAS update", async () => {
+    prismaMock.goal.findUnique.mockResolvedValue({ goal_id: "goal_arch" })
+    prismaMock.plan.aggregate.mockResolvedValue({ _max: { goal_position: 1000 } })
+    prismaMock.plan.updateMany.mockResolvedValue({ count: 1 })
+    prismaMock.plan.findUnique.mockResolvedValue(basePlan)
+
+    const response = await PUT(
+      request("http://localhost/api/plan", {
+        method: "PUT",
+        body: JSON.stringify({
+          plan_id: "plan_ddia",
+          goal_id: "goal_arch",
+          expected_goal_id: "goal_arch",
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.$queryRaw.mock.invocationCallOrder[0],
+    )
+    expect(prismaMock.plan.updateMany).toHaveBeenCalledWith({
+      where: { plan_id: "plan_ddia", goal_id: "goal_arch" },
+      data: { goal_id: "goal_arch", goal_position: 2000 },
+    })
+  })
+
   it("PUT attaches a plan when expected_goal_id matches unassigned state", async () => {
     prismaMock.plan.findUnique.mockResolvedValue({ ...basePlan, goal_position: 1000 })
     prismaMock.goal.findUnique.mockResolvedValue({ goal_id: "goal_arch" })
