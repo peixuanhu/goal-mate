@@ -35,6 +35,15 @@ function candidate(
     is_recurring: false,
     version: "2026-08-23T00:00:00.000Z",
     ...overrides,
+    effective_default_block_minutes: overrides.effective_default_block_minutes ?? 30,
+    invested_minutes: overrides.invested_minutes ?? 0,
+    remaining_minutes: overrides.remaining_minutes ?? 30,
+    reserved_action_minutes: overrides.reserved_action_minutes ?? 0,
+    available_minutes: overrides.available_minutes ?? 30,
+    suggested_block_minutes: overrides.suggested_block_minutes ?? 30,
+    budget_status: overrides.budget_status ?? "ok",
+    can_schedule: overrides.can_schedule ?? true,
+    schedule_reason: overrides.schedule_reason ?? null,
   }
 }
 
