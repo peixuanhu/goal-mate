@@ -340,6 +340,7 @@ describe("/api/schedule-block", () => {
     ["NOT_FOUND", 404],
     ["SCHEDULE_CONFLICT", 409],
     ["ACTION_ALREADY_SCHEDULED", 409],
+    ["PLAN_ALREADY_SCHEDULED", 409],
     ["STALE_VERSION", 409],
   ] as const)("maps %s to %i", async (code, status) => {
     mocks.createScheduleBlock.mockRejectedValue(new ScheduleServiceError(code, "domain failure", ["busy"]))
@@ -360,6 +361,32 @@ describe("/api/schedule-block", () => {
       error: "domain failure",
       code,
       conflictIds: ["busy"],
+    })
+  })
+
+  it("returns a stable 409 response when a Plan already has an active direct block", async () => {
+    mocks.createScheduleBlock.mockRejectedValue(new ScheduleServiceError(
+      "PLAN_ALREADY_SCHEDULED",
+      "计划已有待执行时间块",
+      ["block_existing"],
+    ))
+
+    const response = await POST(request("http://localhost/api/schedule-block", {
+      method: "POST",
+      headers: { "Idempotency-Key": "schedule-plan-v1" },
+      body: JSON.stringify({
+        plan_id: "plan_launch",
+        action_id: null,
+        start_at: "2026-08-23T01:00:00.000Z",
+        end_at: "2026-08-23T02:00:00.000Z",
+      }),
+    }))
+
+    expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({
+      error: "计划已有待执行时间块",
+      code: "PLAN_ALREADY_SCHEDULED",
+      conflictIds: ["block_existing"],
     })
   })
 })
