@@ -205,16 +205,40 @@ EXCEPTION
 END
 $$;
 
+CREATE OR REPLACE FUNCTION "enforce_schedule_block_slot_alignment"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW."start_at" <> date_trunc('minute', NEW."start_at")
+        OR NEW."end_at" <> date_trunc('minute', NEW."end_at")
+        OR mod(extract(epoch FROM (NEW."end_at" - NEW."start_at"))::bigint, 900) <> 0
+    THEN
+        RAISE EXCEPTION 'ScheduleBlock timestamps must align to 15-minute slots'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$$;
+
 DO $$
 BEGIN
-    ALTER TABLE "ScheduleBlock"
-    ADD CONSTRAINT "ScheduleBlock_slot_alignment_check" CHECK (
-        "start_at" = date_trunc('minute', "start_at")
-        AND "end_at" = date_trunc('minute', "end_at")
-        AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
-    ) NOT VALID;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger trigger_record
+        JOIN pg_class table_record ON table_record.oid = trigger_record.tgrelid
+        JOIN pg_namespace namespace_record ON namespace_record.oid = table_record.relnamespace
+        WHERE namespace_record.nspname = current_schema()
+            AND table_record.relname = 'ScheduleBlock'
+            AND trigger_record.tgname = 'ScheduleBlock_slot_alignment_trigger'
+            AND NOT trigger_record.tgisinternal
+    ) THEN
+        CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"
+        BEFORE INSERT OR UPDATE OF "start_at", "end_at"
+        ON "ScheduleBlock"
+        FOR EACH ROW
+        EXECUTE FUNCTION "enforce_schedule_block_slot_alignment"();
+    END IF;
 END
 $$;
 

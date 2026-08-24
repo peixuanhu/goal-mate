@@ -94,13 +94,27 @@ ALTER TABLE "PlanningPreference"
 ADD CONSTRAINT "PlanningPreference_default_block_minutes_check"
 CHECK ("default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0);
 
-ALTER TABLE "ScheduleBlock"
-ADD CONSTRAINT "ScheduleBlock_slot_alignment_check"
-CHECK (
-  "start_at" = date_trunc('minute', "start_at")
-  AND "end_at" = date_trunc('minute', "end_at")
-  AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
-) NOT VALID;
+CREATE OR REPLACE FUNCTION "enforce_schedule_block_slot_alignment"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."start_at" <> date_trunc('minute', NEW."start_at")
+    OR NEW."end_at" <> date_trunc('minute', NEW."end_at")
+    OR mod(extract(epoch FROM (NEW."end_at" - NEW."start_at"))::bigint, 900) <> 0
+  THEN
+    RAISE EXCEPTION 'ScheduleBlock timestamps must align to 15-minute slots'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"
+BEFORE INSERT OR UPDATE OF "start_at", "end_at"
+ON "ScheduleBlock"
+FOR EACH ROW
+EXECUTE FUNCTION "enforce_schedule_block_slot_alignment"();
 
 CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_direct_per_plan_idx"
 ON "ScheduleBlock"("plan_id")

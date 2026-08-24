@@ -276,15 +276,6 @@ const databaseOnlyChecks: DatabaseOnlyCheck[] = [
   },
   {
     table: "ScheduleBlock",
-    name: "ScheduleBlock_slot_alignment_check",
-    expression: `
-      "start_at" = date_trunc('minute', "start_at")
-      AND "end_at" = date_trunc('minute', "end_at")
-      AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
-    `,
-  },
-  {
-    table: "ScheduleBlock",
     name: "ScheduleBlock_status_check",
     expression:
       '"status" IN (\'scheduled\', \'completed\', \'partial\', \'skipped\', \'cancelled\')',
@@ -414,15 +405,66 @@ describe("today workspace Prisma contract", () => {
         'ALTER TABLE "PlanningPreference" DROP CONSTRAINT IF EXISTS "PlanningPreference_default_block_minutes_check";',
       ),
     )
-    expect(normalizedTimeBudgetMigration).toContain(normalizeSql(`
-      ALTER TABLE "ScheduleBlock"
-      ADD CONSTRAINT "ScheduleBlock_slot_alignment_check"
-      CHECK (
-        "start_at" = date_trunc('minute', "start_at")
-        AND "end_at" = date_trunc('minute', "end_at")
-        AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
-      ) NOT VALID;
-    `))
+  })
+
+  it("protects timestamp writes without blocking status-only updates to legacy blocks", () => {
+    const slotAlignmentFunction = normalizeSql(`
+      CREATE OR REPLACE FUNCTION "enforce_schedule_block_slot_alignment"()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF NEW."start_at" <> date_trunc('minute', NEW."start_at")
+          OR NEW."end_at" <> date_trunc('minute', NEW."end_at")
+          OR mod(extract(epoch FROM (NEW."end_at" - NEW."start_at"))::bigint, 900) <> 0
+        THEN
+          RAISE EXCEPTION 'ScheduleBlock timestamps must align to 15-minute slots'
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END
+      $$;
+    `)
+    const slotAlignmentTrigger = normalizeSql(`
+      CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"
+      BEFORE INSERT OR UPDATE OF "start_at", "end_at"
+      ON "ScheduleBlock"
+      FOR EACH ROW
+      EXECUTE FUNCTION "enforce_schedule_block_slot_alignment"();
+    `)
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    const normalizedOverlay = normalizeSql(integrityOverlay)
+
+    expect(normalizedTimeBudgetMigration).toContain(slotAlignmentFunction)
+    expect(normalizedOverlay).toContain(slotAlignmentFunction)
+    expect(normalizedTimeBudgetMigration).toContain(slotAlignmentTrigger)
+    expect(normalizedOverlay).toContain(slotAlignmentTrigger)
+
+    for (const sql of [timeBudgetMigration, integrityOverlay]) {
+      expect(sql).not.toContain("ScheduleBlock_slot_alignment_check")
+      expect(sql).not.toMatch(/NOT\s+VALID/i)
+      expect(sql).not.toMatch(/UPDATE\s+"ScheduleBlock"/i)
+    }
+
+    for (const sql of [normalizedTimeBudgetMigration, normalizedOverlay]) {
+      expect(sql).not.toContain(normalizeSql(`
+        BEFORE INSERT OR UPDATE ON "ScheduleBlock"
+      `))
+      expect(sql.match(/CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"/g)).toHaveLength(1)
+    }
+
+    const overlayTriggerIndex = normalizedOverlay.indexOf(slotAlignmentTrigger)
+    const overlayConditionalStart = normalizedOverlay.lastIndexOf("IF NOT EXISTS(", overlayTriggerIndex)
+    const overlayConditionalEnd = normalizedOverlay.indexOf("END IF;", overlayTriggerIndex)
+    expect(overlayConditionalStart).toBeGreaterThanOrEqual(0)
+    expect(overlayConditionalEnd).toBeGreaterThan(overlayTriggerIndex)
+    const overlayTriggerBlock = normalizedOverlay.slice(
+      overlayConditionalStart,
+      overlayConditionalEnd,
+    )
+    expect(overlayTriggerBlock).toContain("FROM pg_trigger")
+    expect(overlayTriggerBlock).toContain("current_schema()")
+    expect(overlayTriggerBlock).toContain("NOT trigger_record.tgisinternal")
   })
 
   it("applies the time budget migration atomically after safe preflight checks", () => {
@@ -540,15 +582,6 @@ describe("today workspace Prisma contract", () => {
       SET "default_block_minutes" = ((("default_block_minutes"::bigint + 14) / 15) * 15)::integer
       WHERE "default_block_minutes" % 15 <> 0;
     `))
-    expect(normalizedOverlay).toContain(normalizeSql(`
-      ALTER TABLE "ScheduleBlock"
-      ADD CONSTRAINT "ScheduleBlock_slot_alignment_check"
-      CHECK (
-        "start_at" = date_trunc('minute', "start_at")
-        AND "end_at" = date_trunc('minute', "end_at")
-        AND mod(extract(epoch from ("end_at" - "start_at"))::bigint, 900) = 0
-      ) NOT VALID;
-    `))
 
     const firstMutationIndex = integrityOverlay.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
     const planOverflowPreflightIndex = integrityOverlay.search(
@@ -580,7 +613,7 @@ describe("today workspace Prisma contract", () => {
       expectConditionalConstraintUpgrade(integrityOverlay, check)
     }
 
-    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 2)
+    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 1)
     expect(integrityOverlay.match(/EXCEPTION\s+WHEN duplicate_object THEN NULL;/g)).toHaveLength(
       databaseOnlyChecks.length - 4,
     )
