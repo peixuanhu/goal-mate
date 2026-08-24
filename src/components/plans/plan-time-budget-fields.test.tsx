@@ -85,9 +85,23 @@ describe("PlanTimeBudgetFields", () => {
   })
 
   it("warns when invested time exceeds an edited total", () => {
+    render(
+      <PlanTimeBudgetFields
+        {...ordinaryProps}
+        estimatedMinutes="90"
+        reservedActionMinutes={0}
+      />,
+    )
+
+    expect(screen.getByText("已投入时间超过当前预估")).toBeTruthy()
+    expect(screen.queryByText("行动项预留时间超过剩余预算")).toBeNull()
+  })
+
+  it("can show both budget warnings when actions remain reserved after an overrun", () => {
     render(<PlanTimeBudgetFields {...ordinaryProps} estimatedMinutes="90" />)
 
     expect(screen.getByText("已投入时间超过当前预估")).toBeTruthy()
+    expect(screen.getByText("行动项预留时间超过剩余预算")).toBeTruthy()
   })
 
   it("warns when action reservations exceed the uninvested budget", () => {

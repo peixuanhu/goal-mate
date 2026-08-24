@@ -16,6 +16,7 @@ import { Slider } from '@/components/ui/slider'
 import { refreshQuadrantSidebar } from "@/lib/utils"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { PlanTimeBudgetFields } from "@/components/plans/plan-time-budget-fields"
+import type { PlanTimeBudget } from "@/lib/today/time-budget"
 
 
 interface GoalOption {
@@ -47,19 +48,11 @@ interface Plan {
   estimated_minutes: number | null
   default_block_minutes: number | null
   has_execution_history: boolean
-  time_budget: {
-    effective_default_block_minutes: number
-    invested_minutes: number
-    remaining_minutes: number | null
-    reserved_action_minutes: number
-    unallocated_remaining_minutes: number | null
-    suggested_block_minutes: number
-    budget_status: string
-    has_scheduled_direct_block: boolean
-    actions: Record<string, unknown>
-  }
+  time_budget: PlanTimeBudget
 }
 const DIFFICULTY = ['easy', 'medium', 'hard']
+const DEFAULT_PLAN_TOTAL_MINUTES = 60
+const DEFAULT_GLOBAL_BLOCK_MINUTES = 60
 
 type PlanForm = {
   id?: number;
@@ -90,7 +83,7 @@ function createEmptyPlanForm(goalId: string | null): PlanForm {
     progress: '',
     is_recurring: false,
     goal_id: goalId,
-    estimated_minutes: '60',
+    estimated_minutes: String(DEFAULT_PLAN_TOTAL_MINUTES),
     default_block_minutes: null,
   }
 }
@@ -196,7 +189,7 @@ function PlansPageContent() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [globalDefaultBlockMinutes, setGlobalDefaultBlockMinutes] = useState(60)
+  const [globalDefaultBlockMinutes, setGlobalDefaultBlockMinutes] = useState(DEFAULT_GLOBAL_BLOCK_MINUTES)
   const [recurrenceLocked, setRecurrenceLocked] = useState(false)
   const [budgetSummary, setBudgetSummary] = useState<BudgetSummary>({
     investedMinutes: 0,
@@ -440,7 +433,7 @@ function PlansPageContent() {
           setGlobalDefaultBlockMinutes(value)
         }
       } catch {
-        // This optional read must not block plan management. Keep the 60-minute fallback.
+        // This optional read must not block plan management. Keep the named fallback.
       }
     }
 
@@ -480,7 +473,7 @@ function PlansPageContent() {
             : Number(form.default_block_minutes),
         }
       : {
-          estimated_minutes: Number(form.estimated_minutes || 60),
+          estimated_minutes: Number(form.estimated_minutes || DEFAULT_PLAN_TOTAL_MINUTES),
           default_block_minutes: form.default_block_minutes === null
             ? null
             : Number(form.default_block_minutes),

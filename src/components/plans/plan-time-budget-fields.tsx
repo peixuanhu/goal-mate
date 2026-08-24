@@ -30,7 +30,8 @@ export function PlanTimeBudgetFields({
   const total = Number(estimatedMinutes)
   const hasNumericTotal = estimatedMinutes !== "" && Number.isFinite(total)
   const isOverInvested = hasNumericTotal && total < investedMinutes
-  const isOverReserved = hasNumericTotal && total - investedMinutes < reservedActionMinutes
+  const remaining = hasNumericTotal ? Math.max(total - investedMinutes, 0) : null
+  const isOverReserved = remaining !== null && remaining < reservedActionMinutes
   const displayedBlockMinutes = defaultBlockMinutes ?? String(globalDefaultBlockMinutes)
   const blockLabel = isRecurring ? "每次时长（分钟）" : "默认单块时长（分钟）"
 
