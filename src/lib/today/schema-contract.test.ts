@@ -23,6 +23,8 @@ type DatabaseOnlyInvariant = {
   expression: string
 }
 
+type DatabaseOnlyCheck = Omit<DatabaseOnlyInvariant, "kind">
+
 const findClosingParenthesis = (sql: string, expressionStart: number) => {
   let depth = 1
   let quote: "single" | "double" | null = null
@@ -136,6 +138,34 @@ const expectExactDatabaseOnlyInvariantParity = (formalSql: string, overlaySql: s
   )
 }
 
+const expectConditionalConstraintUpgrade = (
+  overlaySql: string,
+  check: DatabaseOnlyCheck,
+) => {
+  const dropStatement =
+    `ALTER TABLE "${check.table}" DROP CONSTRAINT IF EXISTS "${check.name}";`
+  const dropIndex = overlaySql.indexOf(dropStatement)
+  expect(dropIndex).toBeGreaterThanOrEqual(0)
+
+  const conditionalStart = overlaySql.lastIndexOf("IF NOT EXISTS (", dropIndex)
+  const conditionalEnd = overlaySql.indexOf("END IF;", dropIndex)
+  expect(conditionalStart).toBeGreaterThanOrEqual(0)
+  expect(conditionalEnd).toBeGreaterThan(dropIndex)
+
+  const upgradeBlock = overlaySql.slice(conditionalStart, conditionalEnd)
+  const catalogDefinition =
+    `check${check.expression.toLowerCase().replace(/[^a-z0-9_%><=]+/g, "")}`
+  expect(upgradeBlock).toContain("FROM pg_constraint")
+  expect(upgradeBlock).toContain("pg_get_constraintdef")
+  expect(upgradeBlock).toContain(`= '${catalogDefinition}'`)
+  expect(normalizeSql(upgradeBlock)).toContain(
+    normalizeSql(`
+      ALTER TABLE "${check.table}"
+      ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
+    `),
+  )
+}
+
 const rawPrismaDbPushPattern = /\b(?:npx\s+)?prisma\s+db\s+push\b/i
 
 const findUnapprovedTrackedRawPushes = () => {
@@ -205,7 +235,7 @@ const directDeployScript = readRootFile("deploy-direct.sh")
 const setupGuide = readRootFile("setup.md")
 const chinaDeployGuide = readRootFile("DEPLOY-CHINA.md")
 
-const databaseOnlyChecks = [
+const databaseOnlyChecks: DatabaseOnlyCheck[] = [
   {
     table: "Plan",
     name: "Plan_estimated_minutes_check",
@@ -292,6 +322,14 @@ const databaseOnlyChecks = [
   },
 ]
 
+const replacedMinuteChecks = databaseOnlyChecks.filter((check) =>
+  [
+    "Plan_estimated_minutes_check",
+    "Plan_default_block_minutes_check",
+    "ActionItem_estimated_minutes_check",
+  ].includes(check.name),
+)
+
 describe("today workspace Prisma contract", () => {
   it("adds planning fields and schedulable entities", () => {
     expect(schema).toMatch(/due_date\s+DateTime\?\s+@db\.Date/)
@@ -349,6 +387,54 @@ describe("today workspace Prisma contract", () => {
     for (const foreignKey of requiredForeignKeys) {
       expect(normalizedMigration).toContain(normalizeSql(foreignKey))
     }
+
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "Plan" DROP CONSTRAINT IF EXISTS "Plan_estimated_minutes_check";',
+      ),
+    )
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "ActionItem" DROP CONSTRAINT IF EXISTS "ActionItem_estimated_minutes_check";',
+      ),
+    )
+  })
+
+  it("applies the time budget migration atomically after safe preflight checks", () => {
+    const trimmedMigration = timeBudgetMigration.trim()
+    expect(trimmedMigration).toMatch(/^BEGIN;/)
+    expect(trimmedMigration).toMatch(/COMMIT;$/)
+
+    const firstMutationIndex = timeBudgetMigration.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
+    const duplicatePreflightIndex = timeBudgetMigration.indexOf("duplicate_plan_ids")
+    const planOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"Plan"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const actionOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+
+    expect(firstMutationIndex).toBeGreaterThanOrEqual(0)
+    expect(duplicatePreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(duplicatePreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(timeBudgetMigration).toContain(
+      "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(timeBudgetMigration).toContain(
+      "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    const safeRoundingExpression =
+      '((("estimated_minutes"::bigint + 14) / 15) * 15)::integer'
+    expect(normalizedTimeBudgetMigration.split(normalizeSql(safeRoundingExpression))).toHaveLength(
+      4,
+    )
   })
 
   it("reapplies database-only integrity rules idempotently after schema push", () => {
@@ -384,7 +470,47 @@ describe("today workspace Prisma contract", () => {
         WHERE "action_id" IS NULL AND "status" = 'scheduled';
       `),
     )
-    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 2)
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        UPDATE "Plan"
+        SET "estimated_minutes" = ((("estimated_minutes"::bigint + 14) / 15) * 15)::integer
+        WHERE "is_recurring" = false
+          AND "estimated_minutes" IS NOT NULL
+          AND "estimated_minutes" % 15 <> 0;
+      `),
+    )
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        UPDATE "ActionItem"
+        SET "estimated_minutes" = ((("estimated_minutes"::bigint + 14) / 15) * 15)::integer
+        WHERE "estimated_minutes" IS NOT NULL
+          AND "estimated_minutes" % 15 <> 0;
+      `),
+    )
+
+    const firstMutationIndex = integrityOverlay.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
+    const planOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"Plan"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const actionOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(integrityOverlay).toContain(
+      "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(integrityOverlay).toContain(
+      "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+
+    for (const check of replacedMinuteChecks) {
+      expectConditionalConstraintUpgrade(integrityOverlay, check)
+    }
+
+    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 1)
     expect(integrityOverlay.match(/EXCEPTION\s+WHEN duplicate_object THEN NULL;/g)).toHaveLength(
       databaseOnlyChecks.length - 3,
     )
