@@ -412,10 +412,12 @@ function PlansPageContent() {
   const handleEdit = (plan: Plan) => {
     console.log('[DEBUG] Editing plan:', plan)
     setForm({
-      ...plan,
+      name: plan.name,
+      description: plan.description,
+      difficulty: plan.difficulty,
       progress: plan.progress !== undefined && plan.progress !== null ? plan.progress.toString() : '',
       tags: plan.tags || [],
-      is_recurring: plan.is_recurring || false,
+      is_recurring: plan.is_recurring,
       recurrence_type: plan.recurrence_type,
       recurrence_value: plan.recurrence_value,
       priority_quadrant: plan.priority_quadrant,
