@@ -13,6 +13,7 @@ import {
   getGoalRouteLockKey,
   getNextGoalPosition,
 } from "@/lib/plan-goal-utils";
+import { normalizePlanTiming } from "@/lib/plan-input";
 
 const prisma = new PrismaClient();
 type PlanGoalDb = PrismaClient | Prisma.TransactionClient;
@@ -870,6 +871,7 @@ const runtime = new CopilotRuntime({
           
           // 生成唯一的plan_id
           const plan_id = `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`;
+          const timing = normalizePlanTiming({}, { mode: 'create' });
 
           const transactionResult = await prisma.$transaction(async tx => {
             let goalPosition: number | null = null;
@@ -895,6 +897,7 @@ const runtime = new CopilotRuntime({
                 description: description || '',
                 difficulty: difficulty,
                 progress: 0,
+                ...timing,
                 ...(normalizedGoalId ? { goal_id: normalizedGoalId, goal_position: goalPosition } : {}),
               }
             });

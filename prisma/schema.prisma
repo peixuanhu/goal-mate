@@ -25,29 +25,30 @@ model Goal {
 }
 
 model Plan {
-  id                Int                  @id @default(autoincrement())
-  gmt_create        DateTime             @default(now())
-  gmt_modified      DateTime             @updatedAt
-  plan_id           String               @unique
-  name              String
-  description       String?
-  difficulty        String?
-  progress          Float                @default(0)
-  is_recurring      Boolean              @default(false)
-  recurrence_type   String?
-  recurrence_value  String?
-  goal_id           String?
-  goal_position     Int?
-  due_date          DateTime?            @db.Date
-  estimated_minutes Int?
-  energy_level      String?
-  priority_quadrant String? // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
-  is_scheduled      Boolean              @default(false) // 是否被安排到四象限中显示
-  goal              Goal?                @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
-  tags              PlanTagAssociation[]
-  progressRecords   ProgressRecord[]
-  actionItems       ActionItem[]
-  scheduleBlocks    ScheduleBlock[]
+  id                    Int                  @id @default(autoincrement())
+  gmt_create            DateTime             @default(now())
+  gmt_modified          DateTime             @updatedAt
+  plan_id               String               @unique
+  name                  String
+  description           String?
+  difficulty            String?
+  progress              Float                @default(0)
+  is_recurring          Boolean              @default(false)
+  recurrence_type       String?
+  recurrence_value      String?
+  goal_id               String?
+  goal_position         Int?
+  due_date              DateTime?            @db.Date
+  estimated_minutes     Int?
+  default_block_minutes Int?
+  energy_level          String?
+  priority_quadrant     String? // "q1"=重要紧急, "q2"=重要不紧急, "q3"=不重要紧急, "q4"=不重要不紧急, null=未安排
+  is_scheduled          Boolean              @default(false) // 是否被安排到四象限中显示
+  goal                  Goal?                @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
+  tags                  PlanTagAssociation[]
+  progressRecords       ProgressRecord[]
+  actionItems           ActionItem[]
+  scheduleBlocks        ScheduleBlock[]
 
   @@index([goal_id, goal_position])
 }

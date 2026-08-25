@@ -88,6 +88,14 @@ describe("today validation", () => {
       )
     })
 
+    it("accepts aligned estimates and rejects unaligned estimates", () => {
+      expect(parsePlanningFields({ estimated_minutes: 45 })).toEqual({ estimated_minutes: 45 })
+      expect(() => parsePlanningFields({ estimated_minutes: 50 })).toThrow(
+        "estimated_minutes must use 15-minute increments",
+      )
+      expect(parsePlanningFields({ estimated_minutes: null })).toEqual({ estimated_minutes: null })
+    })
+
     it("rejects rollover dates", () => {
       expect(() => parsePlanningFields({ due_date: "2026-02-30" })).toThrow(
         "due_date must be a valid yyyy-mm-dd value or null",

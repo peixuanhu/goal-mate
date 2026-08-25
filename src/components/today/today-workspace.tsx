@@ -43,6 +43,22 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+}
+
+function isNullableNonNegativeInteger(value: unknown): value is number | null {
+  return value === null || isNonNegativeInteger(value)
+}
+
+function isNullablePositiveInteger(value: unknown): value is number | null {
+  return value === null || isPositiveInteger(value)
+}
+
 function isCandidate(value: unknown): value is SchedulableCandidate {
   if (!isRecord(value)) return false
 
@@ -55,6 +71,16 @@ function isCandidate(value: unknown): value is SchedulableCandidate {
     && typeof value.name === "string"
     && isNullableString(value.due_date)
     && (value.estimated_minutes === null || typeof value.estimated_minutes === "number")
+    && isPositiveInteger(value.effective_default_block_minutes)
+    && value.effective_default_block_minutes % 15 === 0
+    && isNonNegativeInteger(value.invested_minutes)
+    && isNullableNonNegativeInteger(value.remaining_minutes)
+    && isNonNegativeInteger(value.reserved_action_minutes)
+    && isNullableNonNegativeInteger(value.available_minutes)
+    && isNullablePositiveInteger(value.suggested_block_minutes)
+    && (value.budget_status === "ok" || value.budget_status === "exhausted" || value.budget_status === "overrun")
+    && typeof value.can_schedule === "boolean"
+    && isNullableString(value.schedule_reason)
     && (value.energy_level === null || value.energy_level === "low" || value.energy_level === "medium" || value.energy_level === "high")
     && (value.effective_quadrant === null || value.effective_quadrant === "q1" || value.effective_quadrant === "q2" || value.effective_quadrant === "q3" || value.effective_quadrant === "q4")
     && typeof value.is_recurring === "boolean"
@@ -249,7 +275,11 @@ export function TodayWorkspace() {
 
   const openCandidateAt = useCallback((candidate: SchedulableCandidate, startMinutes: number) => {
     if (date === null) return
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const validStart = findValidStartAtOrAfter(date, startMinutes, duration, preference)
     if (validStart === null) {
       setScheduleError("当天规划范围内没有足够的无冲突时间")
@@ -268,7 +298,11 @@ export function TodayWorkspace() {
 
   const scheduleCandidate = useCallback((candidate: SchedulableCandidate) => {
     if (date === null) return
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const start = findNextFreeStart(date, duration, preference, blocks)
     if (start === null) {
       setScheduleError("当天规划范围内没有足够的无冲突时间")
@@ -281,11 +315,15 @@ export function TodayWorkspace() {
     if (event.over?.id !== "today-timeline" || date === null) return
     const candidate = event.active.data.current?.candidate
     if (!isCandidate(candidate)) return
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      return
+    }
     const translated = event.active.rect.current.translated
     const clientY = translated
       ? translated.top + translated.height / 2
       : event.over.rect.top + event.over.rect.height / 2
-    const duration = durationForCandidate(candidate.estimated_minutes, preference)
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
     const start = minuteFromTimelinePoint(clientY, event.over.rect, preference, duration)
     openCandidateAt(candidate, start)
   }

@@ -17,7 +17,16 @@ const candidate: SchedulableCandidate = {
   goal_name: "发布目标",
   name: "上线产品",
   due_date: null,
-  estimated_minutes: 60,
+  estimated_minutes: 300,
+  effective_default_block_minutes: 60,
+  invested_minutes: 0,
+  remaining_minutes: 240,
+  reserved_action_minutes: 0,
+  available_minutes: 240,
+  suggested_block_minutes: 45,
+  budget_status: "ok",
+  can_schedule: true,
+  schedule_reason: null,
   energy_level: "high",
   effective_quadrant: "q1",
   is_recurring: false,
@@ -45,11 +54,13 @@ const todayView: TodayView = {
 }
 
 vi.mock("@/components/today/goal-candidate-panel", () => ({
-  GoalCandidatePanel: ({ candidates, onSchedule }: {
+  GoalCandidatePanel: ({ candidates, error, onSchedule }: {
     candidates: SchedulableCandidate[]
+    error: string | null
     onSchedule: (candidate: SchedulableCandidate) => void
   }) => (
     <aside aria-label="共享工作台">
+      {error ? <p role="alert">{error}</p> : null}
       {candidates.map(item => (
         <button key={item.id} onClick={() => onSchedule(item)} type="button">安排 {item.name}</button>
       ))}
@@ -58,8 +69,13 @@ vi.mock("@/components/today/goal-candidate-panel", () => ({
 }))
 
 vi.mock("@/components/today/schedule-block-editor", () => ({
-  ScheduleBlockEditor: ({ onSubmit }: { onSubmit: (payload: { start_at: string; end_at: string }) => Promise<void> }) => (
+  ScheduleBlockEditor: ({ initialEndMinutes, initialStartMinutes, onSubmit }: {
+    initialEndMinutes: number
+    initialStartMinutes: number
+    onSubmit: (payload: { start_at: string; end_at: string }) => Promise<void>
+  }) => (
     <div role="dialog">
+      <output aria-label="初始时长">{initialEndMinutes - initialStartMinutes}</output>
       <button onClick={() => void onSubmit({
         start_at: "2026-08-24T00:00:00.000Z",
         end_at: "2026-08-24T01:00:00.000Z",
@@ -93,6 +109,7 @@ describe("WorkspaceSidebarController", () => {
     render(<WorkspaceSidebarController date="2026-08-24" />)
 
     fireEvent.click(await screen.findByRole("button", { name: "安排 上线产品" }))
+    expect(screen.getByLabelText("初始时长").textContent).toBe("45")
     fireEvent.click(screen.getByRole("button", { name: "提交排期" }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/schedule-block", expect.objectContaining({
@@ -111,5 +128,29 @@ describe("WorkspaceSidebarController", () => {
       }),
     })))
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/today?date=2026-08-24", expect.objectContaining({ signal: expect.any(AbortSignal) }))
+  })
+
+  it("does not open the editor for a server-blocked candidate", async () => {
+    const blockedView: TodayView = {
+      ...todayView,
+      candidates: [{
+        ...candidate,
+        remaining_minutes: 0,
+        available_minutes: 0,
+        suggested_block_minutes: null,
+        budget_status: "exhausted",
+        can_schedule: false,
+        schedule_reason: "总预计投入已用尽",
+      }],
+    }
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(blockedView))
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<WorkspaceSidebarController date="2026-08-24" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "安排 上线产品" }))
+    expect(screen.getByRole("alert").textContent).toContain("总预计投入已用尽")
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

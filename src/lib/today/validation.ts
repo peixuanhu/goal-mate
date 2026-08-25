@@ -47,6 +47,20 @@ export function parseDateKey(value: unknown): string {
   }
 }
 
+export function parseOptionalSlotMinutes(value: unknown, field: string): number | null {
+  if (value === null || value === "") return null
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${field} must be a positive integer or null`)
+  }
+  if (value > POSTGRESQL_INT_MAX) {
+    throw new Error(`${field} must be a positive PostgreSQL Int or null`)
+  }
+  if (value % 15 !== 0) {
+    throw new Error(`${field} must use 15-minute increments`)
+  }
+  return value
+}
+
 export function parsePlanningFields(value: unknown): PlanningFields {
   if (!isPlainObject(value)) {
     throw new Error("planning fields must be a plain object")
@@ -70,20 +84,7 @@ export function parsePlanningFields(value: unknown): PlanningFields {
   }
 
   if (hasOwn(value, "estimated_minutes")) {
-    const estimatedMinutes = value.estimated_minutes
-    if (estimatedMinutes === null || estimatedMinutes === "") {
-      result.estimated_minutes = null
-    } else if (
-      typeof estimatedMinutes === "number"
-      && Number.isInteger(estimatedMinutes)
-      && estimatedMinutes > POSTGRESQL_INT_MAX
-    ) {
-      throw new Error("estimated_minutes must be a positive PostgreSQL Int or null")
-    } else if (typeof estimatedMinutes === "number" && Number.isInteger(estimatedMinutes) && estimatedMinutes > 0) {
-      result.estimated_minutes = estimatedMinutes
-    } else {
-      throw new Error("estimated_minutes must be a positive integer or null")
-    }
+    result.estimated_minutes = parseOptionalSlotMinutes(value.estimated_minutes, "estimated_minutes")
   }
 
   if (hasOwn(value, "energy_level")) {

@@ -264,6 +264,22 @@ describe("/api/action-item", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it("POST rejects estimated_minutes outside 15-minute increments", async () => {
+    const response = await POST(request("http://localhost/api/action-item", {
+      method: "POST",
+      headers: { "Idempotency-Key": "action-unaligned-estimate" },
+      body: JSON.stringify({
+        plan_id: "plan_launch",
+        name: "写发布说明",
+        estimated_minutes: 50,
+      }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "estimated_minutes must use 15-minute increments" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("POST returns an existing action for the same normalized immutable payload", async () => {
     const key = "action-copy-repeat"
     const existing = {
@@ -481,6 +497,17 @@ describe("/api/action-item", () => {
     expect(events).toEqual(["action-row-lock", "update"])
   })
 
+  it("PUT rejects estimated_minutes outside 15-minute increments", async () => {
+    const response = await PUT(request("http://localhost/api/action-item", {
+      method: "PUT",
+      body: JSON.stringify({ action_id: "action_copy", estimated_minutes: 50 }),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await json(response)).toEqual({ error: "estimated_minutes must use 15-minute increments" })
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("PUT clears completed_at when reopening", async () => {
     prismaMock.$queryRaw.mockResolvedValue([{
       action_id: "action_copy",
@@ -611,7 +638,7 @@ describe("/api/action-item", () => {
     expect(prismaMock.actionItem.delete).not.toHaveBeenCalled()
   })
 
-  it("DELETE blocks deletion while a future scheduled block exists", async () => {
+  it("DELETE blocks deletion while any scheduled block exists", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-08-23T08:30:00.000Z"))
     const events: string[] = []
@@ -637,6 +664,7 @@ describe("/api/action-item", () => {
     const response = await DELETE(request("http://localhost/api/action-item?action_id=action_copy", { method: "DELETE" }))
 
     expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({ error: "行动项存在待执行时间块" })
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(3)
     expect(getRawSqlTemplate(prismaMock.$queryRaw.mock.calls[0])).toBe(
       'SELECT "plan_id", "is_recurring" FROM "Plan" WHERE "plan_id" = ? FOR UPDATE',
@@ -657,9 +685,34 @@ describe("/api/action-item", () => {
       where: {
         action_id: "action_copy",
         status: "scheduled",
-        start_at: { gt: new Date("2026-08-23T08:30:00.000Z") },
       },
     })
+    expect(prismaMock.actionItem.delete).not.toHaveBeenCalled()
+  })
+
+  it("DELETE also blocks a past block that is still scheduled", async () => {
+    prismaMock.actionItem.findUnique.mockResolvedValue({ plan_id: "plan_launch" })
+    prismaMock.$queryRaw.mockImplementation(async (...call: unknown[]) => {
+      const sql = getRawSqlTemplate(call)
+      if (sql.includes('FROM "Plan"')) {
+        return [{ plan_id: "plan_launch", is_recurring: false }]
+      }
+      if (sql.includes('FROM "ScheduleBlock"')) {
+        return [{ block_id: "block_past_scheduled" }]
+      }
+      return [lockedActionRow]
+    })
+    prismaMock.scheduleBlock.count.mockImplementation(async ({ where }: {
+      where: Record<string, unknown>
+    }) => "start_at" in where ? 0 : 1)
+
+    const response = await DELETE(request(
+      "http://localhost/api/action-item?action_id=action_copy",
+      { method: "DELETE" },
+    ))
+
+    expect(response.status).toBe(409)
+    expect(await json(response)).toEqual({ error: "行动项存在待执行时间块" })
     expect(prismaMock.actionItem.delete).not.toHaveBeenCalled()
   })
 

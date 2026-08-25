@@ -23,6 +23,8 @@ type DatabaseOnlyInvariant = {
   expression: string
 }
 
+type DatabaseOnlyCheck = Omit<DatabaseOnlyInvariant, "kind">
+
 const findClosingParenthesis = (sql: string, expressionStart: number) => {
   let depth = 1
   let quote: "single" | "double" | null = null
@@ -120,7 +122,12 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
     })
   }
 
-  return invariants.sort((left, right) =>
+  const latest = new Map<string, DatabaseOnlyInvariant>()
+  for (const invariant of invariants) {
+    latest.set(`${invariant.kind}:${invariant.table}:${invariant.name}`, invariant)
+  }
+
+  return [...latest.values()].sort((left, right) =>
     JSON.stringify(left).localeCompare(JSON.stringify(right)),
   )
 }
@@ -128,6 +135,34 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
 const expectExactDatabaseOnlyInvariantParity = (formalSql: string, overlaySql: string) => {
   expect(extractDatabaseOnlyInvariants(overlaySql)).toEqual(
     extractDatabaseOnlyInvariants(formalSql),
+  )
+}
+
+const expectConditionalConstraintUpgrade = (
+  overlaySql: string,
+  check: DatabaseOnlyCheck,
+) => {
+  const dropStatement =
+    `ALTER TABLE "${check.table}" DROP CONSTRAINT IF EXISTS "${check.name}";`
+  const dropIndex = overlaySql.indexOf(dropStatement)
+  expect(dropIndex).toBeGreaterThanOrEqual(0)
+
+  const conditionalStart = overlaySql.lastIndexOf("IF NOT EXISTS (", dropIndex)
+  const conditionalEnd = overlaySql.indexOf("END IF;", dropIndex)
+  expect(conditionalStart).toBeGreaterThanOrEqual(0)
+  expect(conditionalEnd).toBeGreaterThan(dropIndex)
+
+  const upgradeBlock = overlaySql.slice(conditionalStart, conditionalEnd)
+  const catalogDefinition =
+    `check${check.expression.toLowerCase().replace(/[^a-z0-9_%><=]+/g, "")}`
+  expect(upgradeBlock).toContain("FROM pg_constraint")
+  expect(upgradeBlock).toContain("pg_get_constraintdef")
+  expect(upgradeBlock).toContain(`= '${catalogDefinition}'`)
+  expect(normalizeSql(upgradeBlock)).toContain(
+    normalizeSql(`
+      ALTER TABLE "${check.table}"
+      ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
+    `),
   )
 }
 
@@ -185,6 +220,10 @@ const schema = readRootFile("prisma/schema.prisma")
 const migration = readRootFile(
   "prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql",
 )
+const timeBudgetMigration = readRootFile(
+  "prisma/migrations/20260825120000_add_plan_time_budget/migration.sql",
+)
+const formalIntegritySql = `${migration}\n${timeBudgetMigration}`
 const integrityOverlay = readRootFile("prisma/today-workspace-integrity.sql")
 const packageJson = JSON.parse(readRootFile("package.json")) as {
   scripts: Record<string, string>
@@ -196,11 +235,18 @@ const directDeployScript = readRootFile("deploy-direct.sh")
 const setupGuide = readRootFile("setup.md")
 const chinaDeployGuide = readRootFile("DEPLOY-CHINA.md")
 
-const databaseOnlyChecks = [
+const databaseOnlyChecks: DatabaseOnlyCheck[] = [
   {
     table: "Plan",
     name: "Plan_estimated_minutes_check",
-    expression: '"estimated_minutes" IS NULL OR "estimated_minutes" > 0',
+    expression:
+      '"estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0)',
+  },
+  {
+    table: "Plan",
+    name: "Plan_default_block_minutes_check",
+    expression:
+      '"default_block_minutes" IS NULL OR ("default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0)',
   },
   {
     table: "Plan",
@@ -210,7 +256,8 @@ const databaseOnlyChecks = [
   {
     table: "ActionItem",
     name: "ActionItem_estimated_minutes_check",
-    expression: '"estimated_minutes" IS NULL OR "estimated_minutes" > 0',
+    expression:
+      '"estimated_minutes" IS NULL OR ("estimated_minutes" > 0 AND "estimated_minutes" % 15 = 0)',
   },
   {
     table: "ActionItem",
@@ -266,7 +313,7 @@ const databaseOnlyChecks = [
   {
     table: "PlanningPreference",
     name: "PlanningPreference_default_block_minutes_check",
-    expression: '"default_block_minutes" > 0',
+    expression: '"default_block_minutes" > 0 AND "default_block_minutes" % 15 = 0',
   },
   {
     table: "PlanningPreference",
@@ -275,10 +322,20 @@ const databaseOnlyChecks = [
   },
 ]
 
+const replacedMinuteChecks = databaseOnlyChecks.filter((check) =>
+  [
+    "Plan_estimated_minutes_check",
+    "Plan_default_block_minutes_check",
+    "ActionItem_estimated_minutes_check",
+    "PlanningPreference_default_block_minutes_check",
+  ].includes(check.name),
+)
+
 describe("today workspace Prisma contract", () => {
   it("adds planning fields and schedulable entities", () => {
     expect(schema).toMatch(/due_date\s+DateTime\?\s+@db\.Date/)
     expect(schema).toMatch(/estimated_minutes\s+Int\?/)
+    expect(schema).toMatch(/default_block_minutes\s+Int\?/)
     expect(schema).toMatch(/energy_level\s+String\?/)
     expect(schema).toContain("model ActionItem")
     expect(schema).toContain("model ScheduleBlock")
@@ -292,7 +349,7 @@ describe("today workspace Prisma contract", () => {
   })
 
   it("records the complete database integrity contract in the formal migration", () => {
-    const normalizedMigration = normalizeSql(migration)
+    const normalizedMigration = normalizeSql(formalIntegritySql)
 
     for (const check of databaseOnlyChecks) {
       expect(normalizedMigration).toContain(
@@ -305,6 +362,13 @@ describe("today workspace Prisma contract", () => {
         CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_per_action_idx"
         ON "ScheduleBlock"("action_id")
         WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
+      `),
+    )
+    expect(normalizedMigration).toContain(
+      normalizeSql(`
+        CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_direct_per_plan_idx"
+        ON "ScheduleBlock"("plan_id")
+        WHERE "action_id" IS NULL AND "status" = 'scheduled';
       `),
     )
     expect(normalizedMigration).toContain(
@@ -324,11 +388,151 @@ describe("today workspace Prisma contract", () => {
     for (const foreignKey of requiredForeignKeys) {
       expect(normalizedMigration).toContain(normalizeSql(foreignKey))
     }
+
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "Plan" DROP CONSTRAINT IF EXISTS "Plan_estimated_minutes_check";',
+      ),
+    )
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "ActionItem" DROP CONSTRAINT IF EXISTS "ActionItem_estimated_minutes_check";',
+      ),
+    )
+    expect(normalizedTimeBudgetMigration).toContain(
+      normalizeSql(
+        'ALTER TABLE "PlanningPreference" DROP CONSTRAINT IF EXISTS "PlanningPreference_default_block_minutes_check";',
+      ),
+    )
+  })
+
+  it("protects timestamp writes without blocking status-only updates to legacy blocks", () => {
+    const slotAlignmentFunction = normalizeSql(`
+      CREATE OR REPLACE FUNCTION "enforce_schedule_block_slot_alignment"()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF NEW."start_at" <> date_trunc('minute', NEW."start_at")
+          OR NEW."end_at" <> date_trunc('minute', NEW."end_at")
+          OR mod(extract(epoch FROM (NEW."end_at" - NEW."start_at"))::bigint, 900) <> 0
+        THEN
+          RAISE EXCEPTION 'ScheduleBlock timestamps must align to 15-minute slots'
+            USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+      END
+      $$;
+    `)
+    const slotAlignmentTrigger = normalizeSql(`
+      CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"
+      BEFORE INSERT OR UPDATE OF "start_at", "end_at"
+      ON "ScheduleBlock"
+      FOR EACH ROW
+      EXECUTE FUNCTION "enforce_schedule_block_slot_alignment"();
+    `)
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    const normalizedOverlay = normalizeSql(integrityOverlay)
+
+    expect(normalizedTimeBudgetMigration).toContain(slotAlignmentFunction)
+    expect(normalizedOverlay).toContain(slotAlignmentFunction)
+    expect(normalizedTimeBudgetMigration).toContain(slotAlignmentTrigger)
+    expect(normalizedOverlay).toContain(slotAlignmentTrigger)
+
+    for (const sql of [timeBudgetMigration, integrityOverlay]) {
+      expect(sql).not.toContain("ScheduleBlock_slot_alignment_check")
+      expect(sql).not.toMatch(/NOT\s+VALID/i)
+      expect(sql).not.toMatch(/UPDATE\s+"ScheduleBlock"/i)
+    }
+
+    for (const sql of [normalizedTimeBudgetMigration, normalizedOverlay]) {
+      expect(sql).not.toContain(normalizeSql(`
+        BEFORE INSERT OR UPDATE ON "ScheduleBlock"
+      `))
+      expect(sql.match(/CREATE TRIGGER "ScheduleBlock_slot_alignment_trigger"/g)).toHaveLength(1)
+    }
+
+    const overlayTriggerIndex = normalizedOverlay.indexOf(slotAlignmentTrigger)
+    const overlayConditionalStart = normalizedOverlay.lastIndexOf("IF NOT EXISTS(", overlayTriggerIndex)
+    const overlayConditionalEnd = normalizedOverlay.indexOf("END IF;", overlayTriggerIndex)
+    expect(overlayConditionalStart).toBeGreaterThanOrEqual(0)
+    expect(overlayConditionalEnd).toBeGreaterThan(overlayTriggerIndex)
+    const overlayTriggerBlock = normalizedOverlay.slice(
+      overlayConditionalStart,
+      overlayConditionalEnd,
+    )
+    expect(overlayTriggerBlock).toContain("FROM pg_trigger")
+    expect(overlayTriggerBlock).toContain("current_schema()")
+    expect(overlayTriggerBlock).toContain("NOT trigger_record.tgisinternal")
+  })
+
+  it("applies the time budget migration atomically after safe preflight checks", () => {
+    const trimmedMigration = timeBudgetMigration.trim()
+    expect(trimmedMigration).toMatch(/^BEGIN;/)
+    expect(trimmedMigration).toMatch(/COMMIT;$/)
+
+    const firstMutationIndex = timeBudgetMigration.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
+    const duplicatePreflightIndex = timeBudgetMigration.indexOf("duplicate_plan_ids")
+    const planOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"Plan"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const actionOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const preferenceOverflowPreflightIndex = timeBudgetMigration.search(
+      /FROM\s+"PlanningPreference"\s+WHERE\s+"default_block_minutes"\s*>\s*2147483640/i,
+    )
+
+    expect(firstMutationIndex).toBeGreaterThanOrEqual(0)
+    expect(duplicatePreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(preferenceOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(duplicatePreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(preferenceOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(timeBudgetMigration).toContain(
+      "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(timeBudgetMigration).toContain(
+      "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(timeBudgetMigration).toContain(
+      "PlanningPreference.default_block_minutes exceeds maximum safe 15-minute rounding value",
+    )
+
+    const normalizedTimeBudgetMigration = normalizeSql(timeBudgetMigration)
+    const safeRoundingExpression =
+      '((("estimated_minutes"::bigint + 14) / 15) * 15)::integer'
+    expect(normalizedTimeBudgetMigration.split(normalizeSql(safeRoundingExpression))).toHaveLength(
+      4,
+    )
+    expect(normalizedTimeBudgetMigration).toContain(normalizeSql(`
+      UPDATE "PlanningPreference"
+      SET "default_block_minutes" = ((("default_block_minutes"::bigint + 14) / 15) * 15)::integer
+      WHERE "default_block_minutes" % 15 <> 0;
+    `))
+
+    const preferenceUpdateIndex = timeBudgetMigration.indexOf('UPDATE "PlanningPreference"')
+    const preferenceDropIndex = timeBudgetMigration.indexOf(
+      'ALTER TABLE "PlanningPreference" DROP CONSTRAINT IF EXISTS "PlanningPreference_default_block_minutes_check";',
+    )
+    const preferenceAddIndex = timeBudgetMigration.indexOf(
+      'ADD CONSTRAINT "PlanningPreference_default_block_minutes_check"',
+    )
+    expect(preferenceUpdateIndex).toBeGreaterThan(firstMutationIndex)
+    expect(preferenceDropIndex).toBeGreaterThan(preferenceUpdateIndex)
+    expect(preferenceAddIndex).toBeGreaterThan(preferenceDropIndex)
   })
 
   it("reapplies database-only integrity rules idempotently after schema push", () => {
     expect(integrityOverlay).toContain(
       "Formal source of truth: prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql",
+    )
+    expect(integrityOverlay).toContain(
+      "prisma/migrations/20260825120000_add_plan_time_budget/migration.sql",
     )
 
     const normalizedOverlay = normalizeSql(integrityOverlay)
@@ -336,14 +540,8 @@ describe("today workspace Prisma contract", () => {
     for (const check of databaseOnlyChecks) {
       expect(normalizedOverlay).toContain(
         normalizeSql(`
-          DO $$
-          BEGIN
-            ALTER TABLE "${check.table}"
-            ADD CONSTRAINT "${check.name}" CHECK (${check.expression});
-          EXCEPTION
-            WHEN duplicate_object THEN NULL;
-          END
-          $$;
+          ALTER TABLE "${check.table}"
+          ADD CONSTRAINT "${check.name}" CHECK (${check.expression})
         `),
       )
     }
@@ -355,18 +553,78 @@ describe("today workspace Prisma contract", () => {
         WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
       `),
     )
-    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length)
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx"
+        ON "ScheduleBlock"("plan_id")
+        WHERE "action_id" IS NULL AND "status" = 'scheduled';
+      `),
+    )
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        UPDATE "Plan"
+        SET "estimated_minutes" = ((("estimated_minutes"::bigint + 14) / 15) * 15)::integer
+        WHERE "is_recurring" = false
+          AND "estimated_minutes" IS NOT NULL
+          AND "estimated_minutes" % 15 <> 0;
+      `),
+    )
+    expect(normalizedOverlay).toContain(
+      normalizeSql(`
+        UPDATE "ActionItem"
+        SET "estimated_minutes" = ((("estimated_minutes"::bigint + 14) / 15) * 15)::integer
+        WHERE "estimated_minutes" IS NOT NULL
+          AND "estimated_minutes" % 15 <> 0;
+      `),
+    )
+    expect(normalizedOverlay).toContain(normalizeSql(`
+      UPDATE "PlanningPreference"
+      SET "default_block_minutes" = ((("default_block_minutes"::bigint + 14) / 15) * 15)::integer
+      WHERE "default_block_minutes" % 15 <> 0;
+    `))
+
+    const firstMutationIndex = integrityOverlay.search(/\b(?:ALTER\s+TABLE|UPDATE)\b/i)
+    const planOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"Plan"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const actionOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"ActionItem"\s+WHERE\s+"estimated_minutes"\s*>\s*2147483640/i,
+    )
+    const preferenceOverflowPreflightIndex = integrityOverlay.search(
+      /FROM\s+"PlanningPreference"\s+WHERE\s+"default_block_minutes"\s*>\s*2147483640/i,
+    )
+    expect(planOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(actionOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(preferenceOverflowPreflightIndex).toBeGreaterThanOrEqual(0)
+    expect(planOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(actionOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(preferenceOverflowPreflightIndex).toBeLessThan(firstMutationIndex)
+    expect(integrityOverlay).toContain(
+      "Plan.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(integrityOverlay).toContain(
+      "ActionItem.estimated_minutes exceeds maximum safe 15-minute rounding value",
+    )
+    expect(integrityOverlay).toContain(
+      "PlanningPreference.default_block_minutes exceeds maximum safe 15-minute rounding value",
+    )
+
+    for (const check of replacedMinuteChecks) {
+      expectConditionalConstraintUpgrade(integrityOverlay, check)
+    }
+
+    expect(integrityOverlay.match(/DO \$\$/g)).toHaveLength(databaseOnlyChecks.length - 1)
     expect(integrityOverlay.match(/EXCEPTION\s+WHEN duplicate_object THEN NULL;/g)).toHaveLength(
-      databaseOnlyChecks.length,
+      databaseOnlyChecks.length - 4,
     )
     expect(integrityOverlay.match(/ADD\s+CONSTRAINT/gi)).toHaveLength(databaseOnlyChecks.length)
     expect(integrityOverlay).not.toMatch(/CREATE\s+TABLE|ADD\s+COLUMN|FOREIGN\s+KEY/i)
-    expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(1)
-    expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(1)
+    expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(2)
+    expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(2)
   })
 
   it("keeps the complete formal and deployed database-only invariant sets identical", () => {
-    expectExactDatabaseOnlyInvariantParity(migration, integrityOverlay)
+    expectExactDatabaseOnlyInvariantParity(formalIntegritySql, integrityOverlay)
   })
 
   it("rejects a migration-only invariant in synthetic SQL", () => {

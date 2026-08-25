@@ -7,7 +7,10 @@ import {
   toPlanningPreferenceView,
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
-import { assertSchedulableInterval, findOverlappingBlocks } from "./schedule-validation"
+import {
+  assertPlanningSlotInterval,
+  findOverlappingBlocks,
+} from "./schedule-validation"
 import { lockScheduleLocalDates } from "./schedule-lock"
 import {
   SCHEDULE_BLOCK_RELATIONS,
@@ -35,6 +38,7 @@ export type ScheduleErrorCode =
   | "NOT_FOUND"
   | "SCHEDULE_CONFLICT"
   | "ACTION_ALREADY_SCHEDULED"
+  | "PLAN_ALREADY_SCHEDULED"
   | "STALE_VERSION"
 
 export class ScheduleServiceError extends Error {
@@ -378,13 +382,17 @@ function localDateAndAssertBounds(
   endAt: Date,
   preference: PlanningPreferenceView,
 ): string {
+  let localStart: ReturnType<typeof assertPlanningSlotInterval>
   try {
-    assertSchedulableInterval({ start_at: startAt, end_at: endAt, timezone: preference.timezone })
+    localStart = assertPlanningSlotInterval({
+      start_at: startAt,
+      end_at: endAt,
+      timezone: preference.timezone,
+      day_start_minutes: preference.day_start_minutes,
+    })
   } catch (error) {
-    validation(error instanceof Error ? error.message : "invalid schedule interval")
+    validation(error instanceof Error ? error.message : "invalid schedule slot")
   }
-
-  const localStart = formatUtcInTimeZone(startAt, preference.timezone)
   let planningStart: Date
   let planningEnd: Date
   try {
@@ -481,6 +489,17 @@ async function assertPlanAndAction(
     throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
   }
   if (actionId === null) {
+    const active = await db.scheduleBlock.findFirst({
+      where: { plan_id: planId, action_id: null, status: "scheduled" },
+      select: { block_id: true },
+    })
+    if (active) {
+      throw new ScheduleServiceError(
+        "PLAN_ALREADY_SCHEDULED",
+        "计划已有待执行时间块",
+        [active.block_id],
+      )
+    }
     return
   }
 
@@ -563,6 +582,15 @@ function isActionScheduleUniqueError(error: unknown): boolean {
   ))
 }
 
+function isPlanScheduleUniqueError(error: unknown): boolean {
+  if (!isPrismaError(error, "P2002")) {
+    return false
+  }
+  return prismaErrorTargets(error).some(target => (
+    target === "plan_id" || target.includes("ScheduleBlock_one_scheduled_direct_per_plan_idx")
+  ))
+}
+
 export async function createScheduleBlock(
   db: ScheduleDb,
   rawInput: CreateScheduleBlockInput,
@@ -615,6 +643,21 @@ export async function createScheduleBlock(
       throw new ScheduleServiceError(
         "ACTION_ALREADY_SCHEDULED",
         "行动项已有活动排期",
+        conflictIds,
+      )
+    }
+    if (isPlanScheduleUniqueError(error)) {
+      let conflictIds: string[] | undefined
+      if (isPrismaClient(db)) {
+        const existing = await db.scheduleBlock.findFirst({
+          where: { plan_id: input.planId, action_id: null, status: "scheduled" },
+          select: { block_id: true },
+        })
+        conflictIds = existing ? [existing.block_id] : undefined
+      }
+      throw new ScheduleServiceError(
+        "PLAN_ALREADY_SCHEDULED",
+        "计划已有待执行时间块",
         conflictIds,
       )
     }

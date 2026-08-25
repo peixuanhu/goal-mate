@@ -1,3 +1,5 @@
+import type { TimeBudgetStatus } from "./time-budget"
+
 export type EnergyLevel = "low" | "medium" | "high"
 export type QuadrantId = "q1" | "q2" | "q3" | "q4"
 export type ScheduleBlockStatus = "scheduled" | "completed" | "partial" | "skipped" | "cancelled"
@@ -43,6 +45,15 @@ export type SchedulableCandidate = {
   name: string
   due_date: string | null
   estimated_minutes: number | null
+  effective_default_block_minutes: number
+  invested_minutes: number
+  remaining_minutes: number | null
+  reserved_action_minutes: number
+  available_minutes: number | null
+  suggested_block_minutes: number | null
+  budget_status: TimeBudgetStatus
+  can_schedule: boolean
+  schedule_reason: string | null
   energy_level: EnergyLevel | null
   effective_quadrant: QuadrantId | null
   is_recurring: boolean

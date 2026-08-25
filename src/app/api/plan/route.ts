@@ -6,14 +6,43 @@ import {
   getGoalRouteLockKey,
   getNextGoalPosition,
 } from '@/lib/plan-goal-utils'
+import { normalizePlanTiming } from '@/lib/plan-input'
+import {
+  getDefaultPlanningPreference,
+  toPlanningPreferenceView,
+} from '@/lib/today/planning-preference'
+import { calculatePlanTimeBudget } from '@/lib/today/time-budget'
 
 const prisma = new PrismaClient()
 
 class GoalNotFoundError extends Error {}
 class PlanNotFoundError extends Error {}
 class PlanOwnershipChangedError extends Error {}
+class PlanExecutionHistoryError extends Error {}
+class PlanHasActionsError extends Error {}
+class PlanRouteValidationError extends Error {}
 
 type PlanGoalDb = PrismaClient | Prisma.TransactionClient
+type LockedPlanMutationRow = { plan_id: string; is_recurring: boolean }
+
+const CREATE_FIELDS = new Set([
+  'name',
+  'description',
+  'difficulty',
+  'progress',
+  'is_recurring',
+  'recurrence_type',
+  'recurrence_value',
+  'goal_id',
+  'tags',
+  'due_date',
+  'estimated_minutes',
+  'default_block_minutes',
+  'energy_level',
+  'priority_quadrant',
+  'is_scheduled',
+])
+const UPDATE_FIELDS = new Set([...CREATE_FIELDS, 'plan_id', 'expected_goal_id'])
 
 const CREATE_OMIT_FIELDS = new Set([
   'tags',
@@ -49,6 +78,69 @@ function omitFields(data: Record<string, unknown>, fieldsToOmit: Set<string>): R
   return result
 }
 
+function routeValidation(message: string): never {
+  throw new PlanRouteValidationError(message)
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+async function readJsonObject(req: NextRequest): Promise<Record<string, unknown>> {
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    routeValidation('请求体必须是有效 JSON 对象')
+  }
+
+  if (!isPlainObject(body)) {
+    routeValidation('请求体必须是有效 JSON 对象')
+  }
+  return body
+}
+
+function assertOnlyFields(body: Record<string, unknown>, fields: ReadonlySet<string>): void {
+  const unexpected = Object.keys(body).find(field => !fields.has(field))
+  if (unexpected) {
+    routeValidation(`unexpected field: ${unexpected}`)
+  }
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    routeValidation(`${field} required`)
+  }
+  return value.trim()
+}
+
+function validateTags(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.some(tag => typeof tag !== 'string')) {
+    routeValidation('tags must be an array of strings')
+  }
+  return value
+}
+
+function normalizeTiming(
+  data: Record<string, unknown>,
+  context: Parameters<typeof normalizePlanTiming>[1],
+) {
+  try {
+    return normalizePlanTiming(data, context)
+  } catch (error) {
+    if (error instanceof Error) {
+      routeValidation(error.message)
+    }
+    throw error
+  }
+}
+
 function sanitizeCreateData(data: Record<string, unknown>): Omit<Prisma.PlanUncheckedCreateInput, 'plan_id' | 'goal_id' | 'goal_position'> {
   return omitFields(data, CREATE_OMIT_FIELDS) as Omit<Prisma.PlanUncheckedCreateInput, 'plan_id' | 'goal_id' | 'goal_position'>
 }
@@ -56,7 +148,23 @@ function sanitizeCreateData(data: Record<string, unknown>): Omit<Prisma.PlanUnch
 function normalizeGoalId(value: unknown): string | null | undefined {
   if (value === undefined) return undefined
   if (value === null || value === '') return null
-  return String(value)
+  if (typeof value !== 'string') {
+    routeValidation('goal_id must be a string or null')
+  }
+  return value.trim() || null
+}
+
+async function lockPlanForMutation(
+  tx: Prisma.TransactionClient,
+  planId: string,
+): Promise<LockedPlanMutationRow | null> {
+  const rows = await tx.$queryRaw<LockedPlanMutationRow[]>`
+    SELECT "plan_id", "is_recurring"
+    FROM "Plan"
+    WHERE "plan_id" = ${planId}
+    FOR UPDATE
+  `
+  return rows[0] ?? null
 }
 
 async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
@@ -106,7 +214,7 @@ export async function GET(req: NextRequest) {
     ? [{ goal_position: 'asc' as const }, { gmt_create: 'asc' as const }]
     : { gmt_create: 'desc' as const }
 
-  const [plans, total] = await Promise.all([
+  const [plans, total, preferenceRow] = await Promise.all([
     prisma.plan.findMany({
       where,
       skip: (pageNum - 1) * pageSize,
@@ -121,31 +229,86 @@ export async function GET(req: NextRequest) {
             counts_toward_recurrence: true
           },
           orderBy: { gmt_create: 'desc' }
-        }
+        },
+        actionItems: {
+          select: {
+            action_id: true,
+            estimated_minutes: true,
+            is_completed: true,
+          },
+        },
+        scheduleBlocks: {
+          select: {
+            block_id: true,
+            action_id: true,
+            start_at: true,
+            end_at: true,
+            status: true,
+          },
+        },
       }
     }),
-    prisma.plan.count({ where })
+    prisma.plan.count({ where }),
+    prisma.planningPreference.findUnique({
+      where: { preference_id: 'default' },
+    }),
   ])
 
-  const result = plans.map(plan => ({
-    ...plan,
-    tags: plan.tags.map(t => t.tag)
-  }))
+  const preference = preferenceRow
+    ? toPlanningPreferenceView(preferenceRow)
+    : getDefaultPlanningPreference()
+  const ordinaryCreateTiming = normalizePlanTiming({}, { mode: 'create' })
+  const ordinaryDefaultEstimate = ordinaryCreateTiming.estimated_minutes
+  if (typeof ordinaryDefaultEstimate !== 'number') {
+    throw new Error('Ordinary plan create timing must provide an estimate')
+  }
+
+  const result = plans.map(plan => {
+    const { actionItems, scheduleBlocks, ...publicPlan } = plan
+    const budgetRelations = {
+      default_block_minutes: plan.default_block_minutes,
+      actions: actionItems,
+      blocks: scheduleBlocks,
+    }
+    const timeBudget = plan.is_recurring
+      ? calculatePlanTimeBudget({
+        ...budgetRelations,
+        is_recurring: true,
+        estimated_minutes: null,
+      }, preference.default_block_minutes)
+      : calculatePlanTimeBudget({
+        ...budgetRelations,
+        is_recurring: false,
+        estimated_minutes: plan.estimated_minutes ?? ordinaryDefaultEstimate,
+      }, preference.default_block_minutes)
+
+    return {
+      ...publicPlan,
+      tags: plan.tags.map(t => t.tag),
+      time_budget: timeBudget,
+      has_execution_history: scheduleBlocks.length > 0 || plan.progressRecords.length > 0,
+    }
+  })
 
   return NextResponse.json({ list: result, total })
 }
 
 export async function POST(req: NextRequest) {
-  const data = await req.json() as Record<string, unknown>
-  const tags = data.tags
-  const goal_id = normalizeGoalId(data.goal_id)
-
-  const createData: Prisma.PlanUncheckedCreateInput = {
-    ...sanitizeCreateData(data),
-    plan_id: `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
-  }
-
   try {
+    const data = await readJsonObject(req)
+    assertOnlyFields(data, CREATE_FIELDS)
+    const name = requiredString(data.name, 'name')
+    const tags = validateTags(data.tags)
+    const goal_id = normalizeGoalId(data.goal_id)
+    const timing = normalizeTiming(data, { mode: 'create' })
+
+    const createData: Prisma.PlanUncheckedCreateInput = {
+      ...sanitizeCreateData(data),
+      ...timing,
+      name,
+      plan_id: `plan_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
+    }
+
     const plan = await prisma.$transaction(async tx => {
       if (goal_id) {
         await lockGoalRoute(tx, goal_id)
@@ -159,8 +322,8 @@ export async function POST(req: NextRequest) {
 
       const plan = await tx.plan.create({ data: createData })
 
-      if (tags && Array.isArray(tags)) {
-        await Promise.all(tags.map((tag: string) =>
+      if (tags) {
+        await Promise.all(tags.map(tag =>
           tx.planTagAssociation.create({ data: { plan_id: plan.plan_id, tag } })
         ))
       }
@@ -170,6 +333,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(plan)
   } catch (error) {
+    if (error instanceof PlanRouteValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     if (error instanceof GoalNotFoundError) {
       return NextResponse.json({ error: '目标不存在' }, { status: 400 })
     }
@@ -178,25 +344,73 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const data = await req.json() as Record<string, unknown>
-  const plan_id = data.plan_id as string
-  const tags = data.tags
-  const hasExpectedGoalId = Object.prototype.hasOwnProperty.call(data, 'expected_goal_id')
-
-  const updateData = omitFields(data, UPDATE_OMIT_FIELDS)
-
   try {
+    const data = await readJsonObject(req)
+    assertOnlyFields(data, UPDATE_FIELDS)
+    const plan_id = requiredString(data.plan_id, 'plan_id')
+    const tags = validateTags(data.tags)
+    const hasGoalId = Object.prototype.hasOwnProperty.call(data, 'goal_id')
+    const hasExpectedGoalId = Object.prototype.hasOwnProperty.call(data, 'expected_goal_id')
+    const nextGoalId = hasGoalId ? normalizeGoalId(data.goal_id) : undefined
+    const expectedGoalId = hasExpectedGoalId
+      ? normalizeGoalId(data.expected_goal_id)
+      : undefined
+    if (hasGoalId && nextGoalId === undefined) {
+      routeValidation('goal_id must be a string or null')
+    }
+    if (hasExpectedGoalId && expectedGoalId === undefined) {
+      routeValidation('expected_goal_id must be a string or null')
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(data, 'is_recurring')
+      && typeof data.is_recurring !== 'boolean'
+    ) {
+      routeValidation('is_recurring 必须是布尔值')
+    }
+
     const plan = await prisma.$transaction(async tx => {
-      if (Object.prototype.hasOwnProperty.call(data, 'goal_id')) {
-        const nextGoalId = normalizeGoalId(data.goal_id)
-        const expectedGoalId = normalizeGoalId(data.expected_goal_id)
+      if (hasGoalId && nextGoalId) {
+        await lockGoalRoute(tx, nextGoalId)
+      }
+
+      const lockedPlan = await lockPlanForMutation(tx, plan_id)
+      if (!lockedPlan) {
+        throw new PlanNotFoundError()
+      }
+
+      const timing = normalizeTiming(data, {
+        mode: 'update',
+        currentIsRecurring: lockedPlan.is_recurring,
+      })
+      const changesRecurringType = typeof timing.is_recurring === 'boolean'
+        && timing.is_recurring !== lockedPlan.is_recurring
+      if (changesRecurringType) {
+        const [scheduleBlockCount, progressRecordCount] = await Promise.all([
+          tx.scheduleBlock.count({ where: { plan_id } }),
+          tx.progressRecord.count({ where: { plan_id } }),
+        ])
+        if (scheduleBlockCount > 0 || progressRecordCount > 0) {
+          throw new PlanExecutionHistoryError()
+        }
+
+        if (timing.is_recurring) {
+          const actionCount = await tx.actionItem.count({ where: { plan_id } })
+          if (actionCount > 0) {
+            throw new PlanHasActionsError()
+          }
+        }
+      }
+
+      const updateData = omitFields(data, UPDATE_OMIT_FIELDS)
+      Object.assign(updateData, timing)
+
+      if (hasGoalId) {
 
         if (hasExpectedGoalId) {
           if (nextGoalId === null) {
             updateData.goal_id = null
             updateData.goal_position = null
           } else if (nextGoalId) {
-            await lockGoalRoute(tx, nextGoalId)
             const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
             if (!existingGoal) {
               throw new GoalNotFoundError()
@@ -213,9 +427,9 @@ export async function PUT(req: NextRequest) {
             throw new PlanOwnershipChangedError()
           }
 
-          if (tags && Array.isArray(tags)) {
+          if (tags !== undefined) {
             await tx.planTagAssociation.deleteMany({ where: { plan_id } })
-            await Promise.all(tags.map((tag: string) =>
+            await Promise.all(tags.map(tag =>
               tx.planTagAssociation.create({ data: { plan_id, tag } })
             ))
           }
@@ -234,7 +448,6 @@ export async function PUT(req: NextRequest) {
           updateData.goal_id = null
           updateData.goal_position = null
         } else if (nextGoalId && nextGoalId !== existingPlan.goal_id) {
-          await lockGoalRoute(tx, nextGoalId)
           const existingGoal = await tx.goal.findUnique({ where: { goal_id: nextGoalId } })
           if (!existingGoal) {
             throw new GoalNotFoundError()
@@ -249,9 +462,9 @@ export async function PUT(req: NextRequest) {
         data: updateData
       })
 
-      if (tags && Array.isArray(tags)) {
+      if (tags !== undefined) {
         await tx.planTagAssociation.deleteMany({ where: { plan_id } })
-        await Promise.all(tags.map((tag: string) =>
+        await Promise.all(tags.map(tag =>
           tx.planTagAssociation.create({ data: { plan_id, tag } })
         ))
       }
@@ -261,6 +474,9 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(plan)
   } catch (error) {
+    if (error instanceof PlanRouteValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     if (error instanceof GoalNotFoundError) {
       return NextResponse.json({ error: '目标不存在' }, { status: 400 })
     }
@@ -269,6 +485,12 @@ export async function PUT(req: NextRequest) {
     }
     if (error instanceof PlanOwnershipChangedError) {
       return NextResponse.json({ error: '计划归属已变化，请刷新后重试' }, { status: 409 })
+    }
+    if (error instanceof PlanExecutionHistoryError) {
+      return NextResponse.json({ error: '已有执行记录，不能切换周期类型' }, { status: 409 })
+    }
+    if (error instanceof PlanHasActionsError) {
+      return NextResponse.json({ error: '已有行动项，不能切换为周期计划' }, { status: 409 })
     }
     throw error
   }

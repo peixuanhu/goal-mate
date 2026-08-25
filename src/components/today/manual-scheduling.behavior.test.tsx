@@ -67,6 +67,15 @@ const planCandidate: SchedulableCandidate = {
   name: "上线产品",
   due_date: null,
   estimated_minutes: 60,
+  effective_default_block_minutes: 60,
+  invested_minutes: 0,
+  remaining_minutes: 60,
+  reserved_action_minutes: 0,
+  available_minutes: 60,
+  suggested_block_minutes: 60,
+  budget_status: "ok",
+  can_schedule: true,
+  schedule_reason: null,
   energy_level: "high",
   effective_quadrant: "q1",
   is_recurring: false,
@@ -314,6 +323,132 @@ describe("manual scheduling components", () => {
     }))
   })
 
+  it("warns when a new ordinary block exceeds available time without blocking submit", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ScheduleBlockEditor
+        block={null}
+        candidate={{
+          ...planCandidate,
+          estimated_minutes: 300,
+          remaining_minutes: 30,
+          available_minutes: 30,
+          suggested_block_minutes: 30,
+        }}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={570}
+        initialStartMinutes={540}
+        loading={false}
+        onCancelBlock={vi.fn()}
+        onClose={vi.fn()}
+        onIntentChange={vi.fn()}
+        onSubmit={onSubmit}
+        preference={preference}
+      />,
+    )
+
+    expect(screen.queryByText("本次安排将超出可用预计时间 30 分钟")).toBeNull()
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: "10:00" } })
+    const warning = screen.getByRole("status")
+    expect(warning.textContent).toContain("本次安排将超出可用预计时间 30 分钟")
+    expect(warning.getAttribute("aria-live")).toBe("polite")
+    const submit = screen.getByRole("button", { name: "确认安排" }) as HTMLButtonElement
+    expect(submit.disabled).toBe(false)
+    fireEvent.click(submit)
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:00:00.000Z",
+    }))
+  })
+
+  it.each([
+    ["未对齐刻度", "09:01", "10:01", "时间必须对齐 15 分钟刻度"],
+    ["超出规划范围", "21:30", "22:30", "时间必须位于当天规划范围内"],
+  ])("does not show a budget warning for %s input and keeps the validation error", async (_label, start, end, message) => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ScheduleBlockEditor
+        block={null}
+        candidate={{
+          ...planCandidate,
+          estimated_minutes: 300,
+          remaining_minutes: 30,
+          available_minutes: 30,
+          suggested_block_minutes: 30,
+        }}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={570}
+        initialStartMinutes={540}
+        loading={false}
+        onCancelBlock={vi.fn()}
+        onClose={vi.fn()}
+        onIntentChange={vi.fn()}
+        onSubmit={onSubmit}
+        preference={preference}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText("开始时间"), { target: { value: start } })
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: end } })
+    expect(screen.queryByText(/本次安排将超出可用预计时间/)).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
+    expect((await screen.findByRole("alert")).textContent).toContain(message)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("does not show a plan-budget warning for a recurring candidate", () => {
+    render(
+      <ScheduleBlockEditor
+        block={null}
+        candidate={{
+          ...planCandidate,
+          estimated_minutes: null,
+          remaining_minutes: null,
+          available_minutes: null,
+          suggested_block_minutes: 30,
+          is_recurring: true,
+        }}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={570}
+        initialStartMinutes={540}
+        loading={false}
+        onCancelBlock={vi.fn()}
+        onClose={vi.fn()}
+        onIntentChange={vi.fn()}
+        onSubmit={vi.fn()}
+        preference={preference}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: "10:00" } })
+    expect(screen.queryByText(/本次安排将超出可用预计时间/)).toBeNull()
+  })
+
+  it("does not show a plan-budget warning when editing an existing block", () => {
+    render(
+      <ScheduleBlockEditor
+        block={scheduledBlock()}
+        candidate={null}
+        date="2026-08-23"
+        error={null}
+        initialEndMinutes={570}
+        initialStartMinutes={540}
+        loading={false}
+        onCancelBlock={vi.fn()}
+        onClose={vi.fn()}
+        onIntentChange={vi.fn()}
+        onSubmit={vi.fn()}
+        preference={preference}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: "11:00" } })
+    expect(screen.queryByText(/本次安排将超出可用预计时间/)).toBeNull()
+  })
+
   it("does not close an in-flight editor on Escape", () => {
     const onClose = vi.fn()
     render(
@@ -412,7 +547,13 @@ describe("TodayWorkspace manual scheduling orchestration", () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       if (!init?.method) {
         return jsonResponse({
-          ...todayView(getRequestedDate(url), [], [planCandidate]),
+          ...todayView(getRequestedDate(url), [], [{
+            ...planCandidate,
+            estimated_minutes: 300,
+            remaining_minutes: 240,
+            available_minutes: 240,
+            suggested_block_minutes: 30,
+          }]),
           preference: { ...preference, day_start_minutes: 490, day_end_minutes: 610 },
         })
       }
@@ -425,12 +566,12 @@ describe("TodayWorkspace manual scheduling orchestration", () => {
     const trigger = await screen.findByRole("button", { name: "安排到今天" })
     fireEvent.click(trigger)
     expect((screen.getByLabelText("开始时间") as HTMLInputElement).value).toBe("08:10")
-    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("09:10")
+    expect((screen.getByLabelText("结束时间") as HTMLInputElement).value).toBe("08:40")
     fireEvent.click(screen.getByRole("button", { name: "确认安排" }))
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0]).toEqual(expect.objectContaining({
       start_at: "2026-08-23T00:10:00.000Z",
-      end_at: "2026-08-23T01:10:00.000Z",
+      end_at: "2026-08-23T00:40:00.000Z",
     }))
   })
 

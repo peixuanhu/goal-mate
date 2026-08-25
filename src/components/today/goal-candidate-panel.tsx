@@ -86,9 +86,11 @@ function CandidateCard({
   onSchedule: (candidate: SchedulableCandidate) => void
 }) {
   const isAction = candidate.kind === "action"
+  const schedulingDisabled = !candidate.can_schedule || candidate.suggested_block_minutes === null
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: candidate.id,
     data: { candidate },
+    disabled: schedulingDisabled,
   })
 
   return (
@@ -100,7 +102,8 @@ function CandidateCard({
       <div className="flex items-start gap-2.5">
         <button
           aria-label={`拖动 ${candidate.name}`}
-          className={`mt-0.5 flex h-7 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg ${isAction ? "bg-rose-50 text-rose-500" : "bg-violet-50 text-violet-600"}`}
+          className={`mt-0.5 flex h-7 w-7 shrink-0 touch-none items-center justify-center rounded-lg disabled:cursor-not-allowed disabled:opacity-50 ${schedulingDisabled ? "cursor-not-allowed" : "cursor-grab"} ${isAction ? "bg-rose-50 text-rose-500" : "bg-violet-50 text-violet-600"}`}
+          disabled={schedulingDisabled}
           type="button"
           {...attributes}
           {...listeners}
@@ -110,22 +113,42 @@ function CandidateCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 text-sm font-medium leading-5 text-stone-800">{candidate.name}</p>
-            <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-500">
-              {isAction ? "行动项" : "计划"}
-            </span>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              {candidate.budget_status === "overrun" ? (
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600">预算已超出</span>
+              ) : candidate.budget_status === "exhausted" ? (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">预算已用尽</span>
+              ) : null}
+              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-500">
+                {isAction ? "行动项" : "计划"}
+              </span>
+            </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-400">
-            <span className="inline-flex items-center gap-1">
-              <CalendarClock aria-hidden="true" className="h-3 w-3" />
-              预计 {candidate.estimated_minutes ?? "—"} 分钟
-            </span>
+            {candidate.is_recurring ? (
+              <span className="inline-flex items-center gap-1">
+                <CalendarClock aria-hidden="true" className="h-3 w-3" />
+                每次 {candidate.effective_default_block_minutes} 分钟
+              </span>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <CalendarClock aria-hidden="true" className="h-3 w-3" />
+                  已投入 {candidate.invested_minutes} / {candidate.estimated_minutes ?? "—"} 分钟
+                </span>
+                <span>剩余 {candidate.remaining_minutes ?? "—"} 分钟</span>
+                {candidate.suggested_block_minutes !== null ? <span>下次 {candidate.suggested_block_minutes} 分钟</span> : null}
+              </>
+            )}
             {candidate.goal_name ? <span className="truncate">{candidate.goal_name}</span> : null}
             {candidate.due_date ? <time dateTime={candidate.due_date}>截止 {candidate.due_date}</time> : null}
           </div>
+          {candidate.schedule_reason ? <p className="mt-2 text-xs text-amber-700">{candidate.schedule_reason}</p> : null}
         </div>
       </div>
       <button
-        className="mt-3 w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs font-medium text-stone-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+        className="mt-3 w-full rounded-lg border border-stone-200 px-2 py-1.5 text-xs font-medium text-stone-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400"
+        disabled={schedulingDisabled}
         onClick={() => onSchedule(candidate)}
         type="button"
       >

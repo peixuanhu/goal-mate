@@ -24,14 +24,20 @@ vi.mock("./goal-candidate-panel", () => ({
     candidates,
     error,
     loading,
+    onSchedule,
   }: {
     candidates: SchedulableCandidate[]
     error: string | null
     loading: boolean
+    onSchedule: (candidate: SchedulableCandidate) => void
   }) => (
     <aside aria-label="候选面板" data-loading={String(loading)}>
       {error ? <p role="alert">{error}</p> : null}
-      {candidates.map(candidate => <p key={candidate.id}>{candidate.name}</p>)}
+      {candidates.map(candidate => (
+        <button key={candidate.id} onClick={() => onSchedule(candidate)} type="button">
+          {candidate.name}
+        </button>
+      ))}
     </aside>
   ),
 }))
@@ -90,6 +96,15 @@ function todayView(date: string, candidateName: string, blocks: ScheduleBlockVie
       name: candidateName,
       due_date: null,
       estimated_minutes: 30,
+      effective_default_block_minutes: 60,
+      invested_minutes: 0,
+      remaining_minutes: 30,
+      reserved_action_minutes: 0,
+      available_minutes: 30,
+      suggested_block_minutes: 30,
+      budget_status: "ok",
+      can_schedule: true,
+      schedule_reason: null,
       energy_level: null,
       effective_quadrant: null,
       is_recurring: false,
@@ -259,6 +274,33 @@ describe("TodayWorkspace behavior", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it("guards direct scheduling for a server-blocked candidate", async () => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      const view = todayView(date, "预算阻断候选")
+      return Promise.resolve(jsonResponse({
+        ...view,
+        candidates: [{
+          ...view.candidates[0],
+          remaining_minutes: 0,
+          available_minutes: 0,
+          suggested_block_minutes: null,
+          budget_status: "exhausted",
+          can_schedule: false,
+          schedule_reason: "总预计投入已用尽",
+        }],
+      }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    fireEvent.click(await screen.findByRole("button", { name: "预算阻断候选" }))
+    expect(screen.getByRole("alert").textContent).toContain("总预计投入已用尽")
+    expect(screen.queryByRole("dialog", { name: "安排时间块" })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ["status", { status: "queued" }],
     ["source", { source: "robot" }],
@@ -282,6 +324,35 @@ describe("TodayWorkspace behavior", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("今日数据格式无效")
     expect(screen.queryByText("不应显示的候选")).toBeNull()
+  })
+
+  it.each<[string, (candidate: Record<string, unknown>) => void]>([
+    ["missing budget field", candidate => { delete candidate.invested_minutes }],
+    ["default duration type", candidate => { candidate.effective_default_block_minutes = "60" }],
+    ["non-positive default duration", candidate => { candidate.effective_default_block_minutes = 0 }],
+    ["off-slot default duration", candidate => { candidate.effective_default_block_minutes = 50 }],
+    ["negative invested duration", candidate => { candidate.invested_minutes = -1 }],
+    ["fractional reserved duration", candidate => { candidate.reserved_action_minutes = 1.5 }],
+    ["negative remaining duration", candidate => { candidate.remaining_minutes = -1 }],
+    ["negative available duration", candidate => { candidate.available_minutes = -1 }],
+    ["zero suggested duration", candidate => { candidate.suggested_block_minutes = 0 }],
+    ["budget status enum", candidate => { candidate.budget_status = "warning" }],
+    ["schedulable flag type", candidate => { candidate.can_schedule = "yes" }],
+    ["schedule reason type", candidate => { candidate.schedule_reason = 42 }],
+  ])("rejects a response containing a candidate with malformed %s", async (_label, mutate) => {
+    const fetchMock = vi.fn((request: RequestInfo | URL) => {
+      const date = new URL(String(request), "http://localhost").searchParams.get("date")
+      if (date === null) throw new Error("missing request date")
+      const payload = todayView(date, "不应显示的预算候选")
+      const malformedCandidate: Record<string, unknown> = { ...payload.candidates[0] }
+      mutate(malformedCandidate)
+      return Promise.resolve(jsonResponse({ ...payload, candidates: [malformedCandidate] }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("今日数据格式无效")
+    expect(screen.queryByText("不应显示的预算候选")).toBeNull()
   })
 
   it("aborts the active request when the workspace unmounts", async () => {

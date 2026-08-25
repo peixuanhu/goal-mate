@@ -81,6 +81,15 @@ export function ScheduleBlockEditor({
   const title = candidate?.name ?? block?.title ?? "时间块"
   const goalName = candidate?.goal_name ?? block?.goal_name
   const isEdit = block !== null
+  const budgetExcessMinutes = useMemo(() => {
+    if (isEdit || candidate === null || candidate.is_recurring || candidate.available_minutes === null) return 0
+    try {
+      const interval = localTimeRangeToUtc(date, startValue, endValue, preference)
+      return Math.max(0, interval.endMinutes - interval.startMinutes - candidate.available_minutes)
+    } catch {
+      return 0
+    }
+  }, [candidate, date, endValue, isEdit, preference, startValue])
 
   function changeStart(value: string) {
     setStartValue(value)
@@ -146,6 +155,12 @@ export function ScheduleBlockEditor({
             </label>
           </div>
           <p className="text-xs text-gray-400">{date} · {preference.timezone} · 15 分钟刻度</p>
+
+          {budgetExcessMinutes > 0 ? (
+            <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" role="status">
+              本次安排将超出可用预计时间 {budgetExcessMinutes} 分钟
+            </div>
+          ) : null}
 
           {localError || error ? (
             <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{localError ?? error}</div>

@@ -4,6 +4,7 @@ import {
   parseDateOnly,
 } from "@/lib/focus-period-utils"
 import { isPlanCompleted } from "@/lib/plan-completion"
+import { normalizePlanTiming } from "@/lib/plan-input"
 
 import {
   getDefaultPlanningPreference,
@@ -11,6 +12,13 @@ import {
   type PersistedPlanningPreferenceRow,
 } from "./planning-preference"
 import { SCHEDULE_BLOCK_RELATIONS, toScheduleBlockView } from "./schedule-block-view"
+import {
+  calculatePlanTimeBudget,
+  type BudgetAction,
+  type ActionTimeBudget,
+  type PlanTimeBudget,
+  type PlanTimeBudgetInput,
+} from "./time-budget"
 import { getUtcDayRange } from "./timezone"
 import type {
   EnergyLevel,
@@ -50,7 +58,6 @@ type ActionCandidateRow = {
   energy_level: string | null
   priority_quadrant: string | null
   is_completed: boolean
-  scheduleBlocks: Array<{ block_id: string; status: string }>
   gmt_create: Date
   gmt_modified: Date
 }
@@ -92,6 +99,7 @@ type PlanCandidateRow = {
   recurrence_value: string | null
   due_date: Date | null
   estimated_minutes: number | null
+  default_block_minutes: number | null
   energy_level: string | null
   priority_quadrant: string | null
   gmt_create: Date
@@ -103,6 +111,13 @@ type PlanCandidateRow = {
     counts_toward_recurrence: boolean
   }>
   actionItems: ActionCandidateRow[]
+  scheduleBlocks: Array<{
+    block_id: string
+    action_id: string | null
+    start_at: Date
+    end_at: Date
+    status: string
+  }>
 }
 
 export interface TodayQueryDb {
@@ -142,13 +157,16 @@ export interface TodayQueryDb {
         }
         actionItems: {
           where: { is_completed: false }
-          include: {
-            scheduleBlocks: {
-              where: { status: "scheduled" }
-              select: { block_id: true; status: true }
-            }
-          }
           orderBy: [{ position: "asc" }, { gmt_create: "asc" }, { action_id: "asc" }]
+        }
+        scheduleBlocks: {
+          select: {
+            block_id: true
+            action_id: true
+            start_at: true
+            end_at: true
+            status: true
+          }
         }
       }
       orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }, { plan_id: "asc" }]
@@ -216,7 +234,32 @@ async function loadFocus(db: TodayQueryDb, dateKey: string) {
   }
 }
 
-function actionCandidate(plan: PlanCandidateRow, action: ActionCandidateRow): SchedulableCandidate {
+function actionScheduleReason(actionBudget: ActionTimeBudget): string | null {
+  if (actionBudget.has_scheduled_block) return "已有待执行时间块"
+  if (actionBudget.remaining_minutes === 0) return "行动项预计投入已用尽"
+  if (actionBudget.suggested_block_minutes === null) return "暂无可安排时间"
+  return null
+}
+
+function directScheduleReason(budget: PlanTimeBudget): string | null {
+  if (budget.has_scheduled_direct_block) return "已有待执行时间块"
+  if (budget.budget_status === "overrun") return "总预计投入已超支"
+  if (budget.remaining_minutes === 0) return "总预计投入已用尽"
+  if (budget.unallocated_remaining_minutes === 0 && budget.reserved_action_minutes > 0) {
+    return "剩余时间已预留给行动项"
+  }
+  if (budget.suggested_block_minutes === null) return "暂无可安排时间"
+  return null
+}
+
+function actionCandidate(
+  plan: PlanCandidateRow,
+  action: ActionCandidateRow,
+  budget: PlanTimeBudget,
+): SchedulableCandidate {
+  const actionBudget = budget.actions[action.action_id]
+  const scheduleReason = actionScheduleReason(actionBudget)
+
   return {
     kind: "action",
     id: action.action_id,
@@ -226,7 +269,17 @@ function actionCandidate(plan: PlanCandidateRow, action: ActionCandidateRow): Sc
     goal_name: plan.goal?.name ?? null,
     name: action.name,
     due_date: action.due_date === null ? null : normalizeDateInput(action.due_date),
-    estimated_minutes: action.estimated_minutes,
+    estimated_minutes: actionBudget.estimated_minutes,
+    effective_default_block_minutes: budget.effective_default_block_minutes,
+    invested_minutes: actionBudget.invested_minutes,
+    remaining_minutes: actionBudget.remaining_minutes,
+    reserved_action_minutes: budget.reserved_action_minutes,
+    available_minutes: actionBudget.remaining_minutes,
+    suggested_block_minutes: actionBudget.suggested_block_minutes,
+    budget_status: budget.budget_status,
+    can_schedule: !actionBudget.has_scheduled_block
+      && actionBudget.suggested_block_minutes !== null,
+    schedule_reason: scheduleReason,
     energy_level: normalizeEnergyLevel(action.energy_level),
     effective_quadrant: normalizeQuadrant(action.priority_quadrant ?? plan.priority_quadrant),
     is_recurring: false,
@@ -234,7 +287,13 @@ function actionCandidate(plan: PlanCandidateRow, action: ActionCandidateRow): Sc
   }
 }
 
-function planCandidate(plan: PlanCandidateRow): SchedulableCandidate {
+function planCandidate(
+  plan: PlanCandidateRow,
+  budget: PlanTimeBudget,
+  estimatedMinutes: number | null,
+): SchedulableCandidate {
+  const scheduleReason = directScheduleReason(budget)
+
   return {
     kind: "plan",
     id: plan.plan_id,
@@ -244,7 +303,17 @@ function planCandidate(plan: PlanCandidateRow): SchedulableCandidate {
     goal_name: plan.goal?.name ?? null,
     name: plan.name,
     due_date: plan.due_date === null ? null : normalizeDateInput(plan.due_date),
-    estimated_minutes: plan.estimated_minutes,
+    estimated_minutes: estimatedMinutes,
+    effective_default_block_minutes: budget.effective_default_block_minutes,
+    invested_minutes: budget.invested_minutes,
+    remaining_minutes: budget.remaining_minutes,
+    reserved_action_minutes: budget.reserved_action_minutes,
+    available_minutes: budget.unallocated_remaining_minutes,
+    suggested_block_minutes: budget.suggested_block_minutes,
+    budget_status: budget.budget_status,
+    can_schedule: !budget.has_scheduled_direct_block
+      && budget.suggested_block_minutes !== null,
+    schedule_reason: scheduleReason,
     energy_level: normalizeEnergyLevel(plan.energy_level),
     effective_quadrant: normalizeQuadrant(plan.priority_quadrant),
     is_recurring: plan.is_recurring,
@@ -258,19 +327,70 @@ function compareActions(a: ActionCandidateRow, b: ActionCandidateRow): number {
     || a.action_id.localeCompare(b.action_id)
 }
 
-function buildCandidates(plans: PlanCandidateRow[]): SchedulableCandidate[] {
+function budgetActions(plan: PlanCandidateRow): BudgetAction[] {
+  const knownActionIds = new Set(plan.actionItems.map(action => action.action_id))
+  const completedHistoryActionIds = new Set<string>()
+  for (const block of plan.scheduleBlocks) {
+    if (block.action_id !== null && !knownActionIds.has(block.action_id)) {
+      completedHistoryActionIds.add(block.action_id)
+    }
+  }
+
+  return [
+    ...plan.actionItems,
+    ...[...completedHistoryActionIds].map(action_id => ({
+      action_id,
+      estimated_minutes: null,
+      is_completed: true,
+    })),
+  ]
+}
+
+function buildCandidates(
+  plans: PlanCandidateRow[],
+  preferenceDefaultBlockMinutes: number,
+): SchedulableCandidate[] {
+  const ordinaryCreateTiming = normalizePlanTiming({}, { mode: "create" })
+  const ordinaryDefaultEstimate = ordinaryCreateTiming.estimated_minutes
+  if (typeof ordinaryDefaultEstimate !== "number") {
+    throw new Error("Ordinary plan create timing must provide an estimate")
+  }
+
   return plans
     .filter(plan => !isPlanCompleted(plan))
     .flatMap(plan => {
+      const budgetRelations = {
+        default_block_minutes: plan.default_block_minutes,
+        actions: budgetActions(plan),
+        blocks: plan.scheduleBlocks,
+      }
+      let estimatedMinutes: number | null
+      let budgetInput: PlanTimeBudgetInput
+      if (plan.is_recurring) {
+        estimatedMinutes = null
+        budgetInput = {
+          ...budgetRelations,
+          is_recurring: true,
+          estimated_minutes: null,
+        }
+      } else {
+        estimatedMinutes = plan.estimated_minutes ?? ordinaryDefaultEstimate
+        budgetInput = {
+          ...budgetRelations,
+          is_recurring: false,
+          estimated_minutes: estimatedMinutes,
+        }
+      }
+      const budget = calculatePlanTimeBudget(budgetInput, preferenceDefaultBlockMinutes)
+
       const actions = plan.is_recurring
         ? []
         : plan.actionItems
           .filter(action => !action.is_completed)
-          .filter(action => !action.scheduleBlocks.some(block => block.status === "scheduled"))
           .sort(compareActions)
-          .map(action => actionCandidate(plan, action))
+          .map(action => actionCandidate(plan, action, budget))
 
-      return [...actions, planCandidate(plan)]
+      return [...actions, planCandidate(plan, budget, estimatedMinutes)]
     })
 }
 
@@ -296,13 +416,16 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
         },
         actionItems: {
           where: { is_completed: false },
-          include: {
-            scheduleBlocks: {
-              where: { status: "scheduled" },
-              select: { block_id: true, status: true },
-            },
-          },
           orderBy: [{ position: "asc" }, { gmt_create: "asc" }, { action_id: "asc" }],
+        },
+        scheduleBlocks: {
+          select: {
+            block_id: true,
+            action_id: true,
+            start_at: true,
+            end_at: true,
+            status: true,
+          },
         },
       },
       orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }, { plan_id: "asc" }],
@@ -329,7 +452,7 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
     date: dateKey,
     preference,
     focus,
-    candidates: buildCandidates(plans),
+    candidates: buildCandidates(plans, preference.default_block_minutes),
     blocks,
     checks: [],
   }

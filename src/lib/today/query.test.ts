@@ -31,6 +31,7 @@ const openPlan = {
   recurrence_value: null,
   due_date: new Date("2026-09-03T00:00:00.000Z"),
   estimated_minutes: 120,
+  default_block_minutes: null,
   energy_level: "high",
   priority_quadrant: "q2",
   gmt_create: new Date("2026-08-20T00:00:00.000Z"),
@@ -38,6 +39,7 @@ const openPlan = {
   goal: launchGoal,
   tags: [{ tag: "launch" }],
   progressRecords: [],
+  scheduleBlocks: [],
   actionItems: [
     {
       action_id: "action_copy",
@@ -170,13 +172,16 @@ describe("loadTodayView", () => {
         },
         actionItems: {
           where: { is_completed: false },
-          include: {
-            scheduleBlocks: {
-              where: { status: "scheduled" },
-              select: { block_id: true, status: true },
-            },
-          },
           orderBy: [{ position: "asc" }, { gmt_create: "asc" }, { action_id: "asc" }],
+        },
+        scheduleBlocks: {
+          select: {
+            block_id: true,
+            action_id: true,
+            start_at: true,
+            end_at: true,
+            status: true,
+          },
         },
       },
       orderBy: [{ goal_position: "asc" }, { gmt_create: "asc" }, { plan_id: "asc" }],
@@ -350,6 +355,15 @@ describe("loadTodayView", () => {
       name: "写发布说明",
       due_date: "2026-09-01",
       estimated_minutes: 60,
+      effective_default_block_minutes: 60,
+      invested_minutes: 0,
+      remaining_minutes: 60,
+      reserved_action_minutes: 120,
+      available_minutes: 60,
+      suggested_block_minutes: 60,
+      budget_status: "ok",
+      can_schedule: true,
+      schedule_reason: null,
       energy_level: "medium",
       effective_quadrant: "q1",
       is_recurring: false,
@@ -357,7 +371,7 @@ describe("loadTodayView", () => {
     })
     expect(view.candidates[1]).toEqual(expect.objectContaining({
       due_date: null,
-      estimated_minutes: null,
+      estimated_minutes: 60,
       energy_level: null,
       effective_quadrant: "q2",
     }))
@@ -371,6 +385,15 @@ describe("loadTodayView", () => {
       name: "准备发布",
       due_date: "2026-09-03",
       estimated_minutes: 120,
+      effective_default_block_minutes: 60,
+      invested_minutes: 0,
+      remaining_minutes: 120,
+      reserved_action_minutes: 120,
+      available_minutes: 0,
+      suggested_block_minutes: null,
+      budget_status: "ok",
+      can_schedule: false,
+      schedule_reason: "剩余时间已预留给行动项",
       energy_level: "high",
       effective_quadrant: "q2",
       is_recurring: false,
@@ -384,6 +407,7 @@ describe("loadTodayView", () => {
       plan_id: "plan_daily",
       name: "每日复盘",
       is_recurring: true,
+      estimated_minutes: null,
       actionItems: [{ ...openPlan.actionItems[0], action_id: "action_should_not_leak", plan_id: "plan_daily" }],
     }
     const db = makeDb({ plans: [recurringPlan] })
@@ -395,6 +419,14 @@ describe("loadTodayView", () => {
       kind: "plan",
       id: "plan_daily",
       is_recurring: true,
+      estimated_minutes: null,
+      effective_default_block_minutes: 60,
+      remaining_minutes: null,
+      available_minutes: null,
+      suggested_block_minutes: 60,
+      budget_status: "ok",
+      can_schedule: true,
+      schedule_reason: null,
     }))
   })
 
@@ -440,7 +472,7 @@ describe("loadTodayView", () => {
         goal_id: null,
         goal_name: null,
         due_date: null,
-        estimated_minutes: null,
+        estimated_minutes: 60,
         energy_level: null,
         effective_quadrant: null,
       }),
@@ -542,27 +574,45 @@ describe("loadTodayView", () => {
     expect(JSON.parse(JSON.stringify(view))).toEqual(view)
   })
 
-  it.each(["completed", "partial", "skipped", "cancelled"])(
+  it.each([
+    ["completed", 30],
+    ["partial", 30],
+    ["skipped", 0],
+    ["cancelled", 0],
+  ] as const)(
     "keeps an action candidate when its only block is %s",
-    async status => {
+    async (status, expectedInvestedMinutes) => {
       const db = makeDb({
         plans: [{
           ...openPlan,
-          actionItems: [{
-            ...openPlan.actionItems[0],
-            scheduleBlocks: [{ block_id: `block_${status}`, status }],
+          scheduleBlocks: [{
+            block_id: `block_${status}`,
+            action_id: "action_copy",
+            start_at: new Date("2026-08-20T00:00:00.000Z"),
+            end_at: new Date("2026-08-20T00:30:00.000Z"),
+            status,
           }],
         }],
       })
 
-      expect((await loadTodayView(db, "2026-08-23")).candidates.map(item => item.id)).toEqual([
+      const candidates = (await loadTodayView(db, "2026-08-23")).candidates
+      expect(candidates.map(item => item.id)).toEqual([
         "action_copy",
         "plan_launch",
       ])
+      expect(candidates[0]).toEqual(expect.objectContaining({
+        invested_minutes: expectedInvestedMinutes,
+        remaining_minutes: 60 - expectedInvestedMinutes,
+        suggested_block_minutes: 60 - expectedInvestedMinutes,
+      }))
+      expect(candidates[1]).toEqual(expect.objectContaining({
+        invested_minutes: expectedInvestedMinutes,
+        remaining_minutes: 120 - expectedInvestedMinutes,
+      }))
     },
   )
 
-  it("hides only the action with a globally active scheduled block while keeping its parent and sibling", async () => {
+  it("keeps an action with a globally active scheduled block visible but disabled", async () => {
     const sibling = {
       ...openPlan.actionItems[0],
       action_id: "action_design",
@@ -594,6 +644,13 @@ describe("loadTodayView", () => {
           },
           sibling,
         ],
+        scheduleBlocks: [{
+          block_id: "block_copy_tomorrow",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-24T02:00:00.000Z"),
+          end_at: new Date("2026-08-24T03:00:00.000Z"),
+          status: "scheduled",
+        }],
       }],
       blocks: [planScheduledOutsideDay, actionScheduledOutsideDay],
     })
@@ -601,6 +658,276 @@ describe("loadTodayView", () => {
     const view = await loadTodayView(db, "2026-08-23")
 
     expect(view.blocks).toEqual([])
-    expect(view.candidates.map(item => item.id)).toEqual(["action_design", "plan_launch"])
+    expect(view.candidates.map(item => item.id)).toEqual(["action_copy", "action_design", "plan_launch"])
+    expect(view.candidates.find(item => item.id === "action_copy")).toEqual(expect.objectContaining({
+      can_schedule: false,
+      suggested_block_minutes: null,
+      schedule_reason: "已有待执行时间块",
+    }))
+  })
+
+  it("returns ordinary-plan budget, reservation, and suggestion fields", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 300,
+        default_block_minutes: 60,
+        actionItems: [
+          { ...openPlan.actionItems[0], action_id: "action_one", estimated_minutes: 45 },
+          { ...openPlan.actionItems[0], action_id: "action_two", estimated_minutes: 45, position: 2000 },
+        ],
+        scheduleBlocks: [
+          {
+            block_id: "block_completed",
+            action_id: null,
+            start_at: new Date("2026-08-20T00:00:00.000Z"),
+            end_at: new Date("2026-08-20T00:30:00.000Z"),
+            status: "completed",
+          },
+          {
+            block_id: "block_partial",
+            action_id: null,
+            start_at: new Date("2026-08-21T00:00:00.000Z"),
+            end_at: new Date("2026-08-21T00:30:00.000Z"),
+            status: "partial",
+          },
+        ],
+      }],
+    })
+
+    const plan = (await loadTodayView(db, "2026-08-23")).candidates.find(
+      candidate => candidate.id === "plan_launch",
+    )
+
+    expect(plan).toEqual(expect.objectContaining({
+      estimated_minutes: 300,
+      effective_default_block_minutes: 60,
+      invested_minutes: 60,
+      remaining_minutes: 240,
+      reserved_action_minutes: 90,
+      available_minutes: 150,
+      suggested_block_minutes: 60,
+      budget_status: "ok",
+      can_schedule: true,
+      schedule_reason: null,
+    }))
+  })
+
+  it("exposes an inherited action estimate consistently with its budget remainder", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        default_block_minutes: 75,
+        actionItems: [{ ...openPlan.actionItems[0], estimated_minutes: null }],
+      }],
+    })
+
+    const action = (await loadTodayView(db, "2026-08-23")).candidates.find(
+      candidate => candidate.id === "action_copy",
+    )
+
+    expect(action).toEqual(expect.objectContaining({
+      kind: "action",
+      estimated_minutes: 75,
+      remaining_minutes: 75,
+    }))
+  })
+
+  it("shortens the direct suggestion to the final remainder", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 90,
+        actionItems: [],
+        scheduleBlocks: [{
+          block_id: "block_completed",
+          action_id: null,
+          start_at: new Date("2026-08-20T00:00:00.000Z"),
+          end_at: new Date("2026-08-20T01:00:00.000Z"),
+          status: "completed",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(
+      expect.objectContaining({ suggested_block_minutes: 30, can_schedule: true }),
+    )
+  })
+
+  it("uses plan override or preference duration for recurring candidates without a total", async () => {
+    const recurring = {
+      ...openPlan,
+      is_recurring: true,
+      estimated_minutes: null,
+      actionItems: [],
+    }
+    const db = makeDb({
+      plans: [
+        { ...recurring, plan_id: "recurring_override", default_block_minutes: 45 },
+        { ...recurring, plan_id: "recurring_preference", default_block_minutes: null },
+      ],
+    })
+
+    const view = await loadTodayView(db, "2026-08-23")
+
+    expect(view.candidates).toEqual([
+      expect.objectContaining({
+        id: "recurring_override",
+        estimated_minutes: null,
+        effective_default_block_minutes: 45,
+        remaining_minutes: null,
+        available_minutes: null,
+        suggested_block_minutes: 45,
+        budget_status: "ok",
+      }),
+      expect.objectContaining({
+        id: "recurring_preference",
+        estimated_minutes: null,
+        effective_default_block_minutes: 60,
+        suggested_block_minutes: 60,
+      }),
+    ])
+  })
+
+  it("keeps a direct candidate with a scheduled block visible but disabled", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        actionItems: [],
+        scheduleBlocks: [{
+          block_id: "block_scheduled",
+          action_id: null,
+          start_at: new Date("2026-08-26T00:00:00.000Z"),
+          end_at: new Date("2026-08-26T01:00:00.000Z"),
+          status: "scheduled",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
+      can_schedule: false,
+      suggested_block_minutes: null,
+      schedule_reason: "已有待执行时间块",
+    }))
+  })
+
+  it("keeps an action whose estimate is consumed visible but disabled", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        actionItems: [{ ...openPlan.actionItems[0], estimated_minutes: 45 }],
+        scheduleBlocks: [{
+          block_id: "block_action_partial",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-20T00:00:00.000Z"),
+          end_at: new Date("2026-08-20T00:45:00.000Z"),
+          status: "partial",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
+      kind: "action",
+      invested_minutes: 45,
+      remaining_minutes: 0,
+      available_minutes: 0,
+      suggested_block_minutes: null,
+      can_schedule: false,
+      schedule_reason: "行动项预计投入已用尽",
+    }))
+  })
+
+  it("counts blocks from completed actions omitted by the candidate query", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 120,
+        actionItems: [],
+        scheduleBlocks: [{
+          block_id: "block_completed_action",
+          action_id: "action_already_completed",
+          start_at: new Date("2026-08-20T00:00:00.000Z"),
+          end_at: new Date("2026-08-20T00:45:00.000Z"),
+          status: "completed",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates).toEqual([
+      expect.objectContaining({
+        kind: "plan",
+        invested_minutes: 45,
+        remaining_minutes: 75,
+        reserved_action_minutes: 0,
+        suggested_block_minutes: 60,
+      }),
+    ])
+  })
+
+  it("keeps a fully reserved parent visible but disables direct scheduling", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 90,
+        actionItems: [{ ...openPlan.actionItems[0], estimated_minutes: 90 }],
+      }],
+    })
+
+    const plan = (await loadTodayView(db, "2026-08-23")).candidates.find(
+      candidate => candidate.kind === "plan",
+    )
+    expect(plan).toEqual(expect.objectContaining({
+      remaining_minutes: 90,
+      reserved_action_minutes: 90,
+      available_minutes: 0,
+      can_schedule: false,
+      schedule_reason: "剩余时间已预留给行动项",
+    }))
+  })
+
+  it.each([
+    ["overrun", 30, 45, "总预计投入已超支"],
+    ["exhausted", 45, 45, "总预计投入已用尽"],
+  ])("reports a deterministic %s direct-plan reason", async (budget_status, total, invested, reason) => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: total,
+        actionItems: [],
+        scheduleBlocks: [{
+          block_id: `block_${budget_status}`,
+          action_id: null,
+          start_at: new Date("2026-08-20T00:00:00.000Z"),
+          end_at: new Date(new Date("2026-08-20T00:00:00.000Z").getTime() + invested * 60_000),
+          status: "completed",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
+      budget_status,
+      remaining_minutes: 0,
+      can_schedule: false,
+      schedule_reason: reason,
+    }))
+  })
+
+  it("allows an unfinished action to schedule even when its parent budget is overrun", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 60,
+        actionItems: [{ ...openPlan.actionItems[0], estimated_minutes: 90 }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
+      kind: "action",
+      budget_status: "overrun",
+      remaining_minutes: 90,
+      suggested_block_minutes: 60,
+      can_schedule: true,
+      schedule_reason: null,
+    }))
   })
 })
