@@ -1,16 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
-const prismaMock = vi.hoisted(() => ({
-  $executeRaw: vi.fn(),
-  $transaction: vi.fn(),
-  goal: {
-    aggregate: vi.fn(),
-    count: vi.fn(),
-    create: vi.fn(),
-    delete: vi.fn(),
-    findMany: vi.fn(),
-    update: vi.fn(),
+const { events, prismaMock, transactionMock } = vi.hoisted(() => ({
+  events: [] as string[],
+  prismaMock: {
+    $executeRaw: vi.fn(),
+    $transaction: vi.fn(),
+    goal: {
+      aggregate: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+  transactionMock: {
+    $executeRaw: vi.fn(),
+    goal: {
+      aggregate: vi.fn(),
+      create: vi.fn(),
+    },
   },
 }))
 
@@ -33,8 +43,20 @@ const goalOrder = [
 describe("/api/goal", () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof prismaMock) => unknown) => callback(prismaMock))
+    events.length = 0
+    prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof transactionMock) => unknown) => callback(transactionMock))
     prismaMock.goal.count.mockResolvedValue(2)
+    transactionMock.$executeRaw.mockImplementation(async () => {
+      events.push("lock")
+    })
+    transactionMock.goal.aggregate.mockImplementation(async () => {
+      events.push("aggregate")
+      return { _max: { position: 4 } }
+    })
+    transactionMock.goal.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      events.push("create")
+      return data
+    })
   })
 
   it("returns every manually ordered goal when all=true", async () => {
@@ -67,31 +89,53 @@ describe("/api/goal", () => {
   })
 
   it("appends a new goal after the current maximum position", async () => {
-    prismaMock.goal.aggregate.mockResolvedValue({ _max: { position: 4 } })
-    prismaMock.goal.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve(data))
-
     const response = await POST(request("http://localhost/api/goal", {
       method: "POST",
       body: JSON.stringify({
         name: "新目标",
         tag: "work",
         description: "说明",
+        id: 17,
+        gmt_create: "2026-01-01T00:00:00.000Z",
+        gmt_modified: "2026-01-02T00:00:00.000Z",
+        plans: [{ plan_id: "plan_injected" }],
         position: -99,
       }),
     }))
 
     expect(response.status).toBe(200)
-    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
-    expect(prismaMock.goal.aggregate).toHaveBeenCalledWith({ _max: { position: true } })
-    expect(prismaMock.goal.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled()
+    expect(prismaMock.goal.aggregate).not.toHaveBeenCalled()
+    expect(prismaMock.goal.create).not.toHaveBeenCalled()
+    expect(transactionMock.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(transactionMock.goal.aggregate).toHaveBeenCalledWith({ _max: { position: true } })
+    expect(transactionMock.goal.create).toHaveBeenCalledWith({
+      data: {
         name: "新目标",
         tag: "work",
         description: "说明",
         goal_id: expect.stringMatching(/^goal_[a-z0-9]{10}$/),
         position: 5,
-      }),
+      },
     })
+    expect(events).toEqual(["lock", "aggregate", "create"])
     expect(await response.json()).toEqual(expect.objectContaining({ position: 5 }))
+  })
+
+  it.each([
+    ["an array", []],
+    ["a non-string name", { name: 1, tag: "work" }],
+    ["a non-string tag", { name: "新目标", tag: 1 }],
+    ["an invalid description", { name: "新目标", tag: "work", description: 1 }],
+  ])("rejects %s without starting a transaction", async (_label, body) => {
+    const response = await POST(request("http://localhost/api/goal", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.any(String) }))
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 })

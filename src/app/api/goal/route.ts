@@ -11,6 +11,12 @@ const GOAL_ORDER: Prisma.GoalOrderByWithRelationInput[] = [
   { goal_id: 'asc' },
 ]
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
 // GET: ListGoals 支持分页和tag筛选
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -35,17 +41,31 @@ export async function GET(req: NextRequest) {
 
 // POST: InsertGoal
 export async function POST(req: NextRequest) {
-  const data = await req.json() as Record<string, unknown>
-  const { position: _position, ...goalData } = data
+  const data: unknown = await req.json()
+  if (!isPlainObject(data)) {
+    return NextResponse.json({ error: '请求体必须是有效 JSON 对象' }, { status: 400 })
+  }
+
+  const { name, tag, description } = data
+  if (typeof name !== 'string' || typeof tag !== 'string') {
+    return NextResponse.json({ error: 'name 和 tag 必须是字符串' }, { status: 400 })
+  }
+  if (description !== undefined && description !== null && typeof description !== 'string') {
+    return NextResponse.json({ error: 'description 必须是字符串或 null' }, { status: 400 })
+  }
+
   const goal = await prisma.$transaction(async (tx) => {
     await lockGoalOrder(tx)
     const maximum = await tx.goal.aggregate({ _max: { position: true } })
+    const goalData: Prisma.GoalCreateInput = {
+      name,
+      tag,
+      ...(description === undefined ? {} : { description }),
+      goal_id: `goal_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
+      position: getNextGoalPosition(maximum._max.position),
+    }
     return tx.goal.create({
-      data: {
-        ...goalData,
-        goal_id: `goal_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
-        position: getNextGoalPosition(maximum._max.position),
-      } as Prisma.GoalUncheckedCreateInput,
+      data: goalData,
     })
   })
   return NextResponse.json(goal)
