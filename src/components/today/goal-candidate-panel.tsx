@@ -7,6 +7,7 @@ import React, { useId } from "react"
 import { QuadrantBoard } from "@/components/workspace/quadrant-board"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
+import { cn } from "@/lib/utils"
 
 interface GoalCandidatePanelProps {
   focus: TodayView["focus"]
@@ -19,6 +20,7 @@ interface GoalCandidatePanelProps {
 interface CandidateGroup {
   key: string
   name: string
+  position: number | null
   candidates: SchedulableCandidate[]
   focused: boolean
 }
@@ -28,8 +30,6 @@ interface PlanCandidateGroup {
   actions: SchedulableCandidate[]
   plan: SchedulableCandidate | null
 }
-
-export const FOCUS_GROUP_KEY = "__focus__"
 
 function groupByPlan(candidates: SchedulableCandidate[]): PlanCandidateGroup[] {
   const groups = new Map<string, PlanCandidateGroup>()
@@ -61,20 +61,23 @@ function buildGoalGroups(
   for (const candidate of candidates) {
     const groupKey = candidate.goal_id ?? "__unassigned__"
     const focused = candidate.goal_id !== null && candidate.goal_id === focus?.goal_id
-    const key = focused ? FOCUS_GROUP_KEY : groupKey
-    const group = grouped.get(key) ?? {
-      key,
+    const group = grouped.get(groupKey) ?? {
+      key: groupKey,
       name: candidate.goal_name ?? "未关联目标",
+      position: candidate.goal_position,
       candidates: [],
       focused,
     }
     group.candidates.push(candidate)
-    grouped.set(key, group)
+    grouped.set(groupKey, group)
   }
 
   return [...grouped.values()].sort((left, right) => {
-    if (left.focused !== right.focused) return left.focused ? -1 : 1
-    return left.name.localeCompare(right.name, "zh-CN")
+    const leftPosition = left.position ?? Number.MAX_SAFE_INTEGER
+    const rightPosition = right.position ?? Number.MAX_SAFE_INTEGER
+    return leftPosition - rightPosition
+      || left.name.localeCompare(right.name, "zh-CN")
+      || left.key.localeCompare(right.key)
   })
 }
 
@@ -229,7 +232,11 @@ function GoalTree({
   return (
     <div className="space-y-5">
       {groups.map(group => (
-        <section aria-labelledby={`goal-group-${group.key}`} key={group.key}>
+        <section
+          aria-labelledby={`goal-group-${group.key}`}
+          className={cn(group.focused && "rounded-xl border border-orange-300/80 bg-orange-50/50 p-2 shadow-[0_0_0_3px_rgba(251,146,60,0.12)]")}
+          key={group.key}
+        >
           <div className="mb-2 flex items-center gap-2">
             <span
               aria-hidden="true"

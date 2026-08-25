@@ -257,7 +257,7 @@ describe("GoalCandidatePanel hierarchy", () => {
     }))
   })
 
-  it("labels each plan group, nests its actions, and puts the focus goal first", () => {
+  it("keeps manual goal order while emphasizing the focus goal", () => {
     const candidates: SchedulableCandidate[] = [
       candidate({
         id: "action-other",
@@ -266,6 +266,7 @@ describe("GoalCandidatePanel hierarchy", () => {
         plan_id: "plan/other",
         goal_id: "goal-other",
         goal_name: "其他目标",
+        goal_position: 0,
       }),
       candidate({
         id: "plan/other",
@@ -274,6 +275,7 @@ describe("GoalCandidatePanel hierarchy", () => {
         plan_id: "plan/other",
         goal_id: "goal-other",
         goal_name: "其他目标",
+        goal_position: 0,
       }),
       candidate({
         id: "action-focus",
@@ -282,6 +284,7 @@ describe("GoalCandidatePanel hierarchy", () => {
         plan_id: "plan/聚焦",
         goal_id: "goal-focus",
         goal_name: "聚焦目标",
+        goal_position: 1,
       }),
       candidate({
         id: "plan/聚焦",
@@ -290,6 +293,7 @@ describe("GoalCandidatePanel hierarchy", () => {
         plan_id: "plan/聚焦",
         goal_id: "goal-focus",
         goal_name: "聚焦目标",
+        goal_position: 1,
       }),
     ]
 
@@ -310,7 +314,13 @@ describe("GoalCandidatePanel hierarchy", () => {
     )
 
     const goalHeadings = screen.getAllByRole("heading", { level: 3 })
-    expect(goalHeadings.map(heading => heading.textContent)).toEqual(["聚焦目标", "其他目标"])
+    expect(goalHeadings.map(heading => heading.textContent)).toEqual(["其他目标", "聚焦目标"])
+
+    const focusGroup = screen.getByRole("region", { name: "聚焦目标" })
+    expect(focusGroup.className).toContain("border-orange-300/80")
+    expect(focusGroup.className).toContain("bg-orange-50/50")
+    expect(focusGroup.className).toContain("shadow-[0_0_0_3px_rgba(251,146,60,0.12)]")
+    expect(within(focusGroup).getByText("当前聚焦")).toBeTruthy()
 
     const focusPlan = screen.getByRole("region", { name: "聚焦计划" })
     const otherPlan = screen.getByRole("region", { name: "其他计划" })
@@ -330,6 +340,44 @@ describe("GoalCandidatePanel hierarchy", () => {
     const labelledHeadingId = focusPlan.getAttribute("aria-labelledby")
     expect(labelledHeadingId).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(document.getElementById(labelledHeadingId ?? "")?.textContent).toBe("聚焦计划")
+  })
+
+  it("sorts equally positioned goals by name and unpositioned goals last", () => {
+    const candidates: SchedulableCandidate[] = [
+      candidate({
+        id: "plan-z",
+        kind: "plan",
+        name: "最后计划",
+        plan_id: "plan-z",
+        goal_id: "goal-z",
+        goal_name: "最后",
+        goal_position: null,
+      }),
+      candidate({
+        id: "plan-b",
+        kind: "plan",
+        name: "乙计划",
+        plan_id: "plan-b",
+        goal_id: "goal-b",
+        goal_name: "乙",
+        goal_position: 0,
+      }),
+      candidate({
+        id: "plan-a",
+        kind: "plan",
+        name: "甲计划",
+        plan_id: "plan-a",
+        goal_id: "goal-a",
+        goal_name: "甲",
+        goal_position: 0,
+      }),
+    ]
+
+    render(
+      <GoalCandidatePanel candidates={candidates} error={null} focus={null} loading={false} onSchedule={vi.fn()} />,
+    )
+
+    expect(screen.getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["甲", "乙", "最后"])
   })
 
   it("uses the shared 2×2 quadrant board", () => {
