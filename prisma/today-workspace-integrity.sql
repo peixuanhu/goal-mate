@@ -53,6 +53,10 @@ BEGIN
 END
 $$;
 
+BEGIN;
+
+SELECT pg_advisory_xact_lock(48232::int);
+
 WITH ranked_goals AS (
     SELECT
         "goal_id",
@@ -69,6 +73,8 @@ SET "position" = ranked_goals.normalized_position
 FROM ranked_goals
 WHERE goal."goal_id" = ranked_goals."goal_id"
     AND goal."position" IS DISTINCT FROM ranked_goals.normalized_position;
+
+COMMIT;
 
 UPDATE "Plan"
 SET

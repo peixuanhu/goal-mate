@@ -44,4 +44,48 @@ describe("goal order database contract", () => {
     expect(integrity).toContain('UPDATE "Goal"')
     expect(integrity).toContain('IS DISTINCT FROM ranked_goals.normalized_position')
   })
+
+  it("serializes integrity normalization with the application goal-order lock", () => {
+    const integrity = read("prisma/today-workspace-integrity.sql")
+    const goalOrderSource = read("src/lib/goal-order.ts")
+    const lockNamespaceMatch = goalOrderSource.match(
+      /export const GOAL_ORDER_LOCK_NAMESPACE = (\d+)/,
+    )
+
+    expect(lockNamespaceMatch).not.toBeNull()
+    const lockNamespace = lockNamespaceMatch?.[1]
+    const preflightStart = integrity.indexOf("DO $$")
+    const preflightTerminator = "END\n$$;"
+    const preflightEnd = integrity.indexOf(preflightTerminator, preflightStart)
+    const transactionStart = integrity.indexOf(
+      "BEGIN;",
+      preflightEnd + preflightTerminator.length,
+    )
+    const lock = integrity.indexOf(
+      `SELECT pg_advisory_xact_lock(${lockNamespace}::int);`,
+      transactionStart,
+    )
+    const rankedGoals = integrity.indexOf("WITH ranked_goals AS", lock)
+    const goalUpdate = integrity.indexOf('UPDATE "Goal" AS goal', rankedGoals)
+    const goalUpdateTerminator = "IS DISTINCT FROM ranked_goals.normalized_position;"
+    const goalUpdateEnd = integrity.indexOf(
+      goalUpdateTerminator,
+      goalUpdate,
+    )
+    const transactionEnd = integrity.indexOf("COMMIT;", goalUpdateEnd)
+    const nextIntegrityWrite = integrity.indexOf('UPDATE "Plan"', transactionEnd)
+
+    expect(preflightStart).toBeGreaterThanOrEqual(0)
+    expect(preflightEnd).toBeGreaterThan(preflightStart)
+    expect(transactionStart).toBeGreaterThan(preflightEnd)
+    expect(lock).toBeGreaterThan(transactionStart)
+    expect(rankedGoals).toBeGreaterThan(lock)
+    expect(goalUpdate).toBeGreaterThan(rankedGoals)
+    expect(goalUpdateEnd).toBeGreaterThan(goalUpdate)
+    expect(transactionEnd).toBeGreaterThan(goalUpdateEnd)
+    expect(nextIntegrityWrite).toBeGreaterThan(transactionEnd)
+    expect(
+      integrity.slice(goalUpdateEnd + goalUpdateTerminator.length, transactionEnd).trim(),
+    ).toBe("")
+  })
 })
