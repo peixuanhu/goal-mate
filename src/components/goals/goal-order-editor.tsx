@@ -44,8 +44,8 @@ function isGoalOrderItem(value: unknown): value is GoalOrderItem {
   const item = value as Record<string, unknown>
   return Number.isInteger(item.id)
     && typeof item.goal_id === "string" && item.goal_id.length > 0
-    && typeof item.tag === "string" && item.tag.length > 0
-    && typeof item.name === "string" && item.name.length > 0
+    && typeof item.tag === "string"
+    && typeof item.name === "string"
     && (typeof item.description === "string" || item.description === null)
     && (item.position === null || (typeof item.position === "number" && Number.isInteger(item.position) && item.position >= 0))
 }

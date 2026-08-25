@@ -255,6 +255,18 @@ describe("GoalOrderEditor", () => {
     expect(screen.queryByRole("table")).toBeNull()
   })
 
+  it("accepts empty goal labels from the canonical list", async () => {
+    const unlabeledGoal = { ...goals[0], name: "", tag: "" }
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({ list: [unlabeledGoal], total: 1 }))))
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    const name = await screen.findByTestId("goal-order-name")
+    expect(name.textContent).toBe("")
+    expect(screen.getByRole("table")).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
   it("does not issue a second save while the first save is pending", async () => {
     let resolveSave: ((value: Response) => void) | undefined
     const save = new Promise<Response>(resolve => {
