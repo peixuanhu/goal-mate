@@ -229,6 +229,56 @@ describe("manual scheduling components", () => {
     expect(screen.getByText("01:00").className).toContain("-translate-y-1/2")
   })
 
+  it("auto-positions today's 24-hour timeline once without overriding later user scrolling", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    vi.setSystemTime(new Date("2026-08-23T02:15:00.000Z"))
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600)
+    const timelineProps = {
+      error: null,
+      loading: false,
+      onCompleteBlock: vi.fn(),
+      onEditBlock: vi.fn(),
+      preference: { ...preference, day_start_minutes: 0, day_end_minutes: 1440 },
+    }
+    const { rerender } = render(
+      <DndContext>
+        <DayTimeline {...timelineProps} blocks={[]} date="2026-08-23" />
+      </DndContext>,
+    )
+    const viewport = screen.getByTestId("today-timeline-scroll")
+
+    expect(viewport.scrollTop).toBe(1668)
+    viewport.scrollTop = 123
+    rerender(
+      <DndContext>
+        <DayTimeline {...timelineProps} blocks={[scheduledBlock()]} date="2026-08-23" />
+      </DndContext>,
+    )
+    expect(viewport.scrollTop).toBe(123)
+  })
+
+  it("keeps a non-today 24-hour timeline at the top", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    vi.setSystemTime(new Date("2026-08-23T02:15:00.000Z"))
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600)
+
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[]}
+          date="2026-08-22"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={{ ...preference, day_start_minutes: 0, day_end_minutes: 1440 }}
+        />
+      </DndContext>,
+    )
+
+    expect(screen.getByTestId("today-timeline-scroll").scrollTop).toBe(0)
+  })
+
   it("keeps a scheduled block above overlapping terminal history without terminal pointer interception", () => {
     const onEditBlock = vi.fn()
     const onCompleteBlock = vi.fn()

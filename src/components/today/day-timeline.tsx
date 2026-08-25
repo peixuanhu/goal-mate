@@ -2,7 +2,7 @@
 
 import { useDroppable } from "@dnd-kit/core"
 import { CheckCircle2, Clock3, Pencil } from "lucide-react"
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 
 import { formatUtcInTimeZone } from "@/lib/today/timezone"
 import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } from "@/lib/today/types"
@@ -73,6 +73,8 @@ function useCurrentLocalMinute(date: string, timezone: string): number | null {
 
 export function DayTimeline({ date, preference, blocks, loading, error, onEditBlock, onCompleteBlock }: DayTimelineProps) {
   const { isOver, setNodeRef } = useDroppable({ id: "today-timeline" })
+  const scrollViewportRef = useRef<HTMLDivElement>(null)
+  const autoPositionedDateRef = useRef<string | null>(null)
   const markers = useMemo(
     () => buildTimelineMarkers(preference.day_start_minutes, preference.day_end_minutes),
     [preference.day_end_minutes, preference.day_start_minutes],
@@ -83,6 +85,22 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
   const showCurrentTime = currentMinute !== null
     && currentMinute >= preference.day_start_minutes
     && currentMinute < preference.day_end_minutes
+
+  useEffect(() => {
+    if (!showCurrentTime || currentMinute === null || durationMinutes <= 0) return
+    if (autoPositionedDateRef.current === date) return
+
+    const viewport = scrollViewportRef.current
+    if (viewport === null) return
+
+    const currentOffset = ((currentMinute - preference.day_start_minutes) / durationMinutes) * timelineHeight
+    const maxScrollTop = Math.max(timelineHeight - viewport.clientHeight, 0)
+    viewport.scrollTop = Math.min(
+      Math.max(currentOffset - viewport.clientHeight / 2, 0),
+      maxScrollTop,
+    )
+    autoPositionedDateRef.current = date
+  }, [currentMinute, date, durationMinutes, preference.day_start_minutes, showCurrentTime, timelineHeight])
 
   return (
     <section aria-labelledby="today-timeline-heading" className="flex h-full min-h-[620px] flex-col overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
@@ -97,7 +115,11 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
         </span>
       </header>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto bg-stone-50/50">
+      <div
+        className="relative min-h-0 flex-1 overflow-y-auto bg-stone-50/50"
+        data-testid="today-timeline-scroll"
+        ref={scrollViewportRef}
+      >
         <div className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
           {markers.map((minutes, index) => {
             const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
