@@ -101,9 +101,14 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
         <div className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
           {markers.map((minutes, index) => {
             const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
+            const markerAlignment = index === 0
+              ? "translate-y-0"
+              : index === markers.length - 1
+                ? "-translate-y-full"
+                : "-translate-y-1/2"
             return (
               <div className="absolute inset-x-0 flex items-start" key={minutes} style={{ top: `${top}%` }}>
-                <time className="w-16 -translate-y-1/2 pr-3 text-right text-xs tabular-nums text-stone-400">{formatMinutes(minutes)}</time>
+                <time className={`w-16 ${markerAlignment} pr-3 text-right text-xs tabular-nums text-stone-400`}>{formatMinutes(minutes)}</time>
                 <div className={`flex-1 border-t ${index === 0 || index === markers.length - 1 ? "border-stone-200" : "border-dashed border-stone-200/80"}`} />
               </div>
             )

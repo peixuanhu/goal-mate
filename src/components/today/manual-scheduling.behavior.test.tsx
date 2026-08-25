@@ -209,6 +209,26 @@ describe("manual scheduling components", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it("keeps 00:00 and 24:00 labels inside the scrollable timeline", () => {
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={{ ...preference, day_start_minutes: 0, day_end_minutes: 1440 }}
+        />
+      </DndContext>,
+    )
+
+    expect(screen.getByText("00:00").className).toContain("translate-y-0")
+    expect(screen.getByText("24:00").className).toContain("-translate-y-full")
+    expect(screen.getByText("01:00").className).toContain("-translate-y-1/2")
+  })
+
   it("keeps a scheduled block above overlapping terminal history without terminal pointer interception", () => {
     const onEditBlock = vi.fn()
     const onCompleteBlock = vi.fn()
