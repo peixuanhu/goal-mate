@@ -67,6 +67,69 @@ afterEach(() => {
 })
 
 describe("GoalOrderEditor", () => {
+  it.each([
+    { label: "resolves", rejects: false },
+    { label: "rejects", rejects: true },
+  ])("reports saving until a delayed PUT $label", async ({ rejects }) => {
+    let settleSave: (() => void) | undefined
+    const save = new Promise<Response>((resolve, reject) => {
+      settleSave = () => {
+        if (!rejects) resolve(response({ list: [goals[1], goals[0]], total: 2 }))
+        else reject(new Error("network lost"))
+      }
+    })
+    const onSavingChange = vi.fn()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockImplementationOnce(() => save)
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} onSavingChange={onSavingChange} />)
+
+    await screen.findByText("目标甲")
+    act(() => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+    })
+
+    expect(onSavingChange.mock.calls).toEqual([[true]])
+
+    await act(async () => {
+      settleSave?.()
+      await save.catch(() => undefined)
+    })
+
+    await waitFor(() => expect(onSavingChange.mock.calls).toEqual([[true], [false]]))
+  })
+
+  it("clears a pending saving notification when unmounted", async () => {
+    let resolveSave: ((value: Response) => void) | undefined
+    const save = new Promise<Response>(resolve => {
+      resolveSave = resolve
+    })
+    const onSavingChange = vi.fn()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockImplementationOnce(() => save)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { unmount } = render(<GoalOrderEditor onDone={vi.fn()} onSavingChange={onSavingChange} />)
+
+    await screen.findByText("目标甲")
+    act(() => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+    })
+    expect(onSavingChange.mock.calls).toEqual([[true]])
+
+    unmount()
+    expect(onSavingChange.mock.calls).toEqual([[true], [false]])
+
+    await act(async () => {
+      resolveSave?.(response({ list: [goals[1], goals[0]], total: 2 }))
+      await save
+    })
+    expect(onSavingChange.mock.calls).toEqual([[true], [false]])
+  })
+
   it("loads all goals and saves an optimistic reordered list", async () => {
     let resolveSave: ((value: Response) => void) | undefined
     const save = new Promise<Response>(resolve => {

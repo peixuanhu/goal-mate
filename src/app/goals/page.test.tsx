@@ -34,7 +34,13 @@ vi.mock("@/components/goals/goal-plan-list", () => ({
 }))
 
 vi.mock("@/components/goals/goal-order-editor", () => ({
-  GoalOrderEditor: ({ onDone }: { onDone: () => void }) => {
+  GoalOrderEditor: ({
+    onDone,
+    onSavingChange,
+  }: {
+    onDone: () => void
+    onSavingChange?: (saving: boolean) => void
+  }) => {
     if (orderEditorState.unavailable) {
       return (
         <div>
@@ -48,6 +54,8 @@ vi.mock("@/components/goals/goal-order-editor", () => ({
       <div>
         <span>目标排序编辑器</span>
         <button type="button" onClick={onDone}>完成排序</button>
+        <button type="button" onClick={() => onSavingChange?.(true)}>模拟开始保存</button>
+        <button type="button" onClick={() => onSavingChange?.(false)}>模拟结束保存</button>
       </div>
     )
   },
@@ -147,6 +155,31 @@ describe("GoalsPage sorting mode", () => {
       expect(ordinaryGoalReadUrls(fetchMock)).toHaveLength(2)
     })
     expect(ordinaryGoalReadUrls(fetchMock).every(url => url.includes("pageNum=1"))).toBe(true)
+  })
+
+  it("disables the page-level exit only while an order save is pending", async () => {
+    setupFetch()
+    render(<GoalsPage />)
+
+    const sortingButton = await screen.findByRole("button", { name: "调整排序" })
+    await waitFor(() => expect((sortingButton as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.click(sortingButton)
+
+    const exitButton = screen.getByRole("button", { name: "退出排序" }) as HTMLButtonElement
+    expect(exitButton.disabled).toBe(false)
+    fireEvent.click(screen.getByRole("button", { name: "模拟开始保存" }))
+
+    const savingExitButton = screen.getByRole("button", { name: "正在保存排序…" }) as HTMLButtonElement
+    expect(savingExitButton.disabled).toBe(true)
+    fireEvent.click(savingExitButton)
+    expect(screen.getByText("目标排序编辑器")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "模拟结束保存" }))
+    const restoredExitButton = screen.getByRole("button", { name: "退出排序" }) as HTMLButtonElement
+    expect(restoredExitButton.disabled).toBe(false)
+    fireEvent.click(restoredExitButton)
+
+    await waitFor(() => expect(screen.getByText("目标清单与编辑")).toBeTruthy())
   })
 
   it("returns from the second page to page one with exactly one new ordinary list request", async () => {

@@ -133,7 +133,13 @@ function SortableGoalRow({ goal, index, disabled }: { goal: GoalOrderItem; index
   )
 }
 
-export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
+export function GoalOrderEditor({
+  onDone,
+  onSavingChange,
+}: {
+  onDone: () => void
+  onSavingChange?: (saving: boolean) => void
+}) {
   const [goals, setGoals] = React.useState<GoalOrderItem[]>([])
   const [loadState, setLoadState] = React.useState<LoadState>("loading")
   const [saving, setSaving] = React.useState(false)
@@ -142,6 +148,8 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
   const savingRef = React.useRef(false)
   const mountedRef = React.useRef(false)
   const loadControllerRef = React.useRef<AbortController | null>(null)
+  const onSavingChangeRef = React.useRef(onSavingChange)
+  onSavingChangeRef.current = onSavingChange
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -199,6 +207,10 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
     void loadGoals()
     return () => {
       mountedRef.current = false
+      if (savingRef.current) {
+        savingRef.current = false
+        onSavingChangeRef.current?.(false)
+      }
       loadControllerRef.current?.abort()
       loadControllerRef.current = null
     }
@@ -209,6 +221,7 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
     updateIfMounted(() => {
       setSaving(true)
       setError(null)
+      onSavingChangeRef.current?.(true)
     })
 
     try {
@@ -251,8 +264,12 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
         setRequiresReload(true)
       })
     } finally {
+      const wasSaving = savingRef.current
       savingRef.current = false
-      updateIfMounted(() => setSaving(false))
+      updateIfMounted(() => {
+        setSaving(false)
+        if (wasSaving) onSavingChangeRef.current?.(false)
+      })
     }
   }
 

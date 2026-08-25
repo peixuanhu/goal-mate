@@ -37,6 +37,7 @@ export default function GoalsPage() {
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(() => new Set())
   const [sortingMode, setSortingMode] = useState(false)
+  const [sortingSaving, setSortingSaving] = useState(false)
 
   const toggleGoalExpanded = (goalId: string) => {
     setExpandedGoalIds(current => {
@@ -71,7 +72,13 @@ export default function GoalsPage() {
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
 
+  function startSorting() {
+    setSortingSaving(false)
+    setSortingMode(true)
+  }
+
   function finishSorting() {
+    setSortingSaving(false)
     setSortingMode(false)
     if (pageNum === 1) void fetchGoals()
     else setPageNum(1)
@@ -126,15 +133,21 @@ export default function GoalsPage() {
                 {sortingMode ? '调整目标顺序' : '目标清单与编辑'}
               </CardTitle>
               {sortingMode ? (
-                <Button type="button" variant="outline" onClick={finishSorting}>
-                  退出排序
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sortingSaving}
+                  aria-busy={sortingSaving}
+                  onClick={finishSorting}
+                >
+                  {sortingSaving ? '正在保存排序…' : '退出排序'}
                 </Button>
               ) : (
                 <Button
                   type="button"
                   variant="outline"
                   disabled={loading}
-                  onClick={() => setSortingMode(true)}
+                  onClick={startSorting}
                 >
                   <ArrowUpDown className="h-4 w-4" />
                   调整排序
@@ -143,7 +156,7 @@ export default function GoalsPage() {
             </CardHeader>
             <CardContent className="space-y-6 px-4 sm:px-6">
               {sortingMode ? (
-                <GoalOrderEditor onDone={finishSorting} />
+                <GoalOrderEditor onDone={finishSorting} onSavingChange={setSortingSaving} />
               ) : (
                 <>
               <form onSubmit={handleSubmit} className="space-y-6">
