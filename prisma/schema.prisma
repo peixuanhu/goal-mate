@@ -21,7 +21,10 @@ model Goal {
   tag          String
   name         String
   description  String?
+  position     Int?
   plans        Plan[]
+
+  @@index([position])
 }
 
 model Plan {

@@ -2,6 +2,23 @@
 -- Formal source of truth: prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql
 -- Extended by: prisma/migrations/20260825120000_add_plan_time_budget/migration.sql
 
+WITH ranked_goals AS (
+    SELECT
+        "goal_id",
+        ROW_NUMBER() OVER (
+            ORDER BY
+                "position" ASC NULLS LAST,
+                "gmt_create" DESC,
+                "goal_id" ASC
+        ) - 1 AS normalized_position
+    FROM "Goal"
+)
+UPDATE "Goal" AS goal
+SET "position" = ranked_goals.normalized_position
+FROM ranked_goals
+WHERE goal."goal_id" = ranked_goals."goal_id"
+    AND goal."position" IS DISTINCT FROM ranked_goals.normalized_position;
+
 DO $$
 DECLARE
     duplicate_plan_ids text;
