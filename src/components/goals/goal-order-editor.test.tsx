@@ -159,4 +159,124 @@ describe("GoalOrderEditor", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  it("requires a reload after a 409 rollback and adopts the canonical list before allowing another save", async () => {
+    const canonicalGoals = [
+      { ...goals[0], name: "目标甲（已更新）", position: 1 },
+      { ...goals[1], name: "目标乙（已更新）", position: 0 },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockResolvedValueOnce(response({ error: "目标集合已变化，请刷新后重试" }, 409))
+      .mockResolvedValueOnce(response({ list: canonicalGoals, total: 2 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    await screen.findByText("目标甲")
+    await act(async () => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+      await Promise.resolve()
+    })
+
+    expect(orderedNames()).toEqual(["目标甲", "目标乙"])
+    expect(screen.getByRole("button", { name: "重新加载目标" })).toBeTruthy()
+    act(() => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "重新加载目标" }))
+
+    expect(await screen.findByText("目标甲（已更新）")).toBeTruthy()
+    expect(orderedNames()).toEqual(["目标甲（已更新）", "目标乙（已更新）"])
+    expect((screen.getByRole("button", { name: "完成排序" }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it("shows a retry-only failure state for a malformed initial list", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({ list: [{ ...goals[0], id: "invalid" }], total: 1 }))))
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("目标加载数据格式无效，请重试")
+    expect(screen.queryByRole("table")).toBeNull()
+    expect(screen.getByRole("button", { name: "重新加载目标" })).toBeTruthy()
+    expect((screen.getByRole("button", { name: "完成排序" }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("keeps the optimistic order and requires reload after a malformed successful save response", async () => {
+    const canonicalGoals = [
+      { ...goals[1], name: "目标乙（服务端）", position: 0 },
+      { ...goals[0], name: "目标甲（服务端）", position: 1 },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockResolvedValueOnce(response({ list: [{ ...goals[1], position: null }], total: 1 }))
+      .mockResolvedValueOnce(response({ list: canonicalGoals, total: 2 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    await screen.findByText("目标甲")
+    await act(async () => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+      await Promise.resolve()
+    })
+
+    expect(orderedNames()).toEqual(["目标乙", "目标甲"])
+    expect((await screen.findByRole("alert")).textContent).toContain("排序结果确认失败，请重新加载目标")
+    expect(screen.getByRole("button", { name: "重新加载目标" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "重新加载目标" }))
+    expect(await screen.findByText("目标乙（服务端）")).toBeTruthy()
+    expect(orderedNames()).toEqual(["目标乙（服务端）", "目标甲（服务端）"])
+  })
+
+  it("retries a failed load and renders the successful canonical list", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ error: "目标加载失败，请重试" }, 500))
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("目标加载失败，请重试")
+    fireEvent.click(screen.getByRole("button", { name: "重新加载目标" }))
+    expect(await screen.findByText("目标甲")).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("renders a dedicated empty state for a valid empty goal list", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({ list: [], total: 0 }))))
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    expect(await screen.findByText("暂无目标可排序")).toBeTruthy()
+    expect(screen.queryByRole("table")).toBeNull()
+  })
+
+  it("does not issue a second save while the first save is pending", async () => {
+    let resolveSave: ((value: Response) => void) | undefined
+    const save = new Promise<Response>(resolve => {
+      resolveSave = resolve
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockImplementationOnce(() => save)
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    await screen.findByText("目标甲")
+    act(() => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+      dndState.onDragEnd?.({ active: { id: "goal_a" }, over: { id: "goal_b" } })
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      resolveSave?.(response({ list: [goals[1], goals[0]], total: 2 }))
+      await Promise.resolve()
+    })
+  })
 })
