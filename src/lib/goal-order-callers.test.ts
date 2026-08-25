@@ -12,7 +12,9 @@ describe("goal order mutation callers", () => {
   })
 
   it("serializes deletion and prevents position updates through the goal route", () => {
-    expect(goalRoute).toMatch(/const \{ goal_id, position: _position, \.\.\.rest \} = data/)
+    expect(goalRoute).toMatch(/const \{ goal_id, \.\.\.rest \} = data/)
+    expect(goalRoute).toMatch(/delete rest\.position/)
+    expect(goalRoute).not.toMatch(/position: _position/)
     expect(goalRoute).toMatch(/prisma\.\$transaction\(async\s*\(?tx\)?\s*=>\s*\{[\s\S]*?lockGoalOrder\(tx\)[\s\S]*?tx\.goal\.delete/)
   })
 })

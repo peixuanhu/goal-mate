@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
 // PUT: UpdateGoal
 export async function PUT(req: NextRequest) {
   const data = await req.json()
-  const { goal_id, position: _position, ...rest } = data
+  const { goal_id, ...rest } = data
+  delete rest.position
   const goal = await prisma.goal.update({
     where: { goal_id },
     data: rest
