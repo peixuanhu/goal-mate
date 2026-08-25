@@ -68,8 +68,8 @@ describe("/api/planning-preference", () => {
     expect(await json(response)).toEqual({
       preference_id: "default",
       timezone: expect.any(String),
-      day_start_minutes: 480,
-      day_end_minutes: 1320,
+      day_start_minutes: 0,
+      day_end_minutes: 1440,
       high_energy_start_minutes: null,
       high_energy_end_minutes: null,
       buffer_minutes: 15,
