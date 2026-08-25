@@ -46,6 +46,7 @@ type GoalSummaryRow = {
 type CandidateGoalRow = {
   goal_id: string
   name: string
+  position: number | null
 }
 
 type ActionCandidateRow = {
@@ -77,7 +78,7 @@ type ScheduleBlockRow = {
     plan_id: string
     name: string
     energy_level: string | null
-    goal: CandidateGoalRow | null
+    goal: { goal_id: string; name: string } | null
   }
   action: {
     action_id: string
@@ -149,7 +150,7 @@ export interface TodayQueryDb {
         ]
       }
       include: {
-        goal: { select: { goal_id: true; name: true } }
+        goal: { select: { goal_id: true; name: true; position: true } }
         tags: true
         progressRecords: {
           select: { gmt_create: true; counts_toward_recurrence: true }
@@ -267,6 +268,7 @@ function actionCandidate(
     plan_id: plan.plan_id,
     goal_id: plan.goal?.goal_id ?? plan.goal_id,
     goal_name: plan.goal?.name ?? null,
+    goal_position: plan.goal?.position ?? null,
     name: action.name,
     due_date: action.due_date === null ? null : normalizeDateInput(action.due_date),
     estimated_minutes: actionBudget.estimated_minutes,
@@ -301,6 +303,7 @@ function planCandidate(
     plan_id: plan.plan_id,
     goal_id: plan.goal?.goal_id ?? plan.goal_id,
     goal_name: plan.goal?.name ?? null,
+    goal_position: plan.goal?.position ?? null,
     name: plan.name,
     due_date: plan.due_date === null ? null : normalizeDateInput(plan.due_date),
     estimated_minutes: estimatedMinutes,
@@ -408,7 +411,7 @@ export async function loadTodayView(db: TodayQueryDb, dateKey: string): Promise<
         ],
       },
       include: {
-        goal: { select: { goal_id: true, name: true } },
+        goal: { select: { goal_id: true, name: true, position: true } },
         tags: true,
         progressRecords: {
           select: { gmt_create: true, counts_toward_recurrence: true },

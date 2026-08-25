@@ -15,6 +15,7 @@ const candidate: SchedulableCandidate = {
   action_id: null,
   goal_id: "goal_product",
   goal_name: "发布目标",
+  goal_position: 0,
   name: "上线产品",
   due_date: null,
   estimated_minutes: 300,

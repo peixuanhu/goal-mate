@@ -93,6 +93,7 @@ function todayView(date: string, candidateName: string, blocks: ScheduleBlockVie
       action_id: null,
       goal_id: null,
       goal_name: null,
+      goal_position: null,
       name: candidateName,
       due_date: null,
       estimated_minutes: 30,
@@ -328,6 +329,7 @@ describe("TodayWorkspace behavior", () => {
 
   it.each<[string, (candidate: Record<string, unknown>) => void]>([
     ["missing budget field", candidate => { delete candidate.invested_minutes }],
+    ["goal position type", candidate => { candidate.goal_position = "first" }],
     ["default duration type", candidate => { candidate.effective_default_block_minutes = "60" }],
     ["non-positive default duration", candidate => { candidate.effective_default_block_minutes = 0 }],
     ["off-slot default duration", candidate => { candidate.effective_default_block_minutes = 50 }],

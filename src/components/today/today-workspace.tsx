@@ -68,6 +68,7 @@ function isCandidate(value: unknown): value is SchedulableCandidate {
     && isNullableString(value.action_id)
     && isNullableString(value.goal_id)
     && isNullableString(value.goal_name)
+    && isNullableNonNegativeInteger(value.goal_position)
     && typeof value.name === "string"
     && isNullableString(value.due_date)
     && (value.estimated_minutes === null || typeof value.estimated_minutes === "number")

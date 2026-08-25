@@ -42,6 +42,7 @@ export type SchedulableCandidate = {
   action_id: string | null
   goal_id: string | null
   goal_name: string | null
+  goal_position: number | null
   name: string
   due_date: string | null
   estimated_minutes: number | null

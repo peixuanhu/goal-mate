@@ -18,6 +18,7 @@ const preferenceRow = {
 const launchGoal = {
   goal_id: "goal_product",
   name: "发布 Goal Mate v1",
+  position: 3,
   tag: "product",
 }
 
@@ -164,7 +165,7 @@ describe("loadTodayView", () => {
         ],
       },
       include: {
-        goal: { select: { goal_id: true, name: true } },
+        goal: { select: { goal_id: true, name: true, position: true } },
         tags: true,
         progressRecords: {
           select: { gmt_create: true, counts_toward_recurrence: true },
@@ -352,6 +353,7 @@ describe("loadTodayView", () => {
       plan_id: "plan_launch",
       goal_id: "goal_product",
       goal_name: "发布 Goal Mate v1",
+      goal_position: 3,
       name: "写发布说明",
       due_date: "2026-09-01",
       estimated_minutes: 60,
@@ -382,6 +384,7 @@ describe("loadTodayView", () => {
       plan_id: "plan_launch",
       goal_id: "goal_product",
       goal_name: "发布 Goal Mate v1",
+      goal_position: 3,
       name: "准备发布",
       due_date: "2026-09-03",
       estimated_minutes: 120,

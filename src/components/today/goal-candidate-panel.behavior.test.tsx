@@ -32,6 +32,7 @@ function candidate(
     action_id: overrides.kind === "action" ? overrides.id : null,
     goal_id: null,
     goal_name: null,
+    goal_position: null,
     due_date: null,
     estimated_minutes: 30,
     effective_default_block_minutes: 30,

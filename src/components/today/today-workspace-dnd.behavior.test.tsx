@@ -48,6 +48,7 @@ const candidate: SchedulableCandidate = {
   action_id: null,
   goal_id: "goal_drop",
   goal_name: "拖放目标",
+  goal_position: 0,
   name: "拖放计划",
   due_date: null,
   estimated_minutes: 60,
