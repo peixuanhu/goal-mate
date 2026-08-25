@@ -88,6 +88,16 @@ describe("/api/goal/order", () => {
     expect(await response.json()).toEqual({ list: finalGoals, total: 2 })
   })
 
+  it("accepts an empty ordered collection when the database collection is empty", async () => {
+    transactionMock.goal.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+
+    const response = await PUT(request(JSON.stringify({ ordered_goal_ids: [] })))
+
+    expect(response.status).toBe(200)
+    expect(transactionMock.goal.updateMany).not.toHaveBeenCalled()
+    expect(await response.json()).toEqual({ list: [], total: 0 })
+  })
+
   it.each([
     ["a null body", null, "请求体必须是有效 JSON 对象"],
     ["a non-array ordered id field", { ordered_goal_ids: "goal_a" }, "ordered_goal_ids must be a string array"],
@@ -134,5 +144,12 @@ describe("/api/goal/order", () => {
     expect(response.status).toBe(409)
     expect(await response.json()).toEqual({ error: "目标集合已变化，请刷新后重试" })
     expect(transactionMock.goal.updateMany).toHaveBeenCalledTimes(2)
+  })
+
+  it("rethrows unexpected transaction errors", async () => {
+    const failure = new Error("database unavailable")
+    prismaMock.$transaction.mockRejectedValueOnce(failure)
+
+    await expect(PUT(request(JSON.stringify({ ordered_goal_ids: [] })))).rejects.toBe(failure)
   })
 })

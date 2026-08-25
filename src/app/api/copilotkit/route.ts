@@ -13,6 +13,7 @@ import {
   getGoalRouteLockKey,
   getNextGoalPosition,
 } from "@/lib/plan-goal-utils";
+import { createGoalAtEnd } from "@/lib/goal-order";
 import { normalizePlanTiming } from "@/lib/plan-input";
 
 const prisma = new PrismaClient();
@@ -752,13 +753,10 @@ const runtime = new CopilotRuntime({
         console.log("➕ createGoal called:", args);
         try {
           const { name, tag, description } = args;
-          const goal = await prisma.goal.create({
-            data: {
-              goal_id: `goal_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
-              name,
-              tag,
-              description
-            }
+          const goal = await createGoalAtEnd(prisma, {
+            name,
+            tag,
+            ...(description === undefined ? {} : { description }),
           });
           console.log("✅ Goal created:", goal);
           return { success: true, data: goal };

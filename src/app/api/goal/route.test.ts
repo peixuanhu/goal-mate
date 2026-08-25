@@ -20,6 +20,7 @@ const { events, prismaMock, transactionMock } = vi.hoisted(() => ({
     goal: {
       aggregate: vi.fn(),
       create: vi.fn(),
+      delete: vi.fn(),
     },
   },
 }))
@@ -28,7 +29,7 @@ vi.mock("@prisma/client", () => ({
   PrismaClient: vi.fn(() => prismaMock),
 }))
 
-import { GET, POST } from "./route"
+import { DELETE, GET, POST, PUT } from "./route"
 
 function request(url: string, init?: ConstructorParameters<typeof NextRequest>[1]) {
   return new NextRequest(url, init)
@@ -56,6 +57,10 @@ describe("/api/goal", () => {
     transactionMock.goal.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
       events.push("create")
       return data
+    })
+    transactionMock.goal.delete.mockImplementation(async ({ where }: { where: { goal_id: string } }) => {
+      events.push("delete")
+      return where
     })
   })
 
@@ -137,5 +142,37 @@ describe("/api/goal", () => {
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual(expect.objectContaining({ error: expect.any(String) }))
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("does not forward client supplied positions when updating a goal", async () => {
+    prismaMock.goal.update.mockResolvedValue({ goal_id: "goal_a" })
+
+    const response = await PUT(request("http://localhost/api/goal", {
+      method: "PUT",
+      body: JSON.stringify({
+        goal_id: "goal_a",
+        name: "更新后目标",
+        tag: "study",
+        description: "更新后说明",
+        position: -99,
+      }),
+    }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.goal.update).toHaveBeenCalledWith({
+      where: { goal_id: "goal_a" },
+      data: { name: "更新后目标", tag: "study", description: "更新后说明" },
+    })
+  })
+
+  it("locks the goal collection before deleting a goal", async () => {
+    const response = await DELETE(request("http://localhost/api/goal?goal_id=goal_a"))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.goal.delete).not.toHaveBeenCalled()
+    expect(transactionMock.goal.delete).toHaveBeenCalledWith({ where: { goal_id: "goal_a" } })
+    expect(events).toEqual(["lock", "delete"])
+    expect(await response.json()).toEqual({ success: true })
   })
 })

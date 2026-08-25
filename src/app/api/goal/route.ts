@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient, type Prisma } from '@prisma/client'
-import { randomUUID } from 'crypto'
-import { getNextGoalPosition, lockGoalOrder } from '@/lib/goal-order'
+import { createGoalAtEnd, lockGoalOrder } from '@/lib/goal-order'
 
 const prisma = new PrismaClient()
 
@@ -54,19 +53,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'description 必须是字符串或 null' }, { status: 400 })
   }
 
-  const goal = await prisma.$transaction(async (tx) => {
-    await lockGoalOrder(tx)
-    const maximum = await tx.goal.aggregate({ _max: { position: true } })
-    const goalData: Prisma.GoalCreateInput = {
-      name,
-      tag,
-      ...(description === undefined ? {} : { description }),
-      goal_id: `goal_${randomUUID().replace(/-/g, '').substring(0, 10)}`,
-      position: getNextGoalPosition(maximum._max.position),
-    }
-    return tx.goal.create({
-      data: goalData,
-    })
+  const goal = await createGoalAtEnd(prisma, {
+    name,
+    tag,
+    ...(description === undefined ? {} : { description }),
   })
   return NextResponse.json(goal)
 }
@@ -74,7 +64,7 @@ export async function POST(req: NextRequest) {
 // PUT: UpdateGoal
 export async function PUT(req: NextRequest) {
   const data = await req.json()
-  const { goal_id, ...rest } = data
+  const { goal_id, position: _position, ...rest } = data
   const goal = await prisma.goal.update({
     where: { goal_id },
     data: rest
@@ -87,6 +77,9 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const goal_id = searchParams.get('goal_id') || undefined
   if (!goal_id) return NextResponse.json({ success: false, message: 'goal_id required' }, { status: 400 })
-  await prisma.goal.delete({ where: { goal_id } })
+  await prisma.$transaction(async tx => {
+    await lockGoalOrder(tx)
+    await tx.goal.delete({ where: { goal_id } })
+  })
   return NextResponse.json({ success: true })
 }
