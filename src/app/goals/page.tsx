@@ -13,7 +13,8 @@ import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { GoalPlanList } from "@/components/goals/goal-plan-list"
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { GoalOrderEditor } from "@/components/goals/goal-order-editor"
+import { ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Goal {
   id: number
@@ -35,6 +36,7 @@ export default function GoalsPage() {
   const [loading, setLoading] = useState(false)
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [expandedGoalIds, setExpandedGoalIds] = useState<Set<string>>(() => new Set())
+  const [sortingMode, setSortingMode] = useState(false)
 
   const toggleGoalExpanded = (goalId: string) => {
     setExpandedGoalIds(current => {
@@ -68,6 +70,12 @@ export default function GoalsPage() {
   }, [])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
+
+  function finishSorting() {
+    setSortingMode(false)
+    if (pageNum === 1) void fetchGoals()
+    else setPageNum(1)
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -113,10 +121,27 @@ export default function GoalsPage() {
             title="目标管理"
           />
           <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">目标清单与编辑</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between gap-4 px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">
+                {sortingMode ? '调整目标顺序' : '目标清单与编辑'}
+              </CardTitle>
+              {!sortingMode ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                  onClick={() => setSortingMode(true)}
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  调整排序
+                </Button>
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-6 px-4 sm:px-6">
+              {sortingMode ? (
+                <GoalOrderEditor onDone={finishSorting} />
+              ) : (
+                <>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 表单字段 - 响应式布局 */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -332,6 +357,8 @@ export default function GoalsPage() {
                   </Button>
                 </div>
               </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </AppPage>

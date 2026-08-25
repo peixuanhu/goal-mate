@@ -9,6 +9,14 @@ function readProjectFile(relativePath: string) {
 }
 
 describe("table action layout regression", () => {
+  it("keeps goal sorting isolated from the normal management table", () => {
+    const source = readProjectFile("src/app/goals/page.tsx")
+
+    expect(source).toContain("<GoalOrderEditor")
+    expect(source).toContain("sortingMode ?")
+    expect(source).toContain("调整排序")
+  })
+
   it("uses the shared application shell without redundant home buttons on every primary page", () => {
     for (const page of ["goals", "plans", "progress", "reports"]) {
       const source = readProjectFile(`src/app/${page}/page.tsx`)
