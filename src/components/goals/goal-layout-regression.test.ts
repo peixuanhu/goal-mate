@@ -15,6 +15,7 @@ describe("table action layout regression", () => {
     expect(source).toContain("<GoalOrderEditor")
     expect(source).toContain("sortingMode ?")
     expect(source).toContain("调整排序")
+    expect(source).toContain("flex-wrap")
   })
 
   it("uses the shared application shell without redundant home buttons on every primary page", () => {

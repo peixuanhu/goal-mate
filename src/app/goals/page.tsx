@@ -121,11 +121,15 @@ export default function GoalsPage() {
             title="目标管理"
           />
           <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between gap-4 px-4 sm:px-6">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 px-4 sm:px-6">
               <CardTitle className="text-lg sm:text-xl">
                 {sortingMode ? '调整目标顺序' : '目标清单与编辑'}
               </CardTitle>
-              {!sortingMode ? (
+              {sortingMode ? (
+                <Button type="button" variant="outline" onClick={finishSorting}>
+                  退出排序
+                </Button>
+              ) : (
                 <Button
                   type="button"
                   variant="outline"
@@ -135,7 +139,7 @@ export default function GoalsPage() {
                   <ArrowUpDown className="h-4 w-4" />
                   调整排序
                 </Button>
-              ) : null}
+              )}
             </CardHeader>
             <CardContent className="space-y-6 px-4 sm:px-6">
               {sortingMode ? (
