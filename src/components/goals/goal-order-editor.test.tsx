@@ -146,6 +146,14 @@ describe("GoalOrderEditor", () => {
     expect(screen.queryAllByTestId("goal-order-name")).toHaveLength(0)
   })
 
+  it("uses the load fallback when a non-2xx error payload is malformed", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({ error: { detail: "invalid" } }, 500))))
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    expect((await screen.findByRole("alert")).textContent).toContain("目标加载失败")
+  })
+
   it("does not save when a goal is dropped onto itself", async () => {
     const fetchMock = vi.fn(() => Promise.resolve(response({ list: goals, total: 2 })))
     vi.stubGlobal("fetch", fetchMock)
@@ -261,9 +269,43 @@ describe("GoalOrderEditor", () => {
 
     render(<GoalOrderEditor onDone={vi.fn()} />)
 
-    const name = await screen.findByTestId("goal-order-name")
-    expect(name.textContent).toBe("")
+    expect((await screen.findByTestId("goal-order-name")).textContent).toBe("未命名目标")
+    expect(screen.getByText("未分类")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "拖拽排序 第 1 项 未命名目标" })).toBeTruthy()
     expect(screen.getByRole("table")).toBeTruthy()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("keeps the optimistic order and requires reload when a save transport fails", async () => {
+    const canonicalGoals = [
+      { ...goals[1], name: "目标乙（已确认）", position: 0 },
+      { ...goals[0], name: "目标甲（已确认）", position: 1 },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ list: goals, total: 2 }))
+      .mockRejectedValueOnce(new Error("network lost"))
+      .mockResolvedValueOnce(response({ list: canonicalGoals, total: 2 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalOrderEditor onDone={vi.fn()} />)
+
+    await screen.findByText("目标甲")
+    await act(async () => {
+      dndState.onDragEnd?.({ active: { id: "goal_b" }, over: { id: "goal_a" } })
+      await Promise.resolve()
+    })
+
+    expect(orderedNames()).toEqual(["目标乙", "目标甲"])
+    expect((await screen.findByRole("alert")).textContent).toContain("排序结果确认失败，请重新加载目标")
+    expect(screen.getByRole("button", { name: "重新加载目标" })).toBeTruthy()
+    act(() => {
+      dndState.onDragEnd?.({ active: { id: "goal_a" }, over: { id: "goal_b" } })
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "重新加载目标" }))
+    expect(await screen.findByText("目标乙（已确认）")).toBeTruthy()
+    expect(orderedNames()).toEqual(["目标乙（已确认）", "目标甲（已确认）"])
     expect(screen.queryByRole("alert")).toBeNull()
   })
 

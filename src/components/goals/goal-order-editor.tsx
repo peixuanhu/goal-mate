@@ -70,14 +70,24 @@ function parseGoalList(payload: unknown, expectedIds?: string[]): GoalOrderItem[
 
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
-    const data = await response.json() as { error?: string; message?: string }
-    return data.error ?? data.message ?? fallback
+    const data: unknown = await response.json()
+    if (!data || typeof data !== "object" || Array.isArray(data)) return fallback
+
+    const { error, message } = data as { error?: unknown; message?: unknown }
+    if (typeof error === "string" && error.trim().length > 0) return error
+    if (typeof message === "string" && message.trim().length > 0) return message
+    return fallback
   } catch {
     return fallback
   }
 }
 
 function SortableGoalRow({ goal, index, disabled }: { goal: GoalOrderItem; index: number; disabled: boolean }) {
+  const displayName = goal.name || "未命名目标"
+  const displayTag = goal.tag || "未分类"
+  const dragLabel = goal.name
+    ? `拖拽排序 ${goal.name}`
+    : `拖拽排序 第 ${index + 1} 项 未命名目标`
   const {
     attributes,
     listeners,
@@ -101,19 +111,19 @@ function SortableGoalRow({ goal, index, disabled }: { goal: GoalOrderItem; index
             ref={setActivatorNodeRef}
             type="button"
             disabled={disabled}
-            aria-label={`拖拽排序 ${goal.name}`}
+            aria-label={dragLabel}
             className="touch-none cursor-grab rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
             {...attributes}
             {...listeners}
           >
             <GripVertical className="size-4" />
           </button>
-          <span data-testid="goal-order-name" className="min-w-0 truncate font-medium">{goal.name}</span>
+          <span data-testid="goal-order-name" className="min-w-0 truncate font-medium">{displayName}</span>
         </div>
       </TableCell>
       <TableCell>
         <span className="inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-200">
-          {goal.tag}
+          {displayTag}
         </span>
       </TableCell>
       <TableCell className="max-w-[28rem] truncate text-muted-foreground" title={goal.description ?? undefined}>
@@ -237,8 +247,8 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
       })
     } catch (saveError) {
       updateIfMounted(() => {
-        setGoals(previousGoals)
-        setError(saveError instanceof Error ? saveError.message : "排序保存失败")
+        setError(SAVE_CONFIRMATION_ERROR)
+        setRequiresReload(true)
       })
     } finally {
       savingRef.current = false
@@ -269,7 +279,7 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
       </div>
 
       {saving ? <p role="status" className="text-sm text-muted-foreground">正在保存排序…</p> : null}
-      {error ? <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+      {error ? <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</div> : null}
 
       {loadState === "error" ? (
         <Button type="button" variant="outline" onClick={() => void loadGoals()}>重新加载目标</Button>
