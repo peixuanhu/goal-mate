@@ -245,7 +245,7 @@ export function GoalOrderEditor({ onDone }: { onDone: () => void }) {
         setGoals(savedGoals)
         setError(null)
       })
-    } catch (saveError) {
+    } catch {
       updateIfMounted(() => {
         setError(SAVE_CONFIRMATION_ERROR)
         setRequiresReload(true)
