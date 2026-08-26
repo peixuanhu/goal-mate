@@ -152,7 +152,7 @@ describe("POST /api/schedule-block/complete", () => {
     ["NOT_FOUND", 404],
     ["STALE_VERSION", 409],
     ["SCHEDULE_CONFLICT", 409],
-    ["ACTION_ALREADY_SCHEDULED", 409],
+    ["SCHEDULE_BUDGET_EXCEEDED", 409],
   ] as const)("maps %s domain failures to %i", async (code, status) => {
     mocks.completeScheduleBlock.mockRejectedValue(new ScheduleServiceError(code, "完成失败", ["block_copy"]))
 
