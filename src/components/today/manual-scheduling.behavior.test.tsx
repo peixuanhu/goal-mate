@@ -183,7 +183,8 @@ describe("manual scheduling components", () => {
       </DndContext>,
     )
 
-    expect(screen.getByText("当前时间")).toBeTruthy()
+    const currentTimeBadge = screen.getByText("当前时间")
+    expect(currentTimeBadge.className).toContain("right-4")
     expect(screen.getByText("写发布说明")).toBeTruthy()
     expect(screen.getByText("已完成")).toBeTruthy()
     expect(screen.getByText("已跳过")).toBeTruthy()
