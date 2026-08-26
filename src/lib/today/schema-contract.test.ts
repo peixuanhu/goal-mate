@@ -108,6 +108,8 @@ const extractDatabaseOnlyInvariants = (sql: string): DatabaseOnlyInvariant[] => 
     match = partialUniqueIndexPattern.exec(uncommentedSql)
   ) {
     if (!/\bWHERE\b/i.test(match[0])) continue
+    const laterSql = uncommentedSql.slice(partialUniqueIndexPattern.lastIndex)
+    if (laterSql.includes(`DROP INDEX IF EXISTS "${match[1]}"`)) continue
 
     invariants.push({
       kind: "partial_unique_index",
@@ -223,7 +225,10 @@ const migration = readRootFile(
 const timeBudgetMigration = readRootFile(
   "prisma/migrations/20260825120000_add_plan_time_budget/migration.sql",
 )
-const formalIntegritySql = `${migration}\n${timeBudgetMigration}`
+const multipleBlocksMigration = readRootFile(
+  "prisma/migrations/20260826140000_allow_multiple_schedule_blocks/migration.sql",
+)
+const formalIntegritySql = `${migration}\n${timeBudgetMigration}\n${multipleBlocksMigration}`
 const integrityOverlay = readRootFile("prisma/today-workspace-integrity.sql")
 const packageJson = JSON.parse(readRootFile("package.json")) as {
   scripts: Record<string, string>
@@ -358,18 +363,10 @@ describe("today workspace Prisma contract", () => {
     }
 
     expect(normalizedMigration).toContain(
-      normalizeSql(`
-        CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_per_action_idx"
-        ON "ScheduleBlock"("action_id")
-        WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
-      `),
+      normalizeSql('DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_per_action_idx";'),
     )
     expect(normalizedMigration).toContain(
-      normalizeSql(`
-        CREATE UNIQUE INDEX "ScheduleBlock_one_scheduled_direct_per_plan_idx"
-        ON "ScheduleBlock"("plan_id")
-        WHERE "action_id" IS NULL AND "status" = 'scheduled';
-      `),
+      normalizeSql('DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx";'),
     )
     expect(normalizedMigration).toContain(
       normalizeSql(`
@@ -547,18 +544,10 @@ describe("today workspace Prisma contract", () => {
     }
 
     expect(normalizedOverlay).toContain(
-      normalizeSql(`
-        CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_per_action_idx"
-        ON "ScheduleBlock"("action_id")
-        WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
-      `),
+      normalizeSql('DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_per_action_idx";'),
     )
     expect(normalizedOverlay).toContain(
-      normalizeSql(`
-        CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx"
-        ON "ScheduleBlock"("plan_id")
-        WHERE "action_id" IS NULL AND "status" = 'scheduled';
-      `),
+      normalizeSql('DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx";'),
     )
     expect(normalizedOverlay).toContain(
       normalizeSql(`
@@ -619,8 +608,8 @@ describe("today workspace Prisma contract", () => {
     )
     expect(integrityOverlay.match(/ADD\s+CONSTRAINT/gi)).toHaveLength(databaseOnlyChecks.length)
     expect(integrityOverlay).not.toMatch(/CREATE\s+TABLE|ADD\s+COLUMN|FOREIGN\s+KEY/i)
-    expect(integrityOverlay.match(/CREATE\s+UNIQUE\s+INDEX/gi)).toHaveLength(2)
-    expect(integrityOverlay.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)).toHaveLength(2)
+    expect(integrityOverlay.match(/DROP\s+INDEX\s+IF\s+EXISTS/gi)).toHaveLength(2)
+    expect(integrityOverlay).not.toMatch(/CREATE\s+(?:UNIQUE\s+)?INDEX/gi)
   })
 
   it("keeps the complete formal and deployed database-only invariant sets identical", () => {
