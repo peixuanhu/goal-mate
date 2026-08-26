@@ -9,6 +9,9 @@ import {
   localTimeRangeToUtc,
   minuteFromTimelinePoint,
   toLocalBlockRange,
+  buildTimelineGrid,
+  placeTimelineRange,
+  validateTimelinePlacement,
 } from "./scheduling-ui"
 
 const preference: PlanningPreferenceView = {
@@ -43,6 +46,55 @@ function block(start: string, end: string, status: ScheduleBlockView["status"] =
 }
 
 describe("manual scheduling UI helpers", () => {
+  it("builds a full-day quarter-hour grid with start-relative emphasis", () => {
+    const markers = buildTimelineGrid({ ...preference, day_start_minutes: 0, day_end_minutes: 1440 })
+    expect(markers).toHaveLength(97)
+    expect(markers[0]).toEqual({ minutes: 0, emphasis: "hour" })
+    expect(markers[2]).toEqual({ minutes: 30, emphasis: "half" })
+    expect(markers[1]).toEqual({ minutes: 15, emphasis: "quarter" })
+    expect(markers[4]).toEqual({ minutes: 60, emphasis: "hour" })
+    const offset = buildTimelineGrid({ ...preference, day_start_minutes: 490, day_end_minutes: 603 })
+    expect(offset.at(-1)).toEqual({ minutes: 603, emphasis: "quarter" })
+    expect(offset[2]).toEqual({ minutes: 520, emphasis: "half" })
+  })
+
+  it("places create and move ranges while preserving duration and clamping", () => {
+    expect(placeTimelineRange("move", 570, { start: 510, end: 570 }, preference)).toEqual({ start: 540, end: 600 })
+    expect(placeTimelineRange("create", 599, { start: 510, end: 570 }, preference)).toEqual({ start: 540, end: 600 })
+    const offset = { ...preference, day_start_minutes: 490, day_end_minutes: 603 }
+    expect(placeTimelineRange("move", 603, { start: 520, end: 550 }, offset)).toEqual({ start: 565, end: 595 })
+    expect(placeTimelineRange("create", 500, { start: 500, end: 500 }, preference)).toEqual({ start: 495, end: 495 })
+    expect(placeTimelineRange("move", 500, { start: 400, end: 700 }, preference)).toEqual({ start: 495, end: 795 })
+  })
+
+  it("resizes each edge without going below one slot or outside the plan", () => {
+    expect(placeTimelineRange("resize-start", 555, { start: 510, end: 570 }, preference)).toEqual({ start: 555, end: 570 })
+    expect(placeTimelineRange("resize-end", 510, { start: 510, end: 570 }, preference)).toEqual({ start: 510, end: 525 })
+    expect(placeTimelineRange("resize-start", 599, { start: 510, end: 525 }, preference)).toEqual({ start: 510, end: 525 })
+    const offset = { ...preference, day_start_minutes: 490, day_end_minutes: 603 }
+    expect(placeTimelineRange("resize-end", 603, { start: 565, end: 595 }, offset)).toEqual({ start: 565, end: 595 })
+  })
+
+  it("validates boundaries, budget, DST, and half-open conflicts", () => {
+    const valid = validateTimelinePlacement({ date: "2026-08-23", range: { start: 510, end: 540 }, preference, blocks: [] })
+    expect(valid).toMatchObject({ ok: true, range: { start: 510, end: 540 }, interval: { startMinutes: 510, endMinutes: 540 } })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 510, end: 540 }, preference, blocks: [block("2026-08-23T00:30:00.000Z", "2026-08-23T01:00:00.000Z")] })).toMatchObject({ ok: false, code: "conflict", message: "该时间与其他时间块冲突" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 540, end: 570 }, preference, blocks: [block("2026-08-23T00:30:00.000Z", "2026-08-23T01:00:00.000Z")] })).toMatchObject({ ok: true })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 510, end: 540 }, preference, blocks: [block("2026-08-23T00:30:00.000Z", "2026-08-23T01:00:00.000Z")] , ignoredBlockId: "2026-08-23T00:30:00.000Z-scheduled" })).toMatchObject({ ok: true })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 510, end: 540 }, preference, blocks: [], maximumDurationMinutes: 15 })).toMatchObject({ ok: false, code: "budget" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 450, end: 540 }, preference, blocks: [] })).toMatchObject({ ok: false, code: "out-of-bounds" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 470 }, preference, blocks: [] })).toMatchObject({ ok: false, code: "out-of-bounds" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 510, end: 510 }, preference, blocks: [] })).toMatchObject({ ok: false, code: "too-short" })
+    expect(validateTimelinePlacement({ date: "2026-03-08", range: { start: 150, end: 180 }, preference: { ...preference, timezone: "America/New_York", day_start_minutes: 0, day_end_minutes: 600 }, blocks: [] })).toMatchObject({ ok: false, code: "invalid-local-time" })
+    expect(() => validateTimelinePlacement({ date: "2026-08-23", range: { start: 481, end: 511 }, preference, blocks: [] })).toThrow("timeline range must align to 15-minute slots")
+    expect(() => validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference: { ...preference, timezone: "Mars/Olympus" }, blocks: [] })).toThrow("timezone")
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("bad", "2026-08-23T00:30:00.000Z")] })).toMatchObject({ ok: false, code: "conflict" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("2026-08-23T02:00:00.000Z", "2026-08-23T01:00:00.000Z")] })).toMatchObject({ ok: false, code: "conflict" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("2026-08-24T00:00:00.000Z", "2026-08-24T01:00:00.000Z")] })).toMatchObject({ ok: true })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("2026-08-22T15:30:00.000Z", "2026-08-23T01:00:00.000Z")] })).toMatchObject({ ok: false, code: "conflict" })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("2026-08-23T00:30:00.000Z", "2026-08-23T01:00:00.000Z", "skipped")] })).toMatchObject({ ok: true })
+    expect(validateTimelinePlacement({ date: "2026-08-23", range: { start: 480, end: 510 }, preference, blocks: [block("2026-08-23T00:30:00.000Z", "2026-08-23T01:00:00.000Z", "cancelled")] })).toMatchObject({ ok: true })
+  })
   it("rounds and clamps candidate duration to 15-minute slots", () => {
     expect(durationForCandidate(52, preference)).toBe(60)
     expect(durationForCandidate(null, preference)).toBe(45)

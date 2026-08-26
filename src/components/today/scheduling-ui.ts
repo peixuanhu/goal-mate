@@ -18,6 +18,101 @@ export type TimelineRect = {
   height: number
 }
 
+export type TimelineRange = { start: number; end: number }
+export type TimelinePlacementMode = "create" | "move" | "resize-start" | "resize-end"
+export type TimelineGridMarker = { minutes: number; emphasis: "hour" | "half" | "quarter" }
+
+export function buildTimelineGrid(preference: PlanningPreferenceView): TimelineGridMarker[] {
+  const markers: TimelineGridMarker[] = []
+  for (let minutes = preference.day_start_minutes; minutes <= preference.day_end_minutes; minutes += SCHEDULE_SLOT_MINUTES) {
+    const offset = minutes - preference.day_start_minutes
+    markers.push({ minutes, emphasis: offset % 60 === 0 ? "hour" : offset % 30 === 0 ? "half" : "quarter" })
+  }
+  const last = markers[markers.length - 1]
+  if (!last || last.minutes !== preference.day_end_minutes) {
+    const offset = preference.day_end_minutes - preference.day_start_minutes
+    markers.push({ minutes: preference.day_end_minutes, emphasis: offset % 60 === 0 ? "hour" : offset % 30 === 0 ? "half" : "quarter" })
+  }
+  return markers
+}
+
+export function placeTimelineRange(
+  mode: TimelinePlacementMode,
+  snappedMinute: number,
+  original: TimelineRange,
+  preference: PlanningPreferenceView,
+): TimelineRange {
+  const start = preference.day_start_minutes
+  const end = preference.day_end_minutes
+  const snap = clamp(roundMinuteToSlot(snappedMinute, start), start, end)
+  if (mode === "resize-start") return { start: clamp(Math.min(snap, original.end - SCHEDULE_SLOT_MINUTES), start, end), end: original.end }
+  if (mode === "resize-end") {
+    const lastCompleteSlot = floorMinuteToSlot(end, start)
+    return { start: original.start, end: clamp(Math.max(snap, original.start + SCHEDULE_SLOT_MINUTES), start, lastCompleteSlot) }
+  }
+  const duration = original.end - original.start
+  if (duration > end - start) return { start: snap, end: snap + duration }
+  const latest = floorMinuteToSlot(end - duration, start)
+  const placedStart = clamp(snap, start, latest)
+  return { start: placedStart, end: placedStart + duration }
+}
+
+export type TimelinePlacementErrorCode = "out-of-bounds" | "too-short" | "conflict" | "budget" | "invalid-local-time"
+export type TimelinePlacementResult =
+  | { ok: true; range: TimelineRange; interval: { start_at: string; end_at: string; startMinutes: number; endMinutes: number } }
+  | { ok: false; code: TimelinePlacementErrorCode; message: string }
+
+export function validateTimelinePlacement(input: {
+  date: string
+  range: TimelineRange
+  preference: PlanningPreferenceView
+  blocks: readonly ScheduleBlockView[]
+  ignoredBlockId?: string
+  maximumDurationMinutes?: number
+}): TimelinePlacementResult {
+  const { range, preference } = input
+  if (
+    range.start < preference.day_start_minutes || range.start > preference.day_end_minutes
+    || range.end < preference.day_start_minutes || range.end > preference.day_end_minutes
+  ) {
+    return { ok: false, code: "out-of-bounds", message: "时间必须位于当天规划范围内" }
+  }
+  if (!Number.isFinite(range.start) || !Number.isFinite(range.end) || !Number.isInteger(range.start) || !Number.isInteger(range.end)) {
+    throw new Error("timeline range must use integer minutes")
+  }
+  if ((range.start - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0 || (range.end - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0) {
+    throw new Error("timeline range must align to 15-minute slots")
+  }
+  const duration = range.end - range.start
+  if (duration < SCHEDULE_SLOT_MINUTES) return { ok: false, code: "too-short", message: "时间块最短为 15 分钟" }
+  if (input.maximumDurationMinutes !== undefined && duration > input.maximumDurationMinutes) {
+    return { ok: false, code: "budget", message: "时间块超过剩余可安排时间" }
+  }
+  let interval: ReturnType<typeof localTimeRangeToUtc>
+  try {
+    interval = localTimeRangeToUtc(input.date, minuteToTimeInput(range.start), minuteToTimeInput(range.end), preference)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("本地时间不存在") || message.includes("本地时间不明确") || message.includes("跨夏令时转换，实际时长不一致")) {
+      return { ok: false, code: "invalid-local-time", message: "该本地时间不可用于排期" }
+    }
+    throw error
+  }
+  const conflict = input.blocks.some(block => {
+    if (block.block_id === input.ignoredBlockId || !BLOCKING_STATUSES.has(block.status)) return false
+    try {
+      const blockStart = new Date(block.start_at)
+      const blockEnd = new Date(block.end_at)
+      if (!Number.isFinite(blockStart.getTime()) || !Number.isFinite(blockEnd.getTime()) || blockEnd.getTime() <= blockStart.getTime()) return true
+      return new Date(interval.start_at).getTime() < blockEnd.getTime() && new Date(interval.end_at).getTime() > blockStart.getTime()
+    } catch {
+      return true
+    }
+  })
+  if (conflict) return { ok: false, code: "conflict", message: "该时间与其他时间块冲突" }
+  return { ok: true, range, interval }
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
 }
