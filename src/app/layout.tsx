@@ -6,6 +6,10 @@ import { CopilotKit } from "@copilotkit/react-core";
 export const metadata: Metadata = {
   title: "Goal Mate - AI智能目标管理",
   description: "基于AI助手的智能目标和计划管理系统",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+  },
 };
 
 export const viewport = {
