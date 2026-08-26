@@ -1,6 +1,11 @@
 "use client"
 
-import { type DragEndEvent } from "@dnd-kit/core"
+import {
+  type DragCancelEvent,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
@@ -15,7 +20,7 @@ import type {
   TodayView,
 } from "@/lib/today/types"
 
-import { DayTimeline } from "./day-timeline"
+import { DayTimeline, type TimelinePlacementPreview } from "./day-timeline"
 import { ScheduleBlockEditor, type ScheduleEditorSubmit } from "./schedule-block-editor"
 import { ScheduleCompletionSheet, type ScheduleCompletionPayload } from "./schedule-completion-sheet"
 import {
@@ -23,6 +28,9 @@ import {
   findNextFreeStart,
   findValidStartAtOrAfter,
   minuteFromTimelinePoint,
+  placeTimelineRange,
+  validateTimelinePlacement,
+  type TimelinePlacementResult,
 } from "./scheduling-ui"
 
 type EditorIntent = {
@@ -33,7 +41,14 @@ type EditorIntent = {
   idempotencyKey: string | null
 }
 
+type SharedMutationContext = {
+  token: number
+  date: string
+  generation: number
+}
+
 const EMPTY_BLOCKS: ScheduleBlockView[] = []
+type TodayLoadResult = "applied" | "superseded" | "cancelled" | "failed"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -88,6 +103,10 @@ function isCandidate(value: unknown): value is SchedulableCandidate {
     && (value.effective_quadrant === null || value.effective_quadrant === "q1" || value.effective_quadrant === "q2" || value.effective_quadrant === "q3" || value.effective_quadrant === "q4")
     && typeof value.is_recurring === "boolean"
     && typeof value.version === "string"
+}
+
+function isCandidateDragData(value: unknown): value is { kind: "candidate"; candidate: SchedulableCandidate } {
+  return isRecord(value) && value.kind === "candidate" && isCandidate(value.candidate)
 }
 
 function isPreference(value: unknown): value is PlanningPreferenceView {
@@ -145,6 +164,20 @@ function isScheduleBlockView(value: unknown): value is ScheduleBlockView {
     && new Date(value.start_at as string).getTime() < new Date(value.end_at as string).getTime()
 }
 
+function isScheduleBlockDragData(value: unknown): value is {
+  kind: "schedule-block"
+  block: ScheduleBlockView
+  localRange: { start: number; end: number }
+} {
+  return isRecord(value)
+    && value.kind === "schedule-block"
+    && isScheduleBlockView(value.block)
+    && isRecord(value.localRange)
+    && isNonNegativeInteger(value.localRange.start)
+    && isPositiveInteger(value.localRange.end)
+    && value.localRange.end > value.localRange.start
+}
+
 function isTodayView(value: unknown): value is TodayView {
   if (!isRecord(value)) return false
 
@@ -182,6 +215,19 @@ async function readMutationResponse(response: Response, fallback: string): Promi
   return payload
 }
 
+function clientYFromActivator(event: DragStartEvent): number | null {
+  const activator = event.activatorEvent as Event & {
+    clientY?: unknown
+    touches?: { length: number; [index: number]: { clientY?: unknown } }
+    changedTouches?: { length: number; [index: number]: { clientY?: unknown } }
+  }
+  const directY = typeof activator?.clientY === "number" ? activator.clientY : null
+  const touch = activator?.touches?.[0] ?? activator?.changedTouches?.[0]
+  const touchY = touch && typeof touch.clientY === "number" ? touch.clientY : null
+  const originY = directY ?? touchY
+  return originY
+}
+
 export function TodayWorkspace() {
   const [date, setDate] = useState<string | null>(null)
   const [view, setView] = useState<TodayView | null>(null)
@@ -192,12 +238,34 @@ export function TodayWorkspace() {
   const [editorError, setEditorError] = useState<string | null>(null)
   const [completionError, setCompletionError] = useState<string | null>(null)
   const [scheduleError, setScheduleError] = useState<string | null>(null)
+  const [dragPreview, setDragPreview] = useState<TimelinePlacementPreview | null>(null)
   const [mutationLoading, setMutationLoading] = useState(false)
-  const requestIdRef = useRef(0)
+  const mountedRef = useRef(false)
+  const viewGenerationRef = useRef(0)
+  const latestLoadRequestIdRef = useRef(0)
   const activeRequestControllerRef = useRef<AbortController | null>(null)
   const dateRef = useRef<string | null>(null)
   const mutationLoadingRef = useRef(false)
+  const sharedMutationTokenRef = useRef(0)
+  const timelineDragActiveRef = useRef(false)
+  const timelineGrabOffsetRef = useRef<number | null>(null)
+  const timelineIdempotencyKeyRef = useRef<string | null>(null)
+  const timelineMutationIdRef = useRef<string | null>(null)
   const defaultPreference = useMemo(() => getDefaultPlanningPreference(), [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      viewGenerationRef.current += 1
+      sharedMutationTokenRef.current += 1
+      timelineDragActiveRef.current = false
+      timelineGrabOffsetRef.current = null
+      timelineIdempotencyKeyRef.current = null
+      timelineMutationIdRef.current = null
+      activeRequestControllerRef.current?.abort()
+    }
+  }, [])
 
   useEffect(() => {
     setDate(normalizeLocalDateInput(new Date()))
@@ -207,8 +275,23 @@ export function TodayWorkspace() {
     requestedDate: string,
     controller: AbortController,
     preserveView: boolean,
-  ): Promise<boolean> => {
-    const requestId = ++requestIdRef.current
+  ): Promise<TodayLoadResult> => {
+    const generation = viewGenerationRef.current
+    const requestId = ++latestLoadRequestIdRef.current
+    const inactiveResult = (): TodayLoadResult | null => {
+      if (!mountedRef.current || viewGenerationRef.current !== generation || dateRef.current !== requestedDate) {
+        return "cancelled"
+      }
+      return requestId === latestLoadRequestIdRef.current ? null : "superseded"
+    }
+    const initialInactive = inactiveResult()
+    if (initialInactive !== null) return initialInactive
+    const isCurrent = () => (
+      mountedRef.current
+      && viewGenerationRef.current === generation
+      && dateRef.current === requestedDate
+      && requestId === latestLoadRequestIdRef.current
+    )
     activeRequestControllerRef.current = controller
     setLoading(true)
     setError(null)
@@ -217,18 +300,22 @@ export function TodayWorkspace() {
     try {
       const response = await fetch(`/api/today?date=${encodeURIComponent(requestedDate)}`, { signal: controller.signal })
       const payload: unknown = await response.json().catch(() => null)
-      if (requestId !== requestIdRef.current || controller.signal.aborted) return false
+      const inactive = inactiveResult()
+      if (controller.signal.aborted) return inactive ?? "cancelled"
+      if (inactive !== null) return inactive
       if (!response.ok) throw new Error(responseError(payload, `今日数据加载失败（${response.status}）`))
       if (!isTodayView(payload)) throw new Error("今日数据格式无效")
       if (payload.date !== requestedDate) throw new Error("返回数据日期与请求日期不一致")
       setView(payload)
-      return true
+      return "applied"
     } catch (loadError) {
-      if (controller.signal.aborted || requestId !== requestIdRef.current) return false
+      const inactive = inactiveResult()
+      if (controller.signal.aborted) return inactive ?? "cancelled"
+      if (inactive !== null) return inactive
       setError(loadError instanceof Error && loadError.message ? loadError.message : "今日数据加载失败")
-      return false
+      return "failed"
     } finally {
-      if (requestId === requestIdRef.current && !controller.signal.aborted) {
+      if (isCurrent() && !controller.signal.aborted) {
         setLoading(false)
       }
       if (activeRequestControllerRef.current === controller) {
@@ -238,12 +325,21 @@ export function TodayWorkspace() {
   }, [])
 
   useEffect(() => {
+    viewGenerationRef.current += 1
+    sharedMutationTokenRef.current += 1
     dateRef.current = date
     setEditorIntent(null)
     setCompletionBlock(null)
     setEditorError(null)
     setCompletionError(null)
     setScheduleError(null)
+    mutationLoadingRef.current = false
+    setMutationLoading(false)
+    setDragPreview(null)
+    timelineDragActiveRef.current = false
+    timelineGrabOffsetRef.current = null
+    timelineIdempotencyKeyRef.current = null
+    timelineMutationIdRef.current = null
     if (date === null) return
 
     const controller = new AbortController()
@@ -314,42 +410,198 @@ export function TodayWorkspace() {
     openCandidateAt(candidate, start)
   }, [blocks, date, openCandidateAt, preference])
 
-  function handleDragEnd(event: DragEndEvent) {
-    if (event.over?.id !== "today-timeline" || date === null) return
-    const candidate = event.active.data.current?.candidate
-    if (!isCandidate(candidate)) return
-    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
-      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
-      return
-    }
-    const translated = event.active.rect.current.translated
-    const clientY = translated
-      ? translated.top + translated.height / 2
-      : event.over.rect.top + event.over.rect.height / 2
-    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
-    const start = minuteFromTimelinePoint(clientY, event.over.rect, preference, duration)
-    openCandidateAt(candidate, start)
+  function clearCandidateDrag() {
+    setDragPreview(null)
+    timelineDragActiveRef.current = false
+    timelineGrabOffsetRef.current = null
+    timelineIdempotencyKeyRef.current = null
   }
 
-  async function refetchAfterMutation(close: () => void, scopedError: (message: string) => void) {
-    const selectedDate = dateRef.current
-    if (selectedDate === null) {
-      scopedError("日期已变化，请关闭后重试")
+  function placementForDrag(event: DragMoveEvent | DragEndEvent, candidate: SchedulableCandidate): {
+    preview: TimelinePlacementPreview
+    result: TimelinePlacementResult
+  } | null {
+    if (date === null || event.over?.id !== "today-timeline") return null
+    const duration = durationForCandidate(candidate.suggested_block_minutes, preference)
+    const translated = event.active.rect.current.translated
+    const clientY = translated
+      ? translated.top + (timelineGrabOffsetRef.current ?? translated.height / 2)
+      : event.over.rect.top + event.over.rect.height / 2
+    const start = minuteFromTimelinePoint(clientY, event.over.rect, preference, duration)
+    const range = placeTimelineRange("create", start, { start, end: start + duration }, preference)
+    const result = validateTimelinePlacement({
+      date,
+      range,
+      preference,
+      blocks,
+      ...(typeof candidate.available_minutes === "number" ? { maximumDurationMinutes: candidate.available_minutes } : {}),
+    })
+    return {
+      result,
+      preview: {
+        id: candidate.id,
+        title: candidate.name,
+        range: result.ok ? result.range : range,
+        valid: result.ok,
+        message: result.ok ? null : result.message,
+        pending: false,
+      },
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    if (timelineMutationIdRef.current !== null) return
+    const data = event.active.data.current
+    if (isScheduleBlockDragData(data)) return
+    if (!isCandidateDragData(data)) return
+    const initial = event.active.rect.current.initial
+    const activatorY = clientYFromActivator(event)
+    timelineDragActiveRef.current = true
+    timelineGrabOffsetRef.current = initial !== null && activatorY !== null
+      ? activatorY - initial.top
+      : null
+    timelineIdempotencyKeyRef.current = crypto.randomUUID()
+    setScheduleError(null)
+    setDragPreview(null)
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
+    const data = event.active.data.current
+    if (isScheduleBlockDragData(data)) return
+    if (!isCandidateDragData(data)) return
+    if (event.over?.id !== "today-timeline") {
+      setDragPreview(null)
       return
     }
-    const refreshed = await loadToday(selectedDate, new AbortController(), true)
-    if (!refreshed || dateRef.current !== selectedDate) {
+    const placement = placementForDrag(event, data.candidate)
+    setDragPreview(placement?.preview ?? null)
+  }
+
+  function handleDragCancel(event: DragCancelEvent) {
+    if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
+    const data = event.active.data.current
+    if (isScheduleBlockDragData(data) || !isCandidateDragData(data)) return
+    clearCandidateDrag()
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
+    const data = event.active.data.current
+    if (isScheduleBlockDragData(data)) return
+    if (!isCandidateDragData(data)) return
+    const candidate = data.candidate
+    if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
+      setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
+      clearCandidateDrag()
+      return
+    }
+    const placement = placementForDrag(event, candidate)
+    if (placement === null) {
+      clearCandidateDrag()
+      return
+    }
+    if (!placement.result.ok) {
+      setScheduleError(placement.result.message)
+      clearCandidateDrag()
+      return
+    }
+    const interval = placement.result.interval
+
+    if (date === null) return
+    const selectedDate = date
+    const mutationId = timelineIdempotencyKeyRef.current ?? crypto.randomUUID()
+    timelineIdempotencyKeyRef.current = mutationId
+    timelineMutationIdRef.current = mutationId
+    setScheduleError(null)
+    setDragPreview({ ...placement.preview, pending: true })
+
+    void (async () => {
+      const isCurrentTimelineMutation = () => (
+        mountedRef.current
+        && timelineMutationIdRef.current === mutationId
+        && dateRef.current === selectedDate
+      )
+      try {
+        const response = await fetch("/api/schedule-block", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": mutationId },
+          body: JSON.stringify({
+            plan_id: candidate.plan_id,
+            action_id: candidate.action_id,
+            start_at: interval.start_at,
+            end_at: interval.end_at,
+            status: "scheduled",
+            source: "manual",
+          }),
+        })
+        await readMutationResponse(response, "创建时间块失败")
+        if (!isCurrentTimelineMutation()) return
+        const refreshResult = await loadToday(selectedDate, new AbortController(), true)
+        if (!isCurrentTimelineMutation()) return
+        if (refreshResult === "failed") {
+          setScheduleError("修改已保存，但今日数据刷新失败，请重新加载页面")
+          return
+        }
+        if (refreshResult !== "applied") return
+        window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
+      } catch (mutationError) {
+        if (isCurrentTimelineMutation()) {
+          setScheduleError(mutationError instanceof Error && mutationError.message ? mutationError.message : "创建时间块失败")
+        }
+      } finally {
+        if (isCurrentTimelineMutation()) {
+          timelineMutationIdRef.current = null
+          clearCandidateDrag()
+        }
+      }
+    })()
+  }
+
+  function beginSharedMutation(): SharedMutationContext | null {
+    const selectedDate = dateRef.current
+    if (!mountedRef.current || selectedDate === null) return null
+    const context = {
+      token: ++sharedMutationTokenRef.current,
+      date: selectedDate,
+      generation: viewGenerationRef.current,
+    }
+    mutationLoadingRef.current = true
+    setMutationLoading(true)
+    return context
+  }
+
+  function isCurrentSharedMutation(context: SharedMutationContext): boolean {
+    return mountedRef.current
+      && sharedMutationTokenRef.current === context.token
+      && viewGenerationRef.current === context.generation
+      && dateRef.current === context.date
+  }
+
+  async function refetchAfterMutation(
+    context: SharedMutationContext,
+    close: () => void,
+    scopedError: (message: string) => void,
+  ) {
+    if (!isCurrentSharedMutation(context)) return
+    const refreshResult = await loadToday(context.date, new AbortController(), true)
+    if (!isCurrentSharedMutation(context)) return
+    if (refreshResult === "failed") {
       scopedError("修改已保存，但今日数据刷新失败，请重新加载页面")
       return
     }
-    window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
-    close()
+    if (refreshResult === "applied") {
+      window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
+      close()
+      return
+    }
+    if (refreshResult === "superseded") close()
   }
 
   async function submitEditor(payload: ScheduleEditorSubmit) {
-    if (editorIntent === null || mutationLoading) return
-    mutationLoadingRef.current = true
-    setMutationLoading(true)
+    if (editorIntent === null || mutationLoading || mutationLoadingRef.current) return
+    const mutation = beginSharedMutation()
+    if (mutation === null) return
     setEditorError(null)
     try {
       const isEdit = editorIntent.block !== null
@@ -375,19 +627,24 @@ export function TodayWorkspace() {
         }),
       })
       await readMutationResponse(response, isEdit ? "更新时间块失败" : "创建时间块失败")
-      await refetchAfterMutation(() => setEditorIntent(null), setEditorError)
+      if (!isCurrentSharedMutation(mutation)) return
+      await refetchAfterMutation(mutation, () => setEditorIntent(null), setEditorError)
     } catch (mutationError) {
-      setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "保存时间块失败")
+      if (isCurrentSharedMutation(mutation)) {
+        setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "保存时间块失败")
+      }
     } finally {
-      mutationLoadingRef.current = false
-      setMutationLoading(false)
+      if (isCurrentSharedMutation(mutation)) {
+        mutationLoadingRef.current = false
+        setMutationLoading(false)
+      }
     }
   }
 
   async function cancelEditorBlock(payload: { block_id: string; expected_version: number }) {
-    if (mutationLoading) return
-    mutationLoadingRef.current = true
-    setMutationLoading(true)
+    if (mutationLoading || mutationLoadingRef.current) return
+    const mutation = beginSharedMutation()
+    if (mutation === null) return
     setEditorError(null)
     try {
       const response = await fetch("/api/schedule-block", {
@@ -396,19 +653,24 @@ export function TodayWorkspace() {
         body: JSON.stringify({ operation: "cancel", ...payload }),
       })
       await readMutationResponse(response, "取消时间块失败")
-      await refetchAfterMutation(() => setEditorIntent(null), setEditorError)
+      if (!isCurrentSharedMutation(mutation)) return
+      await refetchAfterMutation(mutation, () => setEditorIntent(null), setEditorError)
     } catch (mutationError) {
-      setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "取消时间块失败")
+      if (isCurrentSharedMutation(mutation)) {
+        setEditorError(mutationError instanceof Error && mutationError.message ? mutationError.message : "取消时间块失败")
+      }
     } finally {
-      mutationLoadingRef.current = false
-      setMutationLoading(false)
+      if (isCurrentSharedMutation(mutation)) {
+        mutationLoadingRef.current = false
+        setMutationLoading(false)
+      }
     }
   }
 
   async function submitCompletion(payload: ScheduleCompletionPayload) {
-    if (mutationLoading) return
-    mutationLoadingRef.current = true
-    setMutationLoading(true)
+    if (mutationLoading || mutationLoadingRef.current) return
+    const mutation = beginSharedMutation()
+    if (mutation === null) return
     setCompletionError(null)
     try {
       const response = await fetch("/api/schedule-block/complete", {
@@ -417,19 +679,27 @@ export function TodayWorkspace() {
         body: JSON.stringify(payload),
       })
       await readMutationResponse(response, "记录时间块结果失败")
-      await refetchAfterMutation(() => setCompletionBlock(null), setCompletionError)
+      if (!isCurrentSharedMutation(mutation)) return
+      await refetchAfterMutation(mutation, () => setCompletionBlock(null), setCompletionError)
     } catch (mutationError) {
-      setCompletionError(mutationError instanceof Error && mutationError.message ? mutationError.message : "记录时间块结果失败")
+      if (isCurrentSharedMutation(mutation)) {
+        setCompletionError(mutationError instanceof Error && mutationError.message ? mutationError.message : "记录时间块结果失败")
+      }
     } finally {
-      mutationLoadingRef.current = false
-      setMutationLoading(false)
+      if (isCurrentSharedMutation(mutation)) {
+        mutationLoadingRef.current = false
+        setMutationLoading(false)
+      }
     }
   }
 
   return (
     <MainLayout
       onScheduleCandidate={scheduleCandidate}
+      onWorkspaceDragCancel={handleDragCancel}
       onWorkspaceDragEnd={handleDragEnd}
+      onWorkspaceDragMove={handleDragMove}
+      onWorkspaceDragStart={handleDragStart}
       workspaceDate={date}
       workspaceSnapshot={{ candidates, error, focus, loading }}
     >
@@ -488,6 +758,7 @@ export function TodayWorkspace() {
                   date={date}
                   error={error}
                   loading={loading}
+                  preview={dragPreview}
                   onCompleteBlock={block => {
                     setScheduleError(null)
                     setCompletionError(null)

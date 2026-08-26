@@ -1,6 +1,12 @@
 "use client"
 
-import { DndContext, type DragEndEvent } from "@dnd-kit/core"
+import {
+  DndContext,
+  type DragCancelEvent,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core"
 import { Bot, ChevronLeft, ChevronRight, ListTree, X } from "lucide-react"
 import React, { type ReactNode, useEffect, useState } from "react"
 
@@ -23,6 +29,9 @@ interface MainLayoutProps {
   workspaceDate?: string | null
   workspaceSnapshot?: WorkspaceSnapshot
   onScheduleCandidate?: (candidate: SchedulableCandidate) => void
+  onWorkspaceDragStart?: (event: DragStartEvent) => void
+  onWorkspaceDragMove?: (event: DragMoveEvent) => void
+  onWorkspaceDragCancel?: (event: DragCancelEvent) => void
   onWorkspaceDragEnd?: (event: DragEndEvent) => void
 }
 
@@ -31,6 +40,9 @@ export function MainLayout({
   workspaceDate,
   workspaceSnapshot,
   onScheduleCandidate,
+  onWorkspaceDragStart,
+  onWorkspaceDragMove,
+  onWorkspaceDragCancel,
   onWorkspaceDragEnd,
 }: MainLayoutProps) {
   const [leftOpen, setLeftOpen] = useState(true)
@@ -65,7 +77,13 @@ export function MainLayout({
     <div className="flex min-h-dvh flex-col bg-stone-50 text-stone-900 lg:h-dvh lg:overflow-hidden">
       <AppHeader />
 
-      <DndContext onDragEnd={onWorkspaceDragEnd ?? (() => undefined)}>
+      <DndContext
+        autoScroll={{ threshold: { x: 0, y: 0.08 }, acceleration: 8 }}
+        onDragCancel={onWorkspaceDragCancel}
+        onDragEnd={onWorkspaceDragEnd}
+        onDragMove={onWorkspaceDragMove}
+        onDragStart={onWorkspaceDragStart}
+      >
         <div className="relative flex min-h-0 flex-1">
           <aside
             aria-label="目标工作台"

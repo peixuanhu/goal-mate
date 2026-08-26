@@ -8,7 +8,16 @@ import { formatUtcInTimeZone } from "@/lib/today/timezone"
 import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } from "@/lib/today/types"
 
 import { InteractiveScheduleBlock } from "./interactive-schedule-block"
-import { buildTimelineGrid, minuteToTimeInput, toLocalBlockRange } from "./scheduling-ui"
+import { buildTimelineGrid, minuteToTimeInput, toLocalBlockRange, type TimelineRange } from "./scheduling-ui"
+
+export type TimelinePlacementPreview = {
+  id: string
+  title: string
+  range: TimelineRange
+  valid: boolean
+  message: string | null
+  pending: boolean
+}
 
 interface DayTimelineProps {
   date: string
@@ -16,6 +25,7 @@ interface DayTimelineProps {
   blocks: ScheduleBlockView[]
   loading: boolean
   error: string | null
+  preview?: TimelinePlacementPreview | null
   onEditBlock: (block: ScheduleBlockView) => void
   onCompleteBlock: (block: ScheduleBlockView) => void
 }
@@ -60,7 +70,7 @@ function useCurrentLocalMinute(date: string, timezone: string): number | null {
   }
 }
 
-export function DayTimeline({ date, preference, blocks, loading, error, onEditBlock, onCompleteBlock }: DayTimelineProps) {
+export function DayTimeline({ date, preference, blocks, loading, error, preview = null, onEditBlock, onCompleteBlock }: DayTimelineProps) {
   const { isOver, setNodeRef } = useDroppable({ id: "today-timeline" })
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const autoPositionedDateRef = useRef<string | null>(null)
@@ -159,6 +169,31 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
               />
             )
           })}
+
+          {preview && durationMinutes > 0 ? (() => {
+            const visibleStart = Math.max(preview.range.start, preference.day_start_minutes)
+            const visibleEnd = Math.min(preview.range.end, preference.day_end_minutes)
+            if (visibleEnd <= visibleStart) return null
+            const top = ((visibleStart - preference.day_start_minutes) / durationMinutes) * 100
+            const height = ((visibleEnd - visibleStart) / durationMinutes) * 100
+            const previewClass = preview.valid
+              ? "border-violet-400 bg-violet-200/90 text-violet-950"
+              : "border-red-400 bg-red-100/95 text-red-900"
+            return (
+              <div
+                aria-busy={preview.pending}
+                className={`pointer-events-none absolute left-[4.5rem] right-3 z-30 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${previewClass} ${preview.pending ? "opacity-75" : ""}`}
+                data-testid="timeline-placement-preview"
+                data-valid={String(preview.valid)}
+                key={preview.id}
+                style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
+              >
+                <p className="truncate text-sm font-semibold">{preview.title}</p>
+                <p className="mt-0.5 text-[11px] tabular-nums opacity-80">{formatMinutes(preview.range.start)}–{formatMinutes(preview.range.end)} · {preview.range.end - preview.range.start} 分钟</p>
+                {preview.message ? <p className="mt-0.5 text-[11px] font-medium">{preview.message}</p> : null}
+              </div>
+            )
+          })() : null}
 
           {showCurrentTime && currentMinute !== null ? (
             <div aria-label={`当前时间 ${formatMinutes(currentMinute)}`} className="pointer-events-none absolute left-[4.5rem] right-3 z-20 border-t-2 border-rose-500/60" style={{ top: `${((currentMinute - preference.day_start_minutes) / durationMinutes) * 100}%` }}>

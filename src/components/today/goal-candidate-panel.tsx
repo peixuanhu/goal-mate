@@ -92,7 +92,7 @@ function CandidateCard({
   const schedulingDisabled = !candidate.can_schedule || candidate.suggested_block_minutes === null
   const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
     id: candidate.id,
-    data: { candidate },
+    data: { kind: "candidate", candidate },
     disabled: schedulingDisabled,
   })
 

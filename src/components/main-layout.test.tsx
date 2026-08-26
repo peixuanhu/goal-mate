@@ -6,6 +6,15 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { MainLayout } from "./main-layout"
 
+const dndContext = vi.fn()
+
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
+    dndContext(props)
+    return <>{children}</>
+  },
+}))
+
 vi.mock("./app-header", () => ({
   AppHeader: () => <header>全局导航</header>,
 }))
@@ -66,5 +75,32 @@ describe("MainLayout", () => {
 
     expect(screen.getByText("今日共享快照 今日候选")).toBeTruthy()
     expect(screen.queryByText(/共享工作台/)).toBeNull()
+  })
+
+  it("forwards the complete workspace drag lifecycle and timeline auto-scroll configuration", () => {
+    const onWorkspaceDragStart = vi.fn()
+    const onWorkspaceDragMove = vi.fn()
+    const onWorkspaceDragCancel = vi.fn()
+    const onWorkspaceDragEnd = vi.fn()
+
+    render(
+      <MainLayout
+        onWorkspaceDragCancel={onWorkspaceDragCancel}
+        onWorkspaceDragEnd={onWorkspaceDragEnd}
+        onWorkspaceDragMove={onWorkspaceDragMove}
+        onWorkspaceDragStart={onWorkspaceDragStart}
+      >
+        <section>页面内容</section>
+      </MainLayout>,
+    )
+
+    const props = dndContext.mock.calls.at(-1)?.[0]
+    expect(props).toMatchObject({
+      onDragStart: onWorkspaceDragStart,
+      onDragMove: onWorkspaceDragMove,
+      onDragCancel: onWorkspaceDragCancel,
+      onDragEnd: onWorkspaceDragEnd,
+      autoScroll: { threshold: { x: 0, y: 0.08 }, acceleration: 8 },
+    })
   })
 })
