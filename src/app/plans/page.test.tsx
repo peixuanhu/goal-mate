@@ -70,6 +70,7 @@ const planFixture = {
     schedulable_minutes: 105,
     suggested_block_minutes: 45,
     budget_status: "ok",
+    has_scheduled_direct_block: false,
     actions: {},
   },
 }

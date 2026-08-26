@@ -78,6 +78,8 @@ function isCandidate(value: unknown): value is SchedulableCandidate {
     && isNullableNonNegativeInteger(value.remaining_minutes)
     && isNonNegativeInteger(value.reserved_action_minutes)
     && isNullableNonNegativeInteger(value.available_minutes)
+    && isNonNegativeInteger(value.scheduled_block_count)
+    && isNonNegativeInteger(value.scheduled_minutes)
     && isNullablePositiveInteger(value.suggested_block_minutes)
     && (value.budget_status === "ok" || value.budget_status === "exhausted" || value.budget_status === "overrun")
     && typeof value.can_schedule === "boolean"

@@ -903,6 +903,43 @@ describe("loadTodayView", () => {
     ])
   })
 
+  it("keeps scheduled siblings from a completed Action committed in the parent candidate", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 120,
+        actionItems: [],
+        scheduleBlocks: [
+          {
+            block_id: "block_completed_action",
+            action_id: "action_already_completed",
+            start_at: new Date("2026-08-20T00:00:00.000Z"),
+            end_at: new Date("2026-08-20T00:30:00.000Z"),
+            status: "completed",
+          },
+          {
+            block_id: "block_scheduled_sibling",
+            action_id: "action_already_completed",
+            start_at: new Date("2026-08-24T00:00:00.000Z"),
+            end_at: new Date("2026-08-24T00:30:00.000Z"),
+            status: "scheduled",
+          },
+        ],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates).toEqual([
+      expect.objectContaining({
+        kind: "plan",
+        invested_minutes: 30,
+        remaining_minutes: 90,
+        reserved_action_minutes: 0,
+        available_minutes: 60,
+        suggested_block_minutes: 60,
+      }),
+    ])
+  })
+
   it("keeps a fully reserved parent visible but disables direct scheduling", async () => {
     const db = makeDb({
       plans: [{

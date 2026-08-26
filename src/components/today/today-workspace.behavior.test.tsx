@@ -339,6 +339,8 @@ describe("TodayWorkspace behavior", () => {
     ["fractional reserved duration", candidate => { candidate.reserved_action_minutes = 1.5 }],
     ["negative remaining duration", candidate => { candidate.remaining_minutes = -1 }],
     ["negative available duration", candidate => { candidate.available_minutes = -1 }],
+    ["missing scheduled block count", candidate => { delete candidate.scheduled_block_count }],
+    ["negative scheduled minutes", candidate => { candidate.scheduled_minutes = -1 }],
     ["zero suggested duration", candidate => { candidate.suggested_block_minutes = 0 }],
     ["budget status enum", candidate => { candidate.budget_status = "warning" }],
     ["schedulable flag type", candidate => { candidate.can_schedule = "yes" }],

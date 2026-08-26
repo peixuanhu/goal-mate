@@ -157,6 +157,7 @@ describe("/api/plan", () => {
             schedulable_minutes: 300,
             suggested_block_minutes: 60,
             budget_status: "ok",
+            has_scheduled_direct_block: false,
             actions: {},
           },
         },

@@ -38,6 +38,7 @@ export type ActionTimeBudget = {
   scheduled_minutes: number
   schedulable_minutes: number
   suggested_block_minutes: number | null
+  has_scheduled_block: boolean
 }
 
 export type PlanTimeBudget = {
@@ -51,6 +52,7 @@ export type PlanTimeBudget = {
   schedulable_minutes: number | null
   suggested_block_minutes: number | null
   budget_status: TimeBudgetStatus
+  has_scheduled_direct_block: boolean
   actions: Record<string, ActionTimeBudget>
 }
 
@@ -186,12 +188,18 @@ export function calculatePlanTimeBudget(
       suggested_block_minutes: action.is_completed || schedulableMinutes === 0
         ? null
         : Math.min(effectiveDefaultBlockMinutes, schedulableMinutes),
+      has_scheduled_block: scheduledActionMinutes > 0,
     }
   }
 
   const reservedActionMinutes = input.actions
     .filter(action => !action.is_completed)
     .reduce((sum, action) => sum + actions[action.action_id].remaining_minutes, 0)
+  const unreservedScheduledActionMinutes = input.actions.reduce((sum, action) => {
+    const actionBudget = actions[action.action_id]
+    const reservedMinutes = action.is_completed ? 0 : actionBudget.remaining_minutes
+    return sum + Math.max(actionBudget.scheduled_minutes - reservedMinutes, 0)
+  }, 0)
 
   if (input.is_recurring) {
     return {
@@ -205,6 +213,7 @@ export function calculatePlanTimeBudget(
       schedulable_minutes: null,
       suggested_block_minutes: effectiveDefaultBlockMinutes,
       budget_status: "ok",
+      has_scheduled_direct_block: scheduledBlockCount > 0,
       actions,
     }
   }
@@ -212,7 +221,10 @@ export function calculatePlanTimeBudget(
   const estimatedMinutes = input.estimated_minutes
   const remainingMinutes = Math.max(estimatedMinutes - investedMinutes, 0)
   const unallocatedRemainingMinutes = Math.max(remainingMinutes - reservedActionMinutes, 0)
-  const schedulableMinutes = Math.max(unallocatedRemainingMinutes - scheduledMinutes, 0)
+  const schedulableMinutes = Math.max(
+    unallocatedRemainingMinutes - scheduledMinutes - unreservedScheduledActionMinutes,
+    0,
+  )
   const budgetStatus: TimeBudgetStatus = investedMinutes > estimatedMinutes
     || reservedActionMinutes > remainingMinutes
     ? "overrun"
@@ -233,6 +245,7 @@ export function calculatePlanTimeBudget(
       ? null
       : Math.min(effectiveDefaultBlockMinutes, schedulableMinutes),
     budget_status: budgetStatus,
+    has_scheduled_direct_block: scheduledBlockCount > 0,
     actions,
   }
 }

@@ -151,6 +151,13 @@ type NormalizedCancel = {
   expectedVersion: number
 }
 
+type ScheduleBudgetRequest = Pick<
+  NormalizedCreate,
+  "planId" | "actionId" | "startAt" | "endAt"
+> & {
+  ignoredBlockId?: string
+}
+
 const DEFAULT_PREFERENCE_ID = "default"
 const SCHEDULE_KEY_LOCK_NAMESPACE = 48_243
 const CREATE_FIELDS = new Set([
@@ -529,7 +536,7 @@ async function assertPlanAndAction(
 
 async function assertScheduleBudget(
   db: Prisma.TransactionClient,
-  input: NormalizedCreate,
+  input: ScheduleBudgetRequest,
   preferenceDefaultBlockMinutes: number,
 ): Promise<void> {
   const plan = await db.plan.findUnique({
@@ -563,7 +570,7 @@ async function assertScheduleBudget(
   const relations = {
     default_block_minutes: plan.default_block_minutes,
     actions: plan.actionItems,
-    blocks: plan.scheduleBlocks,
+    blocks: plan.scheduleBlocks.filter(block => block.block_id !== input.ignoredBlockId),
   }
   let budgetInput: PlanTimeBudgetInput
   if (plan.is_recurring) {
@@ -727,6 +734,13 @@ export async function updateScheduleBlock(
       }
     }
 
+    await assertScheduleBudget(tx, {
+      planId: current.plan_id,
+      actionId: current.action_id,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      ignoredBlockId: current.block_id,
+    }, preference.default_block_minutes)
     throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt, input.blockId))
     const updated = await tx.scheduleBlock.updateMany({
       where: {

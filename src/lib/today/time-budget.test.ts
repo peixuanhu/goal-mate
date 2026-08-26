@@ -115,12 +115,14 @@ describe("plan time budgets", () => {
       scheduled_minutes: 30,
       schedulable_minutes: 60,
       suggested_block_minutes: 60,
+      has_scheduled_direct_block: true,
     })
     expect(result.actions.write).toMatchObject({
       scheduled_block_count: 1,
       scheduled_minutes: 45,
       schedulable_minutes: 45,
       suggested_block_minutes: 45,
+      has_scheduled_block: true,
     })
   })
 
@@ -193,6 +195,28 @@ describe("plan time budgets", () => {
       invested_minutes: 15,
       remaining_minutes: 60,
       suggested_block_minutes: 30,
+    })
+  })
+
+  it("keeps scheduled siblings of a completed Action committed against the parent budget", () => {
+    const result = calculatePlanTimeBudget({
+      is_recurring: false,
+      estimated_minutes: 120,
+      default_block_minutes: 60,
+      actions: [{ action_id: "lesson", estimated_minutes: 60, is_completed: true }],
+      blocks: [
+        block(30, "completed", "lesson"),
+        { ...block(30, "scheduled", "lesson"), block_id: "scheduled-lesson-sibling" },
+      ],
+    }, 60)
+
+    expect(result).toMatchObject({
+      invested_minutes: 30,
+      remaining_minutes: 90,
+      reserved_action_minutes: 0,
+      unallocated_remaining_minutes: 90,
+      schedulable_minutes: 60,
+      suggested_block_minutes: 60,
     })
   })
 

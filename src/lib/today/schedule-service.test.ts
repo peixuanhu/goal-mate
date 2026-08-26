@@ -834,6 +834,44 @@ describe("ScheduleBlock service", () => {
     expect(db.scheduleBlock.create).not.toHaveBeenCalled()
   })
 
+  it("rejects direct overfill while a completed Action still has a scheduled sibling", async () => {
+    const db = makeDb()
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 120,
+      actionItems: [{
+        action_id: "action_copy",
+        estimated_minutes: 60,
+        is_completed: true,
+      }],
+      scheduleBlocks: [
+        {
+          block_id: "block_action_done",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-22T01:00:00.000Z"),
+          end_at: new Date("2026-08-22T01:30:00.000Z"),
+          status: "completed",
+        },
+        {
+          block_id: "block_action_sibling",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-23T03:00:00.000Z"),
+          end_at: new Date("2026-08-23T03:30:00.000Z"),
+          status: "scheduled",
+        },
+      ],
+    })
+
+    await expect(createScheduleBlock(db, {
+      ...validCreate,
+      action_id: null,
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+    })
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+  })
+
   it("updates an active direct block without treating the block itself as a duplicate", async () => {
     const db = makeDb()
     const current = {
@@ -862,6 +900,57 @@ describe("ScheduleBlock service", () => {
       end_at: "2026-08-23T04:00:00.000Z",
     })).resolves.toEqual(expect.objectContaining({ block_id: "block_direct", version: 2 }))
     expect(db.scheduleBlock.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("rejects expanding an Action block beyond its budget", async () => {
+    const db = makeDb()
+    db.scheduleBlock.findUnique.mockResolvedValue(baseBlock)
+
+    await expect(updateScheduleBlock(db, {
+      block_id: "block_existing",
+      expected_version: 1,
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+      message: "时间块超过剩余可安排时间",
+    })
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("rejects expanding a direct Plan block beyond its budget", async () => {
+    const db = makeDb()
+    const directBlock = {
+      ...baseBlock,
+      action_id: null,
+      action: null,
+    }
+    db.scheduleBlock.findUnique.mockResolvedValue(directBlock)
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 60,
+      actionItems: [],
+      scheduleBlocks: [{
+        block_id: directBlock.block_id,
+        action_id: null,
+        start_at: directBlock.start_at,
+        end_at: directBlock.end_at,
+        status: "scheduled",
+      }],
+    })
+    db.$queryRaw.mockImplementation(async (...call: unknown[]) => (
+      rawSqlTemplate(call).includes('FROM "ScheduleBlock"') ? [directBlock] : [{ plan_id: "plan_launch" }]
+    ))
+
+    await expect(updateScheduleBlock(db, {
+      block_id: directBlock.block_id,
+      expected_version: 1,
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+    })
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
   })
 
   it("allows touching intervals but returns overlap ids for half-open conflicts", async () => {
