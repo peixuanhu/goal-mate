@@ -115,6 +115,41 @@ function draggableBlock(overrides: Partial<ScheduleBlockView> = {}): ScheduleBlo
   }
 }
 
+class TestPointerEvent extends MouseEvent {
+  pointerId: number
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init)
+    this.pointerId = init.pointerId ?? 0
+  }
+}
+
+function beginWorkspaceResize(handleName: string, clientY: number, pointerId = 9) {
+  vi.stubGlobal("PointerEvent", TestPointerEvent)
+  vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1))
+  vi.stubGlobal("cancelAnimationFrame", vi.fn())
+  const dropzone = screen.getByTestId("today-timeline-dropzone")
+  vi.spyOn(dropzone, "getBoundingClientRect").mockReturnValue({
+    bottom: 220,
+    height: 120,
+    left: 0,
+    right: 600,
+    top: 100,
+    width: 600,
+    x: 0,
+    y: 100,
+    toJSON: () => ({}),
+  })
+  const handle = screen.getByRole("button", { name: handleName })
+  Object.defineProperties(handle, {
+    hasPointerCapture: { configurable: true, value: vi.fn(() => true) },
+    releasePointerCapture: { configurable: true, value: vi.fn() },
+    setPointerCapture: { configurable: true, value: vi.fn() },
+  })
+  fireEvent.pointerDown(handle, { clientY, pointerId })
+  return pointerId
+}
+
 function todayResponse(date: string, options: {
   blocks?: ScheduleBlockView[]
   candidate?: SchedulableCandidate
@@ -212,7 +247,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
   it("shows an exact invalid DST preview and does not write on drop", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 2, 8, 12))
-    const fetchMock = vi.fn((url: RequestInfo | URL) => Promise.resolve(todayResponse(dateFromUrl(url), {
+    const fetchMock = vi.fn((url: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(todayResponse(dateFromUrl(url), {
       preference: { timezone: "America/New_York", day_start_minutes: 0, day_end_minutes: 600 },
     })))
     vi.stubGlobal("fetch", fetchMock)
@@ -508,6 +543,127 @@ describe("TodayWorkspace timeline drag interactions", () => {
     })
     expect(screen.getAllByText("拖动时间块").length).toBeGreaterThan(0)
     await waitFor(() => expect(screen.queryByTestId("timeline-placement-preview")).toBeNull())
+  })
+
+  it("resizes a scheduled block through the versioned timeline update flow", async () => {
+    const existing = draggableBlock({ version: 7 })
+    let todayCalls = 0
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        return Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+      }
+      todayCalls += 1
+      return Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    const pointerId = beginWorkspaceResize("调整 拖动时间块 的结束时间", 205)
+    fireEvent.pointerMove(window, { clientY: 205, pointerId })
+    expect(screen.getByTestId("timeline-placement-preview").textContent).toContain("08:40–09:55 · 75 分钟")
+    fireEvent.pointerUp(window, { clientY: 205, pointerId })
+
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1))
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")?.[1]
+    expect(JSON.parse(String(put?.body))).toEqual({
+      operation: "update",
+      block_id: "block_drag",
+      expected_version: 7,
+      start_at: "2026-08-27T00:40:00.000Z",
+      end_at: "2026-08-27T01:55:00.000Z",
+    })
+    await waitFor(() => expect(todayCalls).toBe(2))
+    await waitFor(() => expect(screen.queryByTestId("timeline-placement-preview")).toBeNull())
+  })
+
+  it("does not PUT when a resize handle is pressed and released at the original edge", async () => {
+    const existing = draggableBlock()
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT"
+      ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+      : Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] })))
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    const pointerId = beginWorkspaceResize("调整 拖动时间块 的结束时间", 190)
+    fireEvent.pointerUp(window, { clientY: 190, pointerId })
+    await Promise.resolve()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+  })
+
+  it("keeps one pending resize authoritative and ignores duplicate pointer completion", async () => {
+    const existing = draggableBlock()
+    let settlePut: ((response: Response) => void) | undefined
+    const pendingPut = new Promise<Response>(resolve => { settlePut = resolve })
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT"
+      ? pendingPut
+      : Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] })))
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    const pointerId = beginWorkspaceResize("调整 拖动时间块 的结束时间", 205)
+    fireEvent.pointerMove(window, { clientY: 205, pointerId })
+    fireEvent.pointerUp(window, { clientY: 205, pointerId })
+    fireEvent.pointerUp(window, { clientY: 205, pointerId })
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1))
+    expect(screen.getByTestId("timeline-placement-preview").getAttribute("aria-busy")).toBe("true")
+    const endHandle = screen.getByRole("button", { name: "调整 拖动时间块 的结束时间" }) as HTMLButtonElement
+    expect(endHandle.disabled).toBe(true)
+    fireEvent.pointerDown(endHandle, { clientY: 210, pointerId: 10 })
+    fireEvent.pointerUp(window, { clientY: 210, pointerId: 10 })
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1)
+
+    settlePut?.(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+    await waitFor(() => expect(screen.queryByTestId("timeline-placement-preview")).toBeNull())
+  })
+
+  it("rejects a resize that exceeds the matching candidate budget before PUT", async () => {
+    const existing = draggableBlock()
+    const matchingCandidate = { ...candidate, id: "plan_drag", plan_id: "plan_drag", available_minutes: 0 }
+    const fetchMock = vi.fn((url: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(todayResponse(dateFromUrl(url), {
+      blocks: [existing],
+      candidate: matchingCandidate,
+    })))
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    const pointerId = beginWorkspaceResize("调整 拖动时间块 的结束时间", 205)
+    fireEvent.pointerMove(window, { clientY: 205, pointerId })
+    expect(screen.getByTestId("timeline-placement-preview").dataset.valid).toBe("false")
+    fireEvent.pointerUp(window, { clientY: 205, pointerId })
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+    expect(screen.getByRole("alert").textContent).toContain("超过剩余可安排时间")
+  })
+
+  it("refetches and surfaces a stale-version error after a resize 409", async () => {
+    const existing = draggableBlock()
+    let todayCalls = 0
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        return Promise.resolve(new Response(JSON.stringify({ error: "时间块已被其他请求更新" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        }))
+      }
+      todayCalls += 1
+      return Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    const pointerId = beginWorkspaceResize("调整 拖动时间块 的结束时间", 205)
+    fireEvent.pointerMove(window, { clientY: 205, pointerId })
+    fireEvent.pointerUp(window, { clientY: 205, pointerId })
+
+    await waitFor(() => expect(todayCalls).toBe(2))
+    expect(screen.getByRole("alert").textContent).toContain("时间块已被其他请求更新")
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(screen.getByRole("article", { name: "拖动时间块，已安排" }).textContent).toContain("08:40–09:40")
   })
 
   it.each(["create", "move"] as const)("refreshes exactly once and still broadcasts after a successful timeline %s", async mode => {

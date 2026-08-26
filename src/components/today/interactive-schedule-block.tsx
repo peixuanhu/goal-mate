@@ -18,6 +18,7 @@ export interface InteractiveScheduleBlockProps {
   statusLabel: string
   statusClassName: string
   disabled: boolean
+  timelineInteractionDisabled?: boolean
   onEdit: (block: ScheduleBlockView) => void
   onComplete: (block: ScheduleBlockView) => void
   onResizePointerDown: (block: ScheduleBlockView, edge: ResizeEdge, event: React.PointerEvent<HTMLButtonElement>) => void
@@ -30,6 +31,7 @@ export function InteractiveScheduleBlock({
   statusLabel,
   statusClassName,
   disabled,
+  timelineInteractionDisabled = false,
   onEdit,
   onComplete,
   onResizePointerDown,
@@ -39,7 +41,7 @@ export function InteractiveScheduleBlock({
   const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef, transform } = useDraggable({
     id: `schedule-block:${block.block_id}`,
     data: { kind: "schedule-block", block, localRange },
-    disabled: disabled || block.status !== "scheduled",
+    disabled: disabled || timelineInteractionDisabled || block.status !== "scheduled",
   })
   const dragTransform = CSS.Transform.toString(transform)
   const openEditorFromResizeHandle = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -61,7 +63,7 @@ export function InteractiveScheduleBlock({
           <button
             aria-label={`调整 ${block.title} 的开始时间`}
             className="touch-none absolute inset-x-0 top-0 z-10 h-3 cursor-ns-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-            disabled={disabled}
+            disabled={disabled || timelineInteractionDisabled}
             onKeyDown={openEditorFromResizeHandle}
             onPointerDown={event => onResizePointerDown(block, "start", event)}
             type="button"
@@ -71,7 +73,7 @@ export function InteractiveScheduleBlock({
           <button
             aria-label={`调整 ${block.title} 的结束时间`}
             className="touch-none absolute inset-x-0 bottom-0 z-10 h-3 cursor-ns-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-            disabled={disabled}
+            disabled={disabled || timelineInteractionDisabled}
             onKeyDown={openEditorFromResizeHandle}
             onPointerDown={event => onResizePointerDown(block, "end", event)}
             type="button"
@@ -98,7 +100,7 @@ export function InteractiveScheduleBlock({
             <button
               aria-label={`移动 ${block.title}`}
               className="touch-none cursor-grab rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 active:cursor-grabbing"
-              disabled={disabled}
+              disabled={disabled || timelineInteractionDisabled}
               ref={setActivatorNodeRef}
               type="button"
               {...attributes}

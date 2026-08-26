@@ -29,8 +29,10 @@ import {
   findValidStartAtOrAfter,
   minuteFromTimelinePoint,
   placeTimelineRange,
+  toLocalBlockRange,
   validateTimelinePlacement,
   type TimelinePlacementResult,
+  type TimelineRange,
 } from "./scheduling-ui"
 
 type EditorIntent = {
@@ -468,18 +470,15 @@ export function TodayWorkspace() {
     if (translatedTop === null) return null
     const start = minuteFromTimelinePoint(translatedTop, event.over.rect, preference, duration)
     const range = placeTimelineRange("move", start, data.localRange, preference)
-    const candidate = candidates.find(item => (
-      item.plan_id === data.block.plan_id && item.action_id === data.block.action_id
-    ))
-    const availableMinutes = candidate?.available_minutes
+    const maximumDurationMinutes = maximumDurationForBlock(data.block, data.localRange)
     const result = validateTimelinePlacement({
       date,
       range,
       preference,
       blocks,
       ignoredBlockId: data.block.block_id,
-      ...(typeof availableMinutes === "number"
-        ? { maximumDurationMinutes: duration + availableMinutes }
+      ...(typeof maximumDurationMinutes === "number"
+        ? { maximumDurationMinutes }
         : {}),
     })
     return {
@@ -493,6 +492,112 @@ export function TodayWorkspace() {
         pending: false,
       },
     }
+  }
+
+  function maximumDurationForBlock(block: ScheduleBlockView, original: TimelineRange): number | null | undefined {
+    const candidate = candidates.find(item => (
+      item.plan_id === block.plan_id && item.action_id === block.action_id
+    ))
+    if (candidate === undefined || candidate.available_minutes === undefined) return undefined
+    if (candidate.available_minutes === null) return null
+    return original.end - original.start + candidate.available_minutes
+  }
+
+  function updateTimelineBlock(
+    block: ScheduleBlockView,
+    result: Extract<TimelinePlacementResult, { ok: true }>,
+    pendingPreview: TimelinePlacementPreview,
+  ) {
+    if (timelineMutationIdRef.current !== null) return
+    const selectedDate = date
+    if (selectedDate === null) return
+    const mutationId = crypto.randomUUID()
+    timelineMutationIdRef.current = mutationId
+    setScheduleError(null)
+    setDragPreview({ ...pendingPreview, pending: true })
+
+    void (async () => {
+      const isCurrentTimelineMutation = () => (
+        mountedRef.current
+        && timelineMutationIdRef.current === mutationId
+        && dateRef.current === selectedDate
+      )
+      try {
+        const response = await fetch("/api/schedule-block", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operation: "update",
+            block_id: block.block_id,
+            expected_version: block.version,
+            start_at: result.interval.start_at,
+            end_at: result.interval.end_at,
+          }),
+        })
+        const payload: unknown = await response.json().catch(() => null)
+        if (!response.ok) {
+          const message = responseError(payload, `更新时间块失败（${response.status}）`)
+          if (response.status === 409 && isCurrentTimelineMutation()) {
+            await loadToday(selectedDate, new AbortController(), true)
+            if (isCurrentTimelineMutation()) setScheduleError(message)
+            return
+          }
+          throw new Error(message)
+        }
+        if (!isCurrentTimelineMutation()) return
+        const refreshResult = await loadToday(selectedDate, new AbortController(), true)
+        if (!isCurrentTimelineMutation()) return
+        if (refreshResult === "failed") {
+          setScheduleError("修改已保存，但今日数据刷新失败，请重新加载页面")
+          return
+        }
+        if (refreshResult !== "applied") return
+        window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
+      } catch (mutationError) {
+        if (isCurrentTimelineMutation()) {
+          setScheduleError(mutationError instanceof Error && mutationError.message ? mutationError.message : "更新时间块失败")
+        }
+      } finally {
+        if (isCurrentTimelineMutation()) {
+          timelineMutationIdRef.current = null
+          clearTimelineDrag()
+        }
+      }
+    })()
+  }
+
+  function handleResizeBlock(block: ScheduleBlockView, range: TimelineRange) {
+    if (timelineMutationIdRef.current !== null || date === null) return
+    const maximumDurationMinutes = maximumDurationForBlock(block, toLocalRangeForMaximum(block, range))
+    const result = validateTimelinePlacement({
+      date,
+      range,
+      preference,
+      blocks,
+      ignoredBlockId: block.block_id,
+      ...(typeof maximumDurationMinutes === "number" ? { maximumDurationMinutes } : {}),
+    })
+    if (!result.ok) {
+      setScheduleError(result.message)
+      return
+    }
+    updateTimelineBlock(block, result, {
+      id: `resize:${block.block_id}`,
+      title: block.title,
+      range: result.range,
+      valid: true,
+      message: null,
+      pending: false,
+    })
+  }
+
+  function toLocalRangeForMaximum(block: ScheduleBlockView, fallback: TimelineRange): TimelineRange {
+    try {
+      if (date !== null) return toLocalBlockRange(block.start_at, block.end_at, preference.timezone, date)
+    } catch {
+      // DayTimeline already validated the rendered block; retain its resized range as a safe fallback.
+    }
+    return fallback
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -562,65 +667,7 @@ export function TodayWorkspace() {
         return
       }
 
-      const selectedDate = date
-      if (selectedDate === null) {
-        clearTimelineDrag()
-        return
-      }
-      const mutationId = crypto.randomUUID()
-      const interval = placement.result.interval
-      timelineMutationIdRef.current = mutationId
-      setScheduleError(null)
-      setDragPreview({ ...placement.preview, pending: true })
-
-      void (async () => {
-        const isCurrentTimelineMutation = () => (
-          mountedRef.current
-          && timelineMutationIdRef.current === mutationId
-          && dateRef.current === selectedDate
-        )
-        try {
-          const response = await fetch("/api/schedule-block", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              operation: "update",
-              block_id: data.block.block_id,
-              expected_version: data.block.version,
-              start_at: interval.start_at,
-              end_at: interval.end_at,
-            }),
-          })
-          const payload: unknown = await response.json().catch(() => null)
-          if (!response.ok) {
-            const message = responseError(payload, `更新时间块失败（${response.status}）`)
-            if (response.status === 409 && isCurrentTimelineMutation()) {
-              await loadToday(selectedDate, new AbortController(), true)
-              if (isCurrentTimelineMutation()) setScheduleError(message)
-              return
-            }
-            throw new Error(message)
-          }
-          if (!isCurrentTimelineMutation()) return
-          const refreshResult = await loadToday(selectedDate, new AbortController(), true)
-          if (!isCurrentTimelineMutation()) return
-          if (refreshResult === "failed") {
-            setScheduleError("修改已保存，但今日数据刷新失败，请重新加载页面")
-            return
-          }
-          if (refreshResult !== "applied") return
-          window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
-        } catch (mutationError) {
-          if (isCurrentTimelineMutation()) {
-            setScheduleError(mutationError instanceof Error && mutationError.message ? mutationError.message : "更新时间块失败")
-          }
-        } finally {
-          if (isCurrentTimelineMutation()) {
-            timelineMutationIdRef.current = null
-            clearTimelineDrag()
-          }
-        }
-      })()
+      updateTimelineBlock(data.block, placement.result, placement.preview)
       return
     }
     if (!isCandidateDragData(data)) return
@@ -892,6 +939,7 @@ export function TodayWorkspace() {
                   date={date}
                   error={error}
                   loading={loading}
+                  maximumDurationForBlock={maximumDurationForBlock}
                   preview={dragPreview}
                   onCompleteBlock={block => {
                     setScheduleError(null)
@@ -909,6 +957,8 @@ export function TodayWorkspace() {
                       idempotencyKey: null,
                     })
                   }}
+                  onPlacementError={setScheduleError}
+                  onResizeBlock={handleResizeBlock}
                   preference={preference}
                 />
             </section>

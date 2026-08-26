@@ -58,6 +58,12 @@ const preference: PlanningPreferenceView = {
   version: null,
 }
 
+const passiveTimelineResizeProps = {
+  maximumDurationForBlock: () => null,
+  onPlacementError: () => undefined,
+  onResizeBlock: () => undefined,
+}
+
 const planCandidate: SchedulableCandidate = {
   kind: "plan",
   id: "plan_launch",
@@ -112,6 +118,82 @@ function scheduledBlock(overrides: Partial<ScheduleBlockView> = {}): ScheduleBlo
     version: 2,
     ...overrides,
   }
+}
+
+class TestPointerEvent extends MouseEvent {
+  isPrimary: boolean
+  pointerId: number
+  pointerType: string
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init)
+    this.isPrimary = init.isPrimary ?? true
+    this.pointerId = init.pointerId ?? 0
+    this.pointerType = init.pointerType ?? "mouse"
+  }
+}
+
+function renderResizableTimeline(options: {
+  blocks?: ScheduleBlockView[]
+  date?: string
+  maximumDurationForBlock?: (block: ScheduleBlockView, original: { start: number; end: number }) => number | null | undefined
+} = {}) {
+  vi.stubGlobal("PointerEvent", TestPointerEvent)
+  const onResizeBlock = vi.fn()
+  const onPlacementError = vi.fn()
+  const props = {
+    blocks: options.blocks ?? [scheduledBlock()],
+    date: options.date ?? "2026-08-23",
+    error: null,
+    loading: false,
+    maximumDurationForBlock: options.maximumDurationForBlock ?? (() => null),
+    onCompleteBlock: vi.fn(),
+    onEditBlock: vi.fn(),
+    onPlacementError,
+    onResizeBlock,
+    preference,
+  }
+  const rendered = render(<DndContext><DayTimeline {...props} /></DndContext>)
+  const dropzone = screen.getByTestId("today-timeline-dropzone")
+  vi.spyOn(dropzone, "getBoundingClientRect").mockReturnValue({
+    bottom: 940,
+    height: 840,
+    left: 0,
+    right: 600,
+    top: 100,
+    width: 600,
+    x: 0,
+    y: 100,
+    toJSON: () => ({}),
+  })
+  return { ...rendered, onPlacementError, onResizeBlock, props }
+}
+
+function beginResize(handleName: string, clientY: number, pointerId = 7, init: PointerEventInit = {}) {
+  const handle = screen.getByRole("button", { name: handleName })
+  const setPointerCapture = vi.fn()
+  const releasePointerCapture = vi.fn()
+  Object.defineProperties(handle, {
+    hasPointerCapture: { configurable: true, value: vi.fn(() => true) },
+    releasePointerCapture: { configurable: true, value: releasePointerCapture },
+    setPointerCapture: { configurable: true, value: setPointerCapture },
+  })
+  fireEvent.pointerDown(handle, { clientY, pointerId, ...init })
+  return { handle, pointerId, releasePointerCapture, setPointerCapture }
+}
+
+function stubResizeFrames() {
+  const callbacks = new Map<number, FrameRequestCallback>()
+  let nextFrame = 1
+  const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+    const id = nextFrame++
+    callbacks.set(id, callback)
+    return id
+  })
+  const cancelAnimationFrame = vi.fn((id: number) => callbacks.delete(id))
+  vi.stubGlobal("requestAnimationFrame", requestAnimationFrame)
+  vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame)
+  return { callbacks, cancelAnimationFrame, requestAnimationFrame }
 }
 
 function todayView(date: string, blocks: ScheduleBlockView[] = [], candidates = [planCandidate, actionCandidate]): TodayView {
@@ -171,6 +253,7 @@ describe("manual scheduling components", () => {
     const { rerender, unmount } = render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[
             scheduledBlock(),
             scheduledBlock({ block_id: "done", title: "已完成", status: "completed" }),
@@ -214,6 +297,7 @@ describe("manual scheduling components", () => {
     rerender(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[]}
           date="2026-08-22"
           error={null}
@@ -233,6 +317,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[]}
           date="2026-08-23"
           error={null}
@@ -253,6 +338,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[scheduledBlock()]}
           date="2026-08-23"
           error={null}
@@ -280,6 +366,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[scheduledBlock()]}
           date="2026-08-23"
           error={null}
@@ -306,6 +393,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[scheduledBlock()]}
           date="2026-08-23"
           error={null}
@@ -367,8 +455,208 @@ describe("manual scheduling components", () => {
     expect(onResizePointerDown).toHaveBeenCalledTimes(2)
   })
 
+  it.each([
+    ["start", "调整 写发布说明 的开始时间", 175, { start: 555, end: 600 }],
+    ["end", "调整 写发布说明 的结束时间", 235, { start: 540, end: 615 }],
+  ] as const)("resizes the %s edge on the real quarter-hour timeline geometry", (_edge, handleName, clientY, expectedRange) => {
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    const { setPointerCapture } = beginResize(handleName, clientY)
+    expect(setPointerCapture).toHaveBeenCalledWith(7)
+    fireEvent.pointerMove(window, { clientY, pointerId: 7 })
+    expect(screen.getByTestId("timeline-placement-preview").textContent).toContain(
+      `${expectedRange.start === 555 ? "09:15" : "09:00"}–${expectedRange.end === 615 ? "10:15" : "10:00"}`,
+    )
+    fireEvent.pointerUp(window, { clientY, pointerId: 7 })
+
+    expect(onResizeBlock).toHaveBeenCalledWith(expect.objectContaining({ block_id: "block_copy" }), expectedRange)
+    expect(onPlacementError).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["调整 写发布说明 的开始时间", 220, { start: 585, end: 600 }],
+    ["调整 写发布说明 的结束时间", 160, { start: 540, end: 555 }],
+  ] as const)("keeps a resized block at least one 15-minute slot via %s", (handleName, clientY, expectedRange) => {
+    const { onResizeBlock } = renderResizableTimeline()
+    beginResize(handleName, clientY)
+    fireEvent.pointerMove(window, { clientY, pointerId: 7 })
+    fireEvent.pointerUp(window, { clientY, pointerId: 7 })
+    expect(onResizeBlock).toHaveBeenCalledWith(expect.anything(), expectedRange)
+  })
+
+  it.each([
+    ["mouse click", { pointerType: "mouse" }],
+    ["touch tap", { pointerType: "touch" }],
+  ] as const)("treats a stationary primary %s as a no-op", (_label, pointerInit) => {
+    const { callbacks, cancelAnimationFrame } = stubResizeFrames()
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    beginResize("调整 写发布说明 的结束时间", 220, 7, pointerInit)
+    expect(screen.getByTestId("timeline-placement-preview")).toBeTruthy()
+    fireEvent.pointerUp(window, { clientY: 220, pointerId: 7, ...pointerInit })
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(callbacks.size).toBe(0)
+  })
+
+  it.each([
+    ["right click", { button: 2 }],
+    ["non-primary pointer", { isPrimary: false }],
+  ] as const)("does not start resize for a %s", (_label, pointerInit) => {
+    const { callbacks } = stubResizeFrames()
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    const { setPointerCapture } = beginResize("调整 写发布说明 的结束时间", 235, 7, pointerInit)
+    expect(setPointerCapture).not.toHaveBeenCalled()
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(callbacks.size).toBe(0)
+    fireEvent.pointerUp(window, { clientY: 235, pointerId: 7, ...pointerInit })
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+  })
+
+  it("ignores move and up events from another pointer while keeping the active resize", () => {
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    beginResize("调整 写发布说明 的结束时间", 220, 7)
+    fireEvent.pointerMove(window, { clientY: 235, pointerId: 8 })
+    expect(screen.getByTestId("timeline-placement-preview").textContent).toContain("09:00–10:00")
+    fireEvent.pointerUp(window, { clientY: 235, pointerId: 8 })
+    expect(screen.getByTestId("timeline-placement-preview")).toBeTruthy()
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+    fireEvent.pointerCancel(window, { clientY: 220, pointerId: 7 })
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+  })
+
+  it("cleans an active resize on lostpointercapture without committing", () => {
+    const { callbacks, cancelAnimationFrame } = stubResizeFrames()
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    const { handle } = beginResize("调整 写发布说明 的结束时间", 235, 7)
+    fireEvent.pointerMove(window, { clientY: 235, pointerId: 7 })
+    fireEvent.lostPointerCapture(handle, { pointerId: 7 })
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(callbacks.size).toBe(0)
+  })
+
+  it("does not recursively clean when releasing capture emits lostpointercapture", () => {
+    const { onResizeBlock } = renderResizableTimeline()
+    const { handle } = beginResize("调整 写发布说明 的结束时间", 235, 7)
+    const releasePointerCapture = vi.fn(() => {
+      fireEvent.lostPointerCapture(handle, { pointerId: 7 })
+    })
+    Object.defineProperty(handle, "releasePointerCapture", { configurable: true, value: releasePointerCapture })
+    expect(() => fireEvent.pointerCancel(window, { pointerId: 7 })).not.toThrow()
+    expect(releasePointerCapture).toHaveBeenCalledTimes(1)
+    expect(onResizeBlock).not.toHaveBeenCalled()
+  })
+
+  it("renders a red conflicting resize preview and reports the placement error without committing", () => {
+    const conflict = scheduledBlock({
+      block_id: "conflict",
+      plan_id: "other",
+      action_id: null,
+      title: "已有冲突",
+      start_at: "2026-08-23T00:30:00.000Z",
+      end_at: "2026-08-23T01:00:00.000Z",
+    })
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline({ blocks: [scheduledBlock(), conflict] })
+    beginResize("调整 写发布说明 的开始时间", 145)
+    fireEvent.pointerMove(window, { clientY: 145, pointerId: 7 })
+    const preview = screen.getByTestId("timeline-placement-preview")
+    expect(preview.dataset.valid).toBe("false")
+    expect(preview.textContent).toContain("冲突")
+    fireEvent.pointerUp(window, { clientY: 145, pointerId: 7 })
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).toHaveBeenCalledWith(expect.stringContaining("冲突"))
+  })
+
+  it("enforces the candidate maximum while resizing", () => {
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline({ maximumDurationForBlock: () => 60 })
+    beginResize("调整 写发布说明 的结束时间", 235)
+    fireEvent.pointerMove(window, { clientY: 235, pointerId: 7 })
+    expect(screen.getByTestId("timeline-placement-preview").dataset.valid).toBe("false")
+    fireEvent.pointerUp(window, { clientY: 235, pointerId: 7 })
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).toHaveBeenCalledWith(expect.stringContaining("剩余可安排时间"))
+  })
+
+  it.each(["pointercancel", "Escape"] as const)("clears an active resize on %s without committing", cancellation => {
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline()
+    const { releasePointerCapture } = beginResize("调整 写发布说明 的结束时间", 235)
+    fireEvent.pointerMove(window, { clientY: 235, pointerId: 7 })
+    expect(screen.getByTestId("timeline-placement-preview")).toBeTruthy()
+    if (cancellation === "pointercancel") {
+      fireEvent.pointerCancel(window, { clientY: 235, pointerId: 7 })
+    } else {
+      fireEvent.keyDown(window, { code: "Escape", key: "Escape" })
+    }
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(releasePointerCapture).toHaveBeenCalledWith(7)
+    expect(onResizeBlock).not.toHaveBeenCalled()
+    expect(onPlacementError).not.toHaveBeenCalled()
+  })
+
+  it("clears resize listeners when the date changes or the timeline unmounts", () => {
+    const first = renderResizableTimeline()
+    beginResize("调整 写发布说明 的结束时间", 235)
+    first.rerender(
+      <DndContext>
+        <DayTimeline {...first.props} date="2026-08-24" />
+      </DndContext>,
+    )
+    fireEvent.pointerUp(window, { clientY: 235, pointerId: 7 })
+    expect(first.onResizeBlock).not.toHaveBeenCalled()
+    first.unmount()
+
+    const second = renderResizableTimeline()
+    beginResize("调整 写发布说明 的结束时间", 235)
+    second.unmount()
+    fireEvent.pointerUp(window, { clientY: 235, pointerId: 7 })
+    expect(second.onResizeBlock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["top", 105, 30, 18],
+    ["bottom", 295, 0, 12],
+    ["bottom clamp", 295, 795, 800],
+    ["top boundary", 105, 0, 0],
+  ] as const)("auto-scrolls at the %s edge by at most 12px and clamps the viewport", (_label, clientY, initialScrollTop, expectedScrollTop) => {
+    const { callbacks, cancelAnimationFrame } = stubResizeFrames()
+    renderResizableTimeline()
+    const viewport = screen.getByTestId("today-timeline-scroll")
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1000 },
+    })
+    viewport.scrollTop = initialScrollTop
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+      bottom: 300,
+      height: 200,
+      left: 0,
+      right: 600,
+      top: 100,
+      width: 600,
+      x: 0,
+      y: 100,
+      toJSON: () => ({}),
+    })
+    beginResize("调整 写发布说明 的结束时间", clientY)
+    expect(callbacks.size).toBe(1)
+    const [frameId, callback] = [...callbacks.entries()][0]
+    callbacks.delete(frameId)
+    act(() => callback(16))
+    expect(viewport.scrollTop).toBe(expectedScrollTop)
+    expect(callbacks.size).toBe(1)
+    fireEvent.pointerCancel(window, { clientY, pointerId: 7 })
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(callbacks.size).toBe(0)
+  })
+
   it("uses a compact single line for the 15-minute content safety zone and keeps longer blocks double-line", () => {
     const timelineProps = {
+      ...passiveTimelineResizeProps,
       date: "2026-08-23",
       error: null,
       loading: false,
@@ -412,6 +700,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[]}
           date="2026-08-23"
           error={null}
@@ -434,6 +723,7 @@ describe("manual scheduling components", () => {
     vi.setSystemTime(new Date("2026-08-23T02:15:00.000Z"))
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600)
     const timelineProps = {
+      ...passiveTimelineResizeProps,
       error: null,
       loading: false,
       onCompleteBlock: vi.fn(),
@@ -465,6 +755,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[]}
           date="2026-08-22"
           error={null}
@@ -485,6 +776,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[
             scheduledBlock({ block_id: "a", title: "当前安排" }),
             scheduledBlock({ block_id: "z-cancelled", title: "已取消历史", status: "cancelled" }),
@@ -523,6 +815,7 @@ describe("manual scheduling components", () => {
     render(
       <DndContext>
         <DayTimeline
+          {...passiveTimelineResizeProps}
           blocks={[
             scheduledBlock({
               block_id: "first",

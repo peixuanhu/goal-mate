@@ -2,13 +2,22 @@
 
 import { useDroppable } from "@dnd-kit/core"
 import { Clock3 } from "lucide-react"
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { formatUtcInTimeZone } from "@/lib/today/timezone"
 import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } from "@/lib/today/types"
 
-import { InteractiveScheduleBlock } from "./interactive-schedule-block"
-import { buildTimelineGrid, minuteToTimeInput, toLocalBlockRange, type TimelineRange } from "./scheduling-ui"
+import { InteractiveScheduleBlock, type ResizeEdge } from "./interactive-schedule-block"
+import {
+  buildTimelineGrid,
+  minuteFromTimelinePoint,
+  minuteToTimeInput,
+  placeTimelineRange,
+  toLocalBlockRange,
+  validateTimelinePlacement,
+  type TimelinePlacementResult,
+  type TimelineRange,
+} from "./scheduling-ui"
 
 export type TimelinePlacementPreview = {
   id: string
@@ -28,6 +37,23 @@ interface DayTimelineProps {
   preview?: TimelinePlacementPreview | null
   onEditBlock: (block: ScheduleBlockView) => void
   onCompleteBlock: (block: ScheduleBlockView) => void
+  onResizeBlock: (block: ScheduleBlockView, range: TimelineRange) => void
+  onPlacementError: (message: string) => void
+  maximumDurationForBlock: (block: ScheduleBlockView, original: TimelineRange) => number | null | undefined
+}
+
+type ResizePlacement = {
+  preview: TimelinePlacementPreview
+  result: TimelinePlacementResult
+}
+
+type ResizeState = {
+  pointerId: number
+  clientY: number
+  block: ScheduleBlockView
+  edge: ResizeEdge
+  original: TimelineRange
+  placement: ResizePlacement
 }
 
 export const TIMELINE_PIXELS_PER_MINUTE = 3.2
@@ -70,7 +96,19 @@ function useCurrentLocalMinute(date: string, timezone: string): number | null {
   }
 }
 
-export function DayTimeline({ date, preference, blocks, loading, error, preview = null, onEditBlock, onCompleteBlock }: DayTimelineProps) {
+export function DayTimeline({
+  date,
+  preference,
+  blocks,
+  loading,
+  error,
+  preview = null,
+  onEditBlock,
+  onCompleteBlock,
+  onResizeBlock,
+  onPlacementError,
+  maximumDurationForBlock,
+}: DayTimelineProps) {
   const { isOver, setNodeRef } = useDroppable({
     id: "today-timeline",
     data: {
@@ -79,6 +117,11 @@ export function DayTimeline({ date, preference, blocks, loading, error, preview 
     },
   })
   const scrollViewportRef = useRef<HTMLDivElement>(null)
+  const dropzoneRef = useRef<HTMLDivElement | null>(null)
+  const resizeTargetRef = useRef<HTMLButtonElement | null>(null)
+  const resizeStateRef = useRef<ResizeState | null>(null)
+  const resizeFrameRef = useRef<number | null>(null)
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null)
   const autoPositionedDateRef = useRef<string | null>(null)
   const markers = useMemo(
     () => buildTimelineGrid(preference),
@@ -90,6 +133,194 @@ export function DayTimeline({ date, preference, blocks, loading, error, preview 
   const showCurrentTime = currentMinute !== null
     && currentMinute >= preference.day_start_minutes
     && currentMinute < preference.day_end_minutes
+
+  const updateResizePlacement = useCallback((clientY: number): ResizeState | null => {
+    const current = resizeStateRef.current
+    const dropzone = dropzoneRef.current
+    if (current === null || dropzone === null) return null
+    const snappedMinute = minuteFromTimelinePoint(clientY, dropzone.getBoundingClientRect(), preference, 0)
+    const range = placeTimelineRange(
+      current.edge === "start" ? "resize-start" : "resize-end",
+      snappedMinute,
+      current.original,
+      preference,
+    )
+    const maximum = maximumDurationForBlock(current.block, current.original)
+    const result = validateTimelinePlacement({
+      date,
+      range,
+      preference,
+      blocks,
+      ignoredBlockId: current.block.block_id,
+      ...(typeof maximum === "number" ? { maximumDurationMinutes: maximum } : {}),
+    })
+    const next: ResizeState = {
+      ...current,
+      clientY,
+      placement: {
+        result,
+        preview: {
+          id: `resize:${current.block.block_id}`,
+          title: current.block.title,
+          range: result.ok ? result.range : range,
+          valid: result.ok,
+          message: result.ok ? null : result.message,
+          pending: false,
+        },
+      },
+    }
+    resizeStateRef.current = next
+    setResizeState(next)
+    return next
+  }, [blocks, date, maximumDurationForBlock, preference])
+
+  const stopResizeAutoScroll = useCallback(() => {
+    if (resizeFrameRef.current === null) return
+    window.cancelAnimationFrame(resizeFrameRef.current)
+    resizeFrameRef.current = null
+  }, [])
+
+  const startResizeAutoScroll = useCallback(() => {
+    if (resizeFrameRef.current !== null) return
+    const frame = () => {
+      resizeFrameRef.current = null
+      const current = resizeStateRef.current
+      const viewport = scrollViewportRef.current
+      if (current === null || viewport === null) return
+      const rect = viewport.getBoundingClientRect()
+      let delta = 0
+      if (current.clientY <= rect.top + 48) delta = -12
+      else if (current.clientY >= rect.bottom - 48) delta = 12
+      if (delta !== 0) {
+        const maximumScrollTop = Math.max(viewport.scrollHeight - viewport.clientHeight, 0)
+        const nextScrollTop = Math.min(maximumScrollTop, Math.max(0, viewport.scrollTop + delta))
+        if (nextScrollTop !== viewport.scrollTop) {
+          viewport.scrollTop = nextScrollTop
+          updateResizePlacement(current.clientY)
+        }
+      }
+      if (resizeStateRef.current !== null && resizeFrameRef.current === null) {
+        resizeFrameRef.current = window.requestAnimationFrame(frame)
+      }
+    }
+    resizeFrameRef.current = window.requestAnimationFrame(frame)
+  }, [updateResizePlacement])
+
+  const disposeResize = useCallback(() => {
+    stopResizeAutoScroll()
+    const current = resizeStateRef.current
+    const target = resizeTargetRef.current
+    resizeStateRef.current = null
+    resizeTargetRef.current = null
+    if (current !== null && target?.hasPointerCapture?.(current.pointerId)) {
+      target.releasePointerCapture(current.pointerId)
+    }
+  }, [stopResizeAutoScroll])
+
+  const clearResize = useCallback(() => {
+    disposeResize()
+    setResizeState(null)
+  }, [disposeResize])
+
+  const handleResizePointerDown = useCallback((block: ScheduleBlockView, edge: ResizeEdge, event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.isPrimary === false || event.button !== 0 || preview?.pending || resizeStateRef.current !== null) return
+    let original: TimelineRange
+    try {
+      original = toLocalBlockRange(block.start_at, block.end_at, preference.timezone, date)
+    } catch {
+      onPlacementError("该时间块无法在当前日期调整")
+      return
+    }
+    const pointerId = event.pointerId
+    event.currentTarget.setPointerCapture(pointerId)
+    const maximum = maximumDurationForBlock(block, original)
+    const result = validateTimelinePlacement({
+      date,
+      range: original,
+      preference,
+      blocks,
+      ignoredBlockId: block.block_id,
+      ...(typeof maximum === "number" ? { maximumDurationMinutes: maximum } : {}),
+    })
+    const next: ResizeState = {
+      pointerId,
+      clientY: event.clientY,
+      block,
+      edge,
+      original,
+      placement: {
+        result,
+        preview: {
+          id: `resize:${block.block_id}`,
+          title: block.title,
+          range: original,
+          valid: result.ok,
+          message: result.ok ? null : result.message,
+          pending: false,
+        },
+      },
+    }
+    resizeTargetRef.current = event.currentTarget
+    resizeStateRef.current = next
+    setResizeState(next)
+    startResizeAutoScroll()
+  }, [blocks, date, maximumDurationForBlock, onPlacementError, preference, preview?.pending, startResizeAutoScroll])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const current = resizeStateRef.current
+      if (current === null || event.pointerId !== current.pointerId) return
+      event.preventDefault()
+      updateResizePlacement(event.clientY)
+    }
+    const handlePointerUp = (event: PointerEvent) => {
+      const current = resizeStateRef.current
+      if (current === null || event.pointerId !== current.pointerId) return
+      event.preventDefault()
+      const final = updateResizePlacement(event.clientY) ?? current
+      clearResize()
+      if (
+        final.placement.result.ok
+        && final.placement.result.range.start === final.original.start
+        && final.placement.result.range.end === final.original.end
+      ) return
+      if (final.placement.result.ok) onResizeBlock(final.block, final.placement.result.range)
+      else onPlacementError(final.placement.result.message)
+    }
+    const handlePointerCancel = (event: PointerEvent) => {
+      const current = resizeStateRef.current
+      if (current !== null && event.pointerId === current.pointerId) clearResize()
+    }
+    const handleLostPointerCapture = (event: PointerEvent) => {
+      const current = resizeStateRef.current
+      if (current !== null && event.pointerId === current.pointerId) clearResize()
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || resizeStateRef.current === null) return
+      event.preventDefault()
+      clearResize()
+    }
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    window.addEventListener("pointercancel", handlePointerCancel)
+    window.addEventListener("lostpointercapture", handleLostPointerCapture)
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      window.removeEventListener("pointercancel", handlePointerCancel)
+      window.removeEventListener("lostpointercapture", handleLostPointerCapture)
+      window.removeEventListener("keydown", handleKeyDown, true)
+    }
+  }, [clearResize, onPlacementError, onResizeBlock, updateResizePlacement])
+
+  useEffect(() => {
+    clearResize()
+  }, [clearResize, date])
+
+  useEffect(() => disposeResize, [disposeResize])
 
   useEffect(() => {
     if (!showCurrentTime || currentMinute === null || durationMinutes <= 0) return
@@ -125,7 +356,15 @@ export function DayTimeline({ date, preference, blocks, loading, error, preview 
         data-testid="today-timeline-scroll"
         ref={scrollViewportRef}
       >
-        <div className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
+        <div
+          className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`}
+          data-testid="today-timeline-dropzone"
+          ref={node => {
+            dropzoneRef.current = node
+            setNodeRef(node)
+          }}
+          style={{ minHeight: timelineHeight }}
+        >
           {markers.map((marker, index) => {
             const { emphasis, minutes } = marker
             const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
@@ -168,35 +407,38 @@ export function DayTimeline({ date, preference, blocks, loading, error, preview 
                 disabled={false}
                 onComplete={onCompleteBlock}
                 onEdit={onEditBlock}
-                onResizePointerDown={() => undefined}
+                onResizePointerDown={handleResizePointerDown}
                 statusClassName={STATUS_CLASSES[block.status]}
                 statusLabel={STATUS_LABELS[block.status]}
                 style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
+                timelineInteractionDisabled={preview?.pending === true}
               />
             )
           })}
 
-          {preview && durationMinutes > 0 ? (() => {
-            const visibleStart = Math.max(preview.range.start, preference.day_start_minutes)
-            const visibleEnd = Math.min(preview.range.end, preference.day_end_minutes)
+          {(resizeState?.placement.preview ?? preview) && durationMinutes > 0 ? (() => {
+            const activePreview = resizeState?.placement.preview ?? preview
+            if (activePreview === null) return null
+            const visibleStart = Math.max(activePreview.range.start, preference.day_start_minutes)
+            const visibleEnd = Math.min(activePreview.range.end, preference.day_end_minutes)
             if (visibleEnd <= visibleStart) return null
             const top = ((visibleStart - preference.day_start_minutes) / durationMinutes) * 100
             const height = ((visibleEnd - visibleStart) / durationMinutes) * 100
-            const previewClass = preview.valid
+            const previewClass = activePreview.valid
               ? "border-violet-400 bg-violet-200/90 text-violet-950"
               : "border-red-400 bg-red-100/95 text-red-900"
             return (
               <div
-                aria-busy={preview.pending}
-                className={`pointer-events-none absolute left-[4.5rem] right-3 z-30 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${previewClass} ${preview.pending ? "opacity-75" : ""}`}
+                aria-busy={activePreview.pending}
+                className={`pointer-events-none absolute left-[4.5rem] right-3 z-30 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${previewClass} ${activePreview.pending ? "opacity-75" : ""}`}
                 data-testid="timeline-placement-preview"
-                data-valid={String(preview.valid)}
-                key={preview.id}
+                data-valid={String(activePreview.valid)}
+                key={activePreview.id}
                 style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
               >
-                <p className="truncate text-sm font-semibold">{preview.title}</p>
-                <p className="mt-0.5 text-[11px] tabular-nums opacity-80">{formatMinutes(preview.range.start)}–{formatMinutes(preview.range.end)} · {preview.range.end - preview.range.start} 分钟</p>
-                {preview.message ? <p className="mt-0.5 text-[11px] font-medium">{preview.message}</p> : null}
+                <p className="truncate text-sm font-semibold">{activePreview.title}</p>
+                <p className="mt-0.5 text-[11px] tabular-nums opacity-80">{formatMinutes(activePreview.range.start)}–{formatMinutes(activePreview.range.end)} · {activePreview.range.end - activePreview.range.start} 分钟</p>
+                {activePreview.message ? <p className="mt-0.5 text-[11px] font-medium">{activePreview.message}</p> : null}
               </div>
             )
           })() : null}
