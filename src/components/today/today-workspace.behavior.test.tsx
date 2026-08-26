@@ -102,6 +102,8 @@ function todayView(date: string, candidateName: string, blocks: ScheduleBlockVie
       remaining_minutes: 30,
       reserved_action_minutes: 0,
       available_minutes: 30,
+      scheduled_block_count: 0,
+      scheduled_minutes: 0,
       suggested_block_minutes: 30,
       budget_status: "ok",
       can_schedule: true,

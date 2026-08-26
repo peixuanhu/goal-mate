@@ -40,6 +40,8 @@ function candidate(
     remaining_minutes: 30,
     reserved_action_minutes: 0,
     available_minutes: 30,
+    scheduled_block_count: 0,
+    scheduled_minutes: 0,
     suggested_block_minutes: 30,
     budget_status: "ok",
     can_schedule: true,
@@ -139,6 +141,34 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect(screen.queryByText(/已投入/)).toBeNull()
     expect(screen.queryByText(/剩余/)).toBeNull()
     expect(document.body.textContent).not.toContain("null 分钟")
+  })
+
+  it("shows scheduled block totals without disabling another schedule", () => {
+    render(
+      <GoalCandidatePanel
+        candidates={[candidate({
+          id: "plan-recurring",
+          kind: "plan",
+          name: "周期计划",
+          plan_id: "plan-recurring",
+          goal_id: "goal-recurring",
+          estimated_minutes: null,
+          remaining_minutes: null,
+          available_minutes: null,
+          scheduled_block_count: 2,
+          scheduled_minutes: 60,
+          suggested_block_minutes: 30,
+          is_recurring: true,
+        })]}
+        error={null}
+        focus={null}
+        loading={false}
+        onSchedule={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("已安排 2 段，共 60 分钟")).toBeTruthy()
+    expect((screen.getByRole("button", { name: "安排到今天" }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("disables scheduling and dragging for an overrun candidate while keeping its group visible", () => {
