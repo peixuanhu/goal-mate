@@ -14,6 +14,7 @@ import type {
 
 import { DayTimeline } from "./day-timeline"
 import { GoalCandidatePanel } from "./goal-candidate-panel"
+import { InteractiveScheduleBlock } from "./interactive-schedule-block"
 import { ScheduleBlockEditor } from "./schedule-block-editor"
 import { ScheduleCompletionSheet } from "./schedule-completion-sheet"
 import { TodayWorkspace } from "./today-workspace"
@@ -199,6 +200,9 @@ describe("manual scheduling components", () => {
     expect(actionGroup?.className).toContain("hover:opacity-100")
     expect(actionGroup?.className).toContain("focus-within:opacity-100")
     expect(actionGroup?.className).toContain("[@media(hover:none)]:opacity-100")
+    expect(screen.getByRole("button", { name: "移动 写发布说明" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "调整 写发布说明 的开始时间" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "调整 写发布说明 的结束时间" })).toBeTruthy()
     expect(screen.getByText("写发布说明")).toBeTruthy()
     expect(screen.getByText("已完成")).toBeTruthy()
     expect(screen.getByText("已跳过")).toBeTruthy()
@@ -243,6 +247,186 @@ describe("manual scheduling components", () => {
     expect(screen.getByText("00:00").className).toContain("translate-y-0")
     expect(screen.getByText("24:00").className).toContain("-translate-y-full")
     expect(screen.getByText("01:00").className).toContain("-translate-y-1/2")
+  })
+
+  it("restores keyboard drag cancellation focus to the dedicated move control", async () => {
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[scheduledBlock()]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={preference}
+        />
+      </DndContext>,
+    )
+
+    const move = screen.getByRole("button", { name: "移动 写发布说明" })
+    const edit = screen.getByRole("button", { name: "编辑 写发布说明" })
+    move.focus()
+    fireEvent.keyDown(move, { code: "Space", key: " " })
+    await waitFor(() => expect(move.getAttribute("aria-pressed")).toBe("true"))
+    edit.focus()
+    fireEvent.keyDown(document, { code: "Escape", key: "Escape" })
+
+    await waitFor(() => expect(document.activeElement).toBe(move))
+  })
+
+  it("uses resize-handle keyboard controls as edit fallbacks without resizing", () => {
+    const onEditBlock = vi.fn()
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[scheduledBlock()]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={onEditBlock}
+          preference={preference}
+        />
+      </DndContext>,
+    )
+
+    const block = screen.getByRole("article", { name: "写发布说明，已安排" })
+    const start = within(block).getByRole("button", { name: "调整 写发布说明 的开始时间" })
+    const end = within(block).getByRole("button", { name: "调整 写发布说明 的结束时间" })
+    fireEvent.keyDown(start, { code: "Enter", key: "Enter" })
+    fireEvent.keyDown(end, { code: "Space", key: " " })
+
+    expect(onEditBlock).toHaveBeenNthCalledWith(1, expect.objectContaining({ block_id: "block_copy" }))
+    expect(onEditBlock).toHaveBeenNthCalledWith(2, expect.objectContaining({ block_id: "block_copy" }))
+    expect(onEditBlock).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps resize handles outside the fixed middle content safety zone", () => {
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[scheduledBlock()]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={preference}
+        />
+      </DndContext>,
+    )
+
+    const block = screen.getByRole("article", { name: "写发布说明，已安排" })
+    const start = within(block).getByRole("button", { name: "调整 写发布说明 的开始时间" })
+    const end = within(block).getByRole("button", { name: "调整 写发布说明 的结束时间" })
+    const content = block.children.item(2)
+    expect(start.className).toContain("h-3")
+    expect(start.className).toContain("z-10")
+    expect(end.className).toContain("h-3")
+    expect(end.className).toContain("z-10")
+    expect(content?.className).toContain("absolute")
+    expect(content?.className).toContain("inset-x-3")
+    expect(content?.className).toContain("top-3")
+    expect(content?.className).toContain("bottom-3")
+    expect(content?.className).toContain("z-20")
+    expect(content?.className).toContain("overflow-hidden")
+    expect(within(block).getByRole("button", { name: "移动 写发布说明" })).toBeTruthy()
+    expect(within(block).getByRole("button", { name: "编辑 写发布说明" })).toBeTruthy()
+    expect(within(block).getByRole("button", { name: "完成 写发布说明" })).toBeTruthy()
+  })
+
+  it("routes only resize-handle pointer presses to resize callbacks", () => {
+    const block = scheduledBlock()
+    const onResizePointerDown = vi.fn()
+    render(
+      <DndContext>
+        <InteractiveScheduleBlock
+          block={block}
+          disabled={false}
+          localRange={{ start: 540, end: 600 }}
+          onComplete={vi.fn()}
+          onEdit={vi.fn()}
+          onResizePointerDown={onResizePointerDown}
+          statusClassName="border-violet-200"
+          statusLabel="已安排"
+          style={{ height: 48, top: 0 }}
+        />
+      </DndContext>,
+    )
+
+    const scheduled = screen.getByRole("article", { name: "写发布说明，已安排" })
+    fireEvent.pointerDown(within(scheduled).getByRole("button", { name: "调整 写发布说明 的开始时间" }))
+    fireEvent.pointerDown(within(scheduled).getByRole("button", { name: "调整 写发布说明 的结束时间" }))
+    expect(onResizePointerDown).toHaveBeenNthCalledWith(1, block, "start", expect.any(Object))
+    expect(onResizePointerDown).toHaveBeenNthCalledWith(2, block, "end", expect.any(Object))
+
+    fireEvent.pointerDown(within(scheduled).getByRole("button", { name: "移动 写发布说明" }))
+    fireEvent.pointerDown(within(scheduled).getByRole("button", { name: "编辑 写发布说明" }))
+    fireEvent.pointerDown(within(scheduled).getByRole("button", { name: "完成 写发布说明" }))
+    expect(onResizePointerDown).toHaveBeenCalledTimes(2)
+  })
+
+  it("uses a compact single line for the 15-minute content safety zone and keeps longer blocks double-line", () => {
+    const timelineProps = {
+      date: "2026-08-23",
+      error: null,
+      loading: false,
+      onCompleteBlock: vi.fn(),
+      onEditBlock: vi.fn(),
+      preference,
+    }
+    const { rerender } = render(
+      <DndContext>
+        <DayTimeline
+          {...timelineProps}
+          blocks={[scheduledBlock({ end_at: "2026-08-23T01:15:00.000Z" })]}
+        />
+      </DndContext>,
+    )
+
+    const compactBlock = screen.getByRole("article", { name: "写发布说明，已安排" })
+    const compactContent = compactBlock.children.item(2)
+    const compactSummary = screen.getByText("09:00–09:15 · 已安排")
+    expect(screen.getByText("写发布说明")).toBeTruthy()
+    expect(compactSummary).toBeTruthy()
+    expect(compactContent?.className).toContain("items-center")
+    expect(compactSummary.className).toContain("whitespace-nowrap")
+    expect(compactSummary.parentElement?.className).toContain("flex")
+    expect(compactSummary.parentElement?.className).toContain("items-center")
+    expect(within(compactBlock).getByRole("button", { name: "移动 写发布说明" }).parentElement?.className).toContain("items-center")
+
+    rerender(
+      <DndContext>
+        <DayTimeline {...timelineProps} blocks={[scheduledBlock()]} />
+      </DndContext>,
+    )
+
+    const longBlock = screen.getByRole("article", { name: "写发布说明，已安排" })
+    const longContent = longBlock.children.item(2)
+    expect(longContent?.className).toContain("items-start")
+    expect(screen.getByText("09:00–10:00 · 已安排").className).toContain("mt-0.5")
+  })
+
+  it("renders the full-day quarter-hour grid with emphasized boundaries", () => {
+    render(
+      <DndContext>
+        <DayTimeline
+          blocks={[]}
+          date="2026-08-23"
+          error={null}
+          loading={false}
+          onCompleteBlock={vi.fn()}
+          onEditBlock={vi.fn()}
+          preference={{ ...preference, day_start_minutes: 0, day_end_minutes: 1440 }}
+        />
+      </DndContext>,
+    )
+
+    expect(screen.getAllByTestId("timeline-grid-line")).toHaveLength(97)
+    expect(screen.getByTestId("timeline-grid-0").getAttribute("data-emphasis")).toBe("hour")
+    expect(screen.getByTestId("timeline-grid-30").getAttribute("data-emphasis")).toBe("half")
+    expect(screen.getByTestId("timeline-grid-45").getAttribute("data-emphasis")).toBe("quarter")
   })
 
   it("auto-positions today's 24-hour timeline once without overriding later user scrolling", () => {
@@ -328,6 +512,7 @@ describe("manual scheduling components", () => {
       expect(terminal.className).toContain("pointer-events-none")
       expect(terminal.getAttribute("tabindex")).toBeNull()
       expect(within(terminal).queryByRole("button")).toBeNull()
+      expect(within(terminal).queryByRole("button", { name: /移动|调整/ })).toBeNull()
     }
 
     fireEvent.click(within(scheduled).getByRole("button", { name: "编辑 当前安排" }))

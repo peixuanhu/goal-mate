@@ -1,13 +1,14 @@
 "use client"
 
 import { useDroppable } from "@dnd-kit/core"
-import { CheckCircle2, Clock3, Pencil } from "lucide-react"
+import { Clock3 } from "lucide-react"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 
 import { formatUtcInTimeZone } from "@/lib/today/timezone"
 import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } from "@/lib/today/types"
 
-import { minuteToTimeInput, toLocalBlockRange } from "./scheduling-ui"
+import { InteractiveScheduleBlock } from "./interactive-schedule-block"
+import { buildTimelineGrid, minuteToTimeInput, toLocalBlockRange } from "./scheduling-ui"
 
 interface DayTimelineProps {
   date: string
@@ -19,7 +20,6 @@ interface DayTimelineProps {
   onCompleteBlock: (block: ScheduleBlockView) => void
 }
 
-export const MAX_TIMELINE_MARKERS = 26
 export const TIMELINE_PIXELS_PER_MINUTE = 3.2
 
 const STATUS_LABELS: Record<ScheduleBlockStatus, string> = {
@@ -40,17 +40,6 @@ const STATUS_CLASSES: Record<ScheduleBlockStatus, string> = {
 
 function formatMinutes(totalMinutes: number): string {
   return minuteToTimeInput(totalMinutes)
-}
-
-function buildTimelineMarkers(dayStartMinutes: number, dayEndMinutes: number): number[] {
-  const markers = [dayStartMinutes]
-  let cursor = (Math.floor(dayStartMinutes / 60) + 1) * 60
-  while (cursor < dayEndMinutes && markers.length < MAX_TIMELINE_MARKERS - 1) {
-    markers.push(cursor)
-    cursor += 60
-  }
-  if (markers.at(-1) !== dayEndMinutes) markers.push(dayEndMinutes)
-  return markers
 }
 
 function useCurrentLocalMinute(date: string, timezone: string): number | null {
@@ -76,8 +65,8 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const autoPositionedDateRef = useRef<string | null>(null)
   const markers = useMemo(
-    () => buildTimelineMarkers(preference.day_start_minutes, preference.day_end_minutes),
-    [preference.day_end_minutes, preference.day_start_minutes],
+    () => buildTimelineGrid(preference),
+    [preference],
   )
   const durationMinutes = preference.day_end_minutes - preference.day_start_minutes
   const timelineHeight = Math.max(520, Math.ceil(durationMinutes * TIMELINE_PIXELS_PER_MINUTE))
@@ -121,17 +110,24 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
         ref={scrollViewportRef}
       >
         <div className={`relative transition-colors ${isOver ? "bg-violet-50/70" : ""}`} data-testid="today-timeline-dropzone" ref={setNodeRef} style={{ minHeight: timelineHeight }}>
-          {markers.map((minutes, index) => {
+          {markers.map((marker, index) => {
+            const { emphasis, minutes } = marker
             const top = durationMinutes === 0 ? 0 : ((minutes - preference.day_start_minutes) / durationMinutes) * 100
             const markerAlignment = index === 0
               ? "translate-y-0"
               : index === markers.length - 1
                 ? "-translate-y-full"
                 : "-translate-y-1/2"
+            const showLabel = emphasis === "hour" || index === markers.length - 1
+            const lineClassName = emphasis === "hour"
+              ? "border-stone-300"
+              : emphasis === "half"
+                ? "border-stone-200"
+                : "border-stone-200/60"
             return (
-              <div className="absolute inset-x-0 flex items-start" key={minutes} style={{ top: `${top}%` }}>
-                <time className={`w-16 ${markerAlignment} pr-3 text-right text-xs tabular-nums text-stone-400`}>{formatMinutes(minutes)}</time>
-                <div className={`flex-1 border-t ${index === 0 || index === markers.length - 1 ? "border-stone-200" : "border-dashed border-stone-200/80"}`} />
+              <div className="absolute inset-x-0 flex items-start" data-emphasis={emphasis} data-testid="timeline-grid-line" key={minutes} style={{ top: `${top}%` }}>
+                {showLabel ? <time className={`w-16 ${markerAlignment} pr-3 text-right text-xs tabular-nums text-stone-400`}>{formatMinutes(minutes)}</time> : <div className="w-16" />}
+                <div className={`flex-1 border-t ${lineClassName}`} data-emphasis={emphasis} data-testid={`timeline-grid-${minutes}`} />
               </div>
             )
           })}
@@ -148,31 +144,19 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
             if (visibleEnd <= visibleStart || durationMinutes <= 0) return null
             const top = ((visibleStart - preference.day_start_minutes) / durationMinutes) * 100
             const height = ((visibleEnd - visibleStart) / durationMinutes) * 100
-            const editable = block.status === "scheduled"
             return (
-              <article
-                aria-label={`${block.title}，${STATUS_LABELS[block.status]}`}
-                className={`absolute overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${editable ? "pointer-events-auto left-[4.5rem] right-3 z-20" : "pointer-events-none left-[4.75rem] right-2 z-10 opacity-75"} ${STATUS_CLASSES[block.status]}`}
+              <InteractiveScheduleBlock
+                block={block}
                 key={block.block_id}
+                localRange={local}
+                disabled={false}
+                onComplete={onCompleteBlock}
+                onEdit={onEditBlock}
+                onResizePointerDown={() => undefined}
+                statusClassName={STATUS_CLASSES[block.status]}
+                statusLabel={STATUS_LABELS[block.status]}
                 style={{ top: `${top}%`, height: `${height}%`, minHeight: 48 }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{block.title}</p>
-                    <p className="mt-0.5 text-[11px] tabular-nums opacity-70">{formatMinutes(local.start)}–{formatMinutes(local.end)} · {STATUS_LABELS[block.status]}</p>
-                  </div>
-                  {editable ? (
-                    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                      <button aria-label={`编辑 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" onClick={() => onEditBlock(block)} type="button">
-                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                      </button>
-                      <button aria-label={`完成 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" onClick={() => onCompleteBlock(block)} type="button">
-                        <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </article>
+              />
             )
           })}
 

@@ -66,7 +66,9 @@ describe("read-only Today workspace", () => {
 
     expect(source).toContain("day_start_minutes")
     expect(source).toContain("day_end_minutes")
-    expect(source).toContain("MAX_TIMELINE_MARKERS")
+    expect(source).toContain("buildTimelineGrid")
+    expect(source).toContain("InteractiveScheduleBlock")
+    expect(source).not.toContain("MAX_TIMELINE_MARKERS")
     expect(source).toContain("把左侧计划或行动项拖到这里安排时间")
   })
 })
