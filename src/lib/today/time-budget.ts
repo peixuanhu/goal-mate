@@ -34,8 +34,10 @@ export type ActionTimeBudget = {
   estimated_minutes: number
   invested_minutes: number
   remaining_minutes: number
+  scheduled_block_count: number
+  scheduled_minutes: number
+  schedulable_minutes: number
   suggested_block_minutes: number | null
-  has_scheduled_block: boolean
 }
 
 export type PlanTimeBudget = {
@@ -44,9 +46,11 @@ export type PlanTimeBudget = {
   remaining_minutes: number | null
   reserved_action_minutes: number
   unallocated_remaining_minutes: number | null
+  scheduled_block_count: number
+  scheduled_minutes: number
+  schedulable_minutes: number | null
   suggested_block_minutes: number | null
   budget_status: TimeBudgetStatus
-  has_scheduled_direct_block: boolean
   actions: Record<string, ActionTimeBudget>
 }
 
@@ -127,17 +131,28 @@ export function calculatePlanTimeBudget(
   }
 
   const actionInvestedMinutes = new Map(input.actions.map(action => [action.action_id, 0]))
+  const actionScheduledBlockCounts = new Map(input.actions.map(action => [action.action_id, 0]))
+  const actionScheduledMinutes = new Map(input.actions.map(action => [action.action_id, 0]))
 
   let investedMinutes = 0
-  let hasScheduledDirectBlock = false
-  const actionsWithScheduledBlocks = new Set<string>()
+  let scheduledBlockCount = 0
+  let scheduledMinutes = 0
 
   for (const block of input.blocks) {
     if (block.status === "scheduled") {
+      const minutes = countedBlockMinutes(block)
       if (block.action_id === null) {
-        hasScheduledDirectBlock = true
+        scheduledBlockCount += 1
+        scheduledMinutes += minutes
       } else {
-        actionsWithScheduledBlocks.add(block.action_id)
+        actionScheduledBlockCounts.set(
+          block.action_id,
+          (actionScheduledBlockCounts.get(block.action_id) ?? 0) + 1,
+        )
+        actionScheduledMinutes.set(
+          block.action_id,
+          (actionScheduledMinutes.get(block.action_id) ?? 0) + minutes,
+        )
       }
     }
 
@@ -158,16 +173,19 @@ export function calculatePlanTimeBudget(
     const estimatedMinutes = action.estimated_minutes ?? effectiveDefaultBlockMinutes
     const actionInvested = actionInvestedMinutes.get(action.action_id) ?? 0
     const remainingMinutes = Math.max(estimatedMinutes - actionInvested, 0)
-    const hasScheduledBlock = actionsWithScheduledBlocks.has(action.action_id)
+    const scheduledActionMinutes = actionScheduledMinutes.get(action.action_id) ?? 0
+    const schedulableMinutes = Math.max(remainingMinutes - scheduledActionMinutes, 0)
 
     actions[action.action_id] = {
       estimated_minutes: estimatedMinutes,
       invested_minutes: actionInvested,
       remaining_minutes: remainingMinutes,
-      suggested_block_minutes: action.is_completed || hasScheduledBlock || remainingMinutes === 0
+      scheduled_block_count: actionScheduledBlockCounts.get(action.action_id) ?? 0,
+      scheduled_minutes: scheduledActionMinutes,
+      schedulable_minutes: schedulableMinutes,
+      suggested_block_minutes: action.is_completed || schedulableMinutes === 0
         ? null
-        : Math.min(effectiveDefaultBlockMinutes, remainingMinutes),
-      has_scheduled_block: hasScheduledBlock,
+        : Math.min(effectiveDefaultBlockMinutes, schedulableMinutes),
     }
   }
 
@@ -182,9 +200,11 @@ export function calculatePlanTimeBudget(
       remaining_minutes: null,
       reserved_action_minutes: reservedActionMinutes,
       unallocated_remaining_minutes: null,
-      suggested_block_minutes: hasScheduledDirectBlock ? null : effectiveDefaultBlockMinutes,
+      scheduled_block_count: scheduledBlockCount,
+      scheduled_minutes: scheduledMinutes,
+      schedulable_minutes: null,
+      suggested_block_minutes: effectiveDefaultBlockMinutes,
       budget_status: "ok",
-      has_scheduled_direct_block: hasScheduledDirectBlock,
       actions,
     }
   }
@@ -192,6 +212,7 @@ export function calculatePlanTimeBudget(
   const estimatedMinutes = input.estimated_minutes
   const remainingMinutes = Math.max(estimatedMinutes - investedMinutes, 0)
   const unallocatedRemainingMinutes = Math.max(remainingMinutes - reservedActionMinutes, 0)
+  const schedulableMinutes = Math.max(unallocatedRemainingMinutes - scheduledMinutes, 0)
   const budgetStatus: TimeBudgetStatus = investedMinutes > estimatedMinutes
     || reservedActionMinutes > remainingMinutes
     ? "overrun"
@@ -205,11 +226,13 @@ export function calculatePlanTimeBudget(
     remaining_minutes: remainingMinutes,
     reserved_action_minutes: reservedActionMinutes,
     unallocated_remaining_minutes: unallocatedRemainingMinutes,
-    suggested_block_minutes: hasScheduledDirectBlock || unallocatedRemainingMinutes === 0
+    scheduled_block_count: scheduledBlockCount,
+    scheduled_minutes: scheduledMinutes,
+    schedulable_minutes: schedulableMinutes,
+    suggested_block_minutes: schedulableMinutes === 0
       ? null
-      : Math.min(effectiveDefaultBlockMinutes, unallocatedRemainingMinutes),
+      : Math.min(effectiveDefaultBlockMinutes, schedulableMinutes),
     budget_status: budgetStatus,
-    has_scheduled_direct_block: hasScheduledDirectBlock,
     actions,
   }
 }

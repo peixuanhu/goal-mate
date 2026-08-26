@@ -37,9 +37,11 @@ describe("plan time budgets", () => {
       invested_minutes: 105,
       remaining_minutes: 195,
       unallocated_remaining_minutes: 195,
-      suggested_block_minutes: null,
+      scheduled_block_count: 1,
+      scheduled_minutes: 30,
+      schedulable_minutes: 165,
+      suggested_block_minutes: 60,
       budget_status: "ok",
-      has_scheduled_direct_block: true,
     })
   })
 
@@ -99,7 +101,7 @@ describe("plan time budgets", () => {
     })
   })
 
-  it("does not suggest duplicate scheduled direct or action blocks", () => {
+  it("keeps suggesting blocks while scheduled direct and action budgets remain", () => {
     const result = calculatePlanTimeBudget({
       is_recurring: false,
       estimated_minutes: 180,
@@ -109,12 +111,16 @@ describe("plan time budgets", () => {
     }, 45)
 
     expect(result).toMatchObject({
-      has_scheduled_direct_block: true,
-      suggested_block_minutes: null,
+      scheduled_block_count: 1,
+      scheduled_minutes: 30,
+      schedulable_minutes: 60,
+      suggested_block_minutes: 60,
     })
     expect(result.actions.write).toMatchObject({
-      has_scheduled_block: true,
-      suggested_block_minutes: null,
+      scheduled_block_count: 1,
+      scheduled_minutes: 45,
+      schedulable_minutes: 45,
+      suggested_block_minutes: 45,
     })
   })
 
@@ -164,7 +170,7 @@ describe("plan time budgets", () => {
     })
   })
 
-  it("keeps recurring plans total-free and suppresses a second direct suggestion", () => {
+  it("keeps recurring plans total-free and allows another direct suggestion", () => {
     const result = calculatePlanTimeBudget({
       is_recurring: true,
       estimated_minutes: null,
@@ -177,9 +183,11 @@ describe("plan time budgets", () => {
       remaining_minutes: null,
       reserved_action_minutes: 60,
       unallocated_remaining_minutes: null,
-      suggested_block_minutes: null,
+      scheduled_block_count: 1,
+      scheduled_minutes: 30,
+      schedulable_minutes: null,
+      suggested_block_minutes: 30,
       budget_status: "ok",
-      has_scheduled_direct_block: true,
     })
     expect(result.actions.repeat).toMatchObject({
       invested_minutes: 15,
