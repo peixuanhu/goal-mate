@@ -9,6 +9,7 @@ import type { PlanningPreferenceView, ScheduleBlockStatus, ScheduleBlockView } f
 
 import { InteractiveScheduleBlock, type ResizeEdge } from "./interactive-schedule-block"
 import {
+  SCHEDULE_SLOT_MINUTES,
   buildTimelineGrid,
   minuteFromTimelinePoint,
   minuteToTimeInput,
@@ -231,6 +232,13 @@ export function DayTimeline({
       original = toLocalBlockRange(block.start_at, block.end_at, preference.timezone, date)
     } catch {
       onPlacementError("该时间块无法在当前日期调整")
+      return
+    }
+    if (
+      (original.start - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0
+      || (original.end - preference.day_start_minutes) % SCHEDULE_SLOT_MINUTES !== 0
+    ) {
+      onPlacementError("该时间块不在当前15分钟刻度上，请先移动到新刻度后再调整长度")
       return
     }
     const pointerId = event.pointerId

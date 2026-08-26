@@ -137,6 +137,7 @@ function renderResizableTimeline(options: {
   blocks?: ScheduleBlockView[]
   date?: string
   maximumDurationForBlock?: (block: ScheduleBlockView, original: { start: number; end: number }) => number | null | undefined
+  preference?: PlanningPreferenceView
 } = {}) {
   vi.stubGlobal("PointerEvent", TestPointerEvent)
   const onResizeBlock = vi.fn()
@@ -151,7 +152,7 @@ function renderResizableTimeline(options: {
     onEditBlock: vi.fn(),
     onPlacementError,
     onResizeBlock,
-    preference,
+    preference: options.preference ?? preference,
   }
   const rendered = render(<DndContext><DayTimeline {...props} /></DndContext>)
   const dropzone = screen.getByTestId("today-timeline-dropzone")
@@ -512,6 +513,22 @@ describe("manual scheduling components", () => {
     fireEvent.pointerUp(window, { clientY: 235, pointerId: 7, ...pointerInit })
     expect(onResizeBlock).not.toHaveBeenCalled()
     expect(onPlacementError).not.toHaveBeenCalled()
+  })
+
+  it("rejects a legacy block that is off the current preference grid before capture", () => {
+    const { callbacks } = stubResizeFrames()
+    const shiftedPreference = { ...preference, day_start_minutes: 490, day_end_minutes: 1330 }
+    const { onPlacementError, onResizeBlock } = renderResizableTimeline({ preference: shiftedPreference })
+    const handle = screen.getByRole("button", { name: "调整 写发布说明 的结束时间" })
+    const setPointerCapture = vi.fn()
+    Object.defineProperty(handle, "setPointerCapture", { configurable: true, value: setPointerCapture })
+
+    expect(() => fireEvent.pointerDown(handle, { button: 0, clientY: 220, isPrimary: true, pointerId: 7 })).not.toThrow()
+    expect(setPointerCapture).not.toHaveBeenCalled()
+    expect(callbacks.size).toBe(0)
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(onPlacementError).toHaveBeenCalledWith("该时间块不在当前15分钟刻度上，请先移动到新刻度后再调整长度")
+    expect(onResizeBlock).not.toHaveBeenCalled()
   })
 
   it("ignores move and up events from another pointer while keeping the active resize", () => {

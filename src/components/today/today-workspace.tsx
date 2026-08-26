@@ -666,6 +666,13 @@ export function TodayWorkspace() {
         clearTimelineDrag()
         return
       }
+      if (
+        placement.result.range.start === data.localRange.start
+        && placement.result.range.end === data.localRange.end
+      ) {
+        clearTimelineDrag()
+        return
+      }
 
       updateTimelineBlock(data.block, placement.result, placement.preview)
       return

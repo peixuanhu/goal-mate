@@ -26,6 +26,15 @@ vi.mock("@dnd-kit/core", () => {
     },
     localRange: { start: 520, end: 580 },
   }
+  const legacyScheduleBlockData = {
+    kind: "schedule-block",
+    block: {
+      block_id: "block_legacy", plan_id: "plan_legacy", action_id: null, title: "旧刻度时间块", goal_id: null, goal_name: null,
+      energy_level: null, start_at: "2026-08-27T01:00:00.000Z", end_at: "2026-08-27T02:00:00.000Z",
+      status: "scheduled", source: "manual", result_note: null, version: 3,
+    },
+    localRange: { start: 540, end: 600 },
+  }
   const event = (
     data = candidateData,
     activatorEvent: Record<string, unknown> = { clientY: 100 },
@@ -63,6 +72,11 @@ vi.mock("@dnd-kit/core", () => {
       <button onClick={() => onDragMove?.(event(scheduleBlockData, {}, { x: 0, y: 0 }, { top: 230, height: 20 }, { top: 250, height: 20 }, { top: 80, height: 600 }))} type="button">模拟时间块滚动移动</button>
       <button onClick={() => onDragCancel?.(event(scheduleBlockData))} type="button">模拟时间块取消</button>
       <button onClick={() => onDragEnd?.(event(scheduleBlockData, {}, { x: 0, y: 105 }, { top: 355, height: 20 }, { top: 250, height: 20 }))} type="button">模拟时间块松手</button>
+      <button onClick={() => onDragEnd?.(event(scheduleBlockData, { clientY: 275 }, { x: 0, y: 0 }, { top: 250, height: 20 }, { top: 250, height: 20 }))} type="button">模拟时间块原位松手</button>
+      <button onClick={() => onDragStart?.(event(scheduleBlockData, { type: "keydown", key: " " }, { x: 0, y: 0 }, { top: 250, height: 20 }, { top: 250, height: 20 }))} type="button">模拟时间块键盘开始</button>
+      <button onClick={() => onDragEnd?.(event(scheduleBlockData, { type: "keydown", key: " " }, { x: 0, y: 0 }, { top: 250, height: 20 }, { top: 250, height: 20 }))} type="button">模拟时间块键盘原位松手</button>
+      <button onClick={() => onDragStart?.(event(legacyScheduleBlockData, { clientY: 375 }, { x: 0, y: 0 }, { top: 350, height: 20 }, { top: 350, height: 20 }))} type="button">模拟旧刻度时间块开始</button>
+      <button onClick={() => onDragEnd?.(event(legacyScheduleBlockData, { clientY: 375 }, { x: 0, y: 0 }, { top: 350, height: 20 }, { top: 350, height: 20 }))} type="button">模拟旧刻度时间块原位松手</button>
       <button onClick={() => onDragEnd?.(event({ candidate }))} type="button">模拟未知松手</button>
       {children}
     </>,
@@ -548,6 +562,67 @@ describe("TodayWorkspace timeline drag interactions", () => {
     await waitFor(() => expect(screen.queryByTestId("timeline-placement-preview")).toBeNull())
   })
 
+  it.each([
+    ["pointer", "模拟时间块开始", "模拟时间块原位松手"],
+    ["keyboard without movement", "模拟时间块键盘开始", "模拟时间块键盘原位松手"],
+  ])("treats a same-position schedule-block %s drop as a no-op", async (_mode, startControl, endControl) => {
+    const existing = draggableBlock()
+    let externalEventCount = 0
+    const onDataChanged = () => { externalEventCount += 1 }
+    window.addEventListener("goal-mate:data-changed", onDataChanged)
+    try {
+      const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT"
+        ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+        : Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] })))
+      vi.stubGlobal("fetch", fetchMock)
+      render(<TodayWorkspace />)
+
+      await screen.findByText("拖动时间块")
+      fireEvent.click(screen.getByRole("button", { name: startControl }))
+      fireEvent.click(screen.getByRole("button", { name: endControl }))
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(externalEventCount).toBe(0)
+      expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+      expect(screen.queryByRole("alert")).toBeNull()
+    } finally {
+      window.removeEventListener("goal-mate:data-changed", onDataChanged)
+    }
+  })
+
+  it("snaps a legacy off-grid block to the current grid instead of treating its drop as unchanged", async () => {
+    const existing = draggableBlock({
+      block_id: "block_legacy",
+      plan_id: "plan_legacy",
+      title: "旧刻度时间块",
+      start_at: "2026-08-27T01:00:00.000Z",
+      end_at: "2026-08-27T02:00:00.000Z",
+      version: 3,
+    })
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT"
+      ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+      : Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] })))
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("旧刻度时间块")
+    fireEvent.click(screen.getByRole("button", { name: "模拟旧刻度时间块开始" }))
+    fireEvent.click(screen.getByRole("button", { name: "模拟旧刻度时间块原位松手" }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1))
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")?.[1]
+    expect(JSON.parse(String(put?.body))).toEqual({
+      operation: "update",
+      block_id: "block_legacy",
+      expected_version: 3,
+      start_at: "2026-08-27T00:55:00.000Z",
+      end_at: "2026-08-27T01:55:00.000Z",
+    })
+  })
+
   it("resizes a scheduled block through the versioned timeline update flow", async () => {
     const existing = draggableBlock({ version: 7 })
     let todayCalls = 0
@@ -594,6 +669,27 @@ describe("TodayWorkspace timeline drag interactions", () => {
     await Promise.resolve()
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
     expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+  })
+
+  it("rejects resizing a legacy off-grid block before pointer capture or PUT", async () => {
+    const existing = draggableBlock({
+      start_at: "2026-08-27T01:00:00.000Z",
+      end_at: "2026-08-27T02:00:00.000Z",
+    })
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => init?.method === "PUT"
+      ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+      : Promise.resolve(todayResponse(dateFromUrl(url), { blocks: [existing] })))
+    vi.stubGlobal("fetch", fetchMock)
+    render(<TodayWorkspace />)
+
+    await screen.findByText("拖动时间块")
+    expect(() => beginWorkspaceResize("调整 拖动时间块 的结束时间", 205)).not.toThrow()
+    await Promise.resolve()
+
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId("timeline-placement-preview")).toBeNull()
+    expect(screen.getByRole("alert").textContent).toContain("该时间块不在当前15分钟刻度上")
   })
 
   it("keeps one pending resize authoritative and ignores duplicate pointer completion", async () => {
