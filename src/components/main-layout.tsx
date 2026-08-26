@@ -1,11 +1,17 @@
 "use client"
 
 import {
+  defaultKeyboardCoordinateGetter,
   DndContext,
   type DragCancelEvent,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
+  KeyboardSensor,
+  type KeyboardCoordinateGetter,
+  PointerSensor,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core"
 import { Bot, ChevronLeft, ChevronRight, ListTree, X } from "lucide-react"
 import React, { type ReactNode, useEffect, useState } from "react"
@@ -15,7 +21,31 @@ import type { SchedulableCandidate, TodayView } from "@/lib/today/types"
 import { AppHeader } from "./app-header"
 import { AiWorkspace } from "./today/ai-workspace"
 import { GoalCandidatePanel } from "./today/goal-candidate-panel"
+import { SCHEDULE_SLOT_MINUTES } from "./today/scheduling-ui"
 import { WorkspaceSidebarController } from "./workspace/workspace-sidebar-controller"
+
+export const timelineKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  if (event.code === "ArrowDown" || event.code === "ArrowUp") {
+    const timelineRect = args.context.droppableRects.get("today-timeline")
+    const timelineData = args.context.droppableContainers.get("today-timeline")?.data.current
+    const dayStartMinutes = timelineData?.dayStartMinutes
+    const dayEndMinutes = timelineData?.dayEndMinutes
+    const durationMinutes = typeof dayStartMinutes === "number" && typeof dayEndMinutes === "number"
+      ? dayEndMinutes - dayStartMinutes
+      : Number.NaN
+    const verticalStep = timelineRect === undefined
+      ? Number.NaN
+      : timelineRect.height / durationMinutes * SCHEDULE_SLOT_MINUTES
+
+    if (Number.isFinite(verticalStep) && verticalStep > 0) {
+      return {
+        ...args.currentCoordinates,
+        y: args.currentCoordinates.y + (event.code === "ArrowDown" ? verticalStep : -verticalStep),
+      }
+    }
+  }
+  return defaultKeyboardCoordinateGetter(event, args)
+}
 
 interface WorkspaceSnapshot {
   candidates: SchedulableCandidate[]
@@ -48,6 +78,10 @@ export function MainLayout({
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [mobilePanel, setMobilePanel] = useState<"workspace" | "ai" | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: timelineKeyboardCoordinates }),
+  )
 
   useEffect(() => {
     if (mobilePanel === null) return
@@ -83,6 +117,7 @@ export function MainLayout({
         onDragEnd={onWorkspaceDragEnd}
         onDragMove={onWorkspaceDragMove}
         onDragStart={onWorkspaceDragStart}
+        sensors={sensors}
       >
         <div className="relative flex min-h-0 flex-1">
           <aside

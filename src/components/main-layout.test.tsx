@@ -4,15 +4,35 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import React from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { MainLayout } from "./main-layout"
+import type { KeyboardCoordinateGetter } from "@dnd-kit/core"
 
-const dndContext = vi.fn()
+import { MainLayout } from "./main-layout"
+import { minuteFromTimelinePoint } from "./today/scheduling-ui"
+
+const { dndContext, keyboardSensor, pointerSensor, useSensor, useSensors } = vi.hoisted(() => ({
+  dndContext: vi.fn(),
+  keyboardSensor: class KeyboardSensor {},
+  pointerSensor: class PointerSensor {},
+  useSensor: vi.fn((sensor: unknown, options: Record<string, unknown> = {}) => ({ sensor, options })),
+  useSensors: vi.fn((...sensors: unknown[]) => sensors),
+}))
 
 vi.mock("@dnd-kit/core", () => ({
   DndContext: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
     dndContext(props)
     return <>{children}</>
   },
+  KeyboardSensor: keyboardSensor,
+  PointerSensor: pointerSensor,
+  defaultKeyboardCoordinateGetter: (event: KeyboardEvent, { currentCoordinates }: { currentCoordinates: { x: number; y: number } }) => {
+    if (event.code === "ArrowLeft") return { ...currentCoordinates, x: currentCoordinates.x - 25 }
+    if (event.code === "ArrowRight") return { ...currentCoordinates, x: currentCoordinates.x + 25 }
+    if (event.code === "ArrowUp") return { ...currentCoordinates, y: currentCoordinates.y - 25 }
+    if (event.code === "ArrowDown") return { ...currentCoordinates, y: currentCoordinates.y + 25 }
+    return undefined
+  },
+  useSensor,
+  useSensors,
 }))
 
 vi.mock("./app-header", () => ({
@@ -102,5 +122,103 @@ describe("MainLayout", () => {
       onDragEnd: onWorkspaceDragEnd,
       autoScroll: { threshold: { x: 0, y: 0.08 }, acceleration: 8 },
     })
+  })
+
+  it("configures keyboard dragging so every vertical arrow moves one measured 15-minute row", () => {
+    render(
+      <MainLayout>
+        <section>页面内容</section>
+      </MainLayout>,
+    )
+
+    const props = dndContext.mock.calls.at(-1)?.[0]
+    const sensors = props?.sensors as Array<{ sensor: unknown; options: { coordinateGetter?: KeyboardCoordinateGetter } }> | undefined
+    expect(sensors).toHaveLength(2)
+    expect(sensors?.[0]?.sensor).toBe(pointerSensor)
+    expect(sensors?.[1]?.sensor).toBe(keyboardSensor)
+
+    const getter = sensors?.[1]?.options.coordinateGetter
+    if (!getter) throw new Error("missing timeline keyboard coordinate getter")
+
+    for (const geometry of [
+      { dayStartMinutes: 0, dayEndMinutes: 1_440, height: 4_608, startingMinute: 480 },
+      { dayStartMinutes: 490, dayEndMinutes: 610, height: 520, startingMinute: 520 },
+    ]) {
+      const preference = {
+        preference_id: "default" as const,
+        timezone: "Asia/Shanghai",
+        day_start_minutes: geometry.dayStartMinutes,
+        day_end_minutes: geometry.dayEndMinutes,
+        high_energy_start_minutes: null,
+        high_energy_end_minutes: null,
+        buffer_minutes: 0,
+        default_block_minutes: 30,
+        capacity_warning_minutes: 0,
+        version: null,
+      }
+      const context = {
+        droppableRects: new Map([
+          ["today-timeline", { top: 0, height: geometry.height }],
+        ]),
+        droppableContainers: new Map([
+          ["today-timeline", { data: { current: {
+            dayStartMinutes: geometry.dayStartMinutes,
+            dayEndMinutes: geometry.dayEndMinutes,
+          } } }],
+        ]),
+      } as never
+      const start = {
+        x: 12,
+        y: (geometry.startingMinute - geometry.dayStartMinutes)
+          / (geometry.dayEndMinutes - geometry.dayStartMinutes)
+          * geometry.height,
+      }
+      const args = (currentCoordinates: { x: number; y: number }) => ({
+        active: "schedule-block:block",
+        currentCoordinates,
+        context,
+      })
+      const firstDown = getter(new KeyboardEvent("keydown", { code: "ArrowDown" }), args(start))
+      if (!firstDown) throw new Error("ArrowDown did not produce coordinates")
+      const secondDown = getter(new KeyboardEvent("keydown", { code: "ArrowDown" }), args(firstDown))
+      if (!secondDown) throw new Error("second ArrowDown did not produce coordinates")
+      const oneUp = getter(new KeyboardEvent("keydown", { code: "ArrowUp" }), args(secondDown))
+      if (!oneUp) throw new Error("ArrowUp did not produce coordinates")
+
+      const minuteAt = (coordinate: { y: number }) => minuteFromTimelinePoint(
+        coordinate.y,
+        { top: 0, height: geometry.height },
+        preference,
+        15,
+      )
+      expect([minuteAt(firstDown), minuteAt(secondDown), minuteAt(oneUp)]).toEqual([
+        geometry.startingMinute + 15,
+        geometry.startingMinute + 30,
+        geometry.startingMinute + 15,
+      ])
+    }
+
+    const fallbackArgs = {
+      active: "schedule-block:block",
+      currentCoordinates: { x: 12, y: 20 },
+      context: {
+        droppableRects: new Map(),
+        droppableContainers: new Map(),
+      } as never,
+    }
+    expect(getter(new KeyboardEvent("keydown", { code: "ArrowDown" }), fallbackArgs)).toEqual({ x: 12, y: 45 })
+    expect(getter(new KeyboardEvent("keydown", { code: "ArrowRight" }), fallbackArgs)).toEqual({ x: 37, y: 20 })
+
+    const invalidGeometryArgs = {
+      ...fallbackArgs,
+      context: {
+        droppableRects: new Map([["today-timeline", { top: 0, height: 520 }]]),
+        droppableContainers: new Map([["today-timeline", { data: { current: {
+          dayStartMinutes: 610,
+          dayEndMinutes: 490,
+        } } }]]),
+      } as never,
+    }
+    expect(getter(new KeyboardEvent("keydown", { code: "ArrowDown" }), invalidGeometryArgs)).toEqual({ x: 12, y: 45 })
   })
 })

@@ -71,7 +71,13 @@ function useCurrentLocalMinute(date: string, timezone: string): number | null {
 }
 
 export function DayTimeline({ date, preference, blocks, loading, error, preview = null, onEditBlock, onCompleteBlock }: DayTimelineProps) {
-  const { isOver, setNodeRef } = useDroppable({ id: "today-timeline" })
+  const { isOver, setNodeRef } = useDroppable({
+    id: "today-timeline",
+    data: {
+      dayStartMinutes: preference.day_start_minutes,
+      dayEndMinutes: preference.day_end_minutes,
+    },
+  })
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const autoPositionedDateRef = useRef<string | null>(null)
   const markers = useMemo(

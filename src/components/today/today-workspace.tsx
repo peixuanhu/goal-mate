@@ -164,11 +164,13 @@ function isScheduleBlockView(value: unknown): value is ScheduleBlockView {
     && new Date(value.start_at as string).getTime() < new Date(value.end_at as string).getTime()
 }
 
-function isScheduleBlockDragData(value: unknown): value is {
+type ScheduleBlockDragData = {
   kind: "schedule-block"
   block: ScheduleBlockView
   localRange: { start: number; end: number }
-} {
+}
+
+function isScheduleBlockDragData(value: unknown): value is ScheduleBlockDragData {
   return isRecord(value)
     && value.kind === "schedule-block"
     && isScheduleBlockView(value.block)
@@ -355,7 +357,12 @@ export function TodayWorkspace() {
     const refreshAfterSharedMutation = (event: Event) => {
       const detail = (event as CustomEvent<{ entity?: string }>).detail
       const selectedDate = dateRef.current
-      if (detail?.entity !== "schedule-block" || selectedDate === null || mutationLoadingRef.current) return
+      if (
+        detail?.entity !== "schedule-block"
+        || selectedDate === null
+        || mutationLoadingRef.current
+        || timelineMutationIdRef.current !== null
+      ) return
 
       activeRequestControllerRef.current?.abort()
       const controller = new AbortController()
@@ -410,7 +417,7 @@ export function TodayWorkspace() {
     openCandidateAt(candidate, start)
   }, [blocks, date, openCandidateAt, preference])
 
-  function clearCandidateDrag() {
+  function clearTimelineDrag() {
     setDragPreview(null)
     timelineDragActiveRef.current = false
     timelineGrabOffsetRef.current = null
@@ -449,10 +456,57 @@ export function TodayWorkspace() {
     }
   }
 
+  function placementForBlockDrag(
+    event: DragMoveEvent | DragEndEvent,
+    data: ScheduleBlockDragData,
+  ): { preview: TimelinePlacementPreview; result: TimelinePlacementResult } | null {
+    if (date === null || event.over?.id !== "today-timeline") return null
+    const duration = data.localRange.end - data.localRange.start
+    const translated = event.active.rect.current.translated
+    const initial = event.active.rect.current.initial
+    const translatedTop = translated?.top ?? (initial ? initial.top + event.delta.y : null)
+    if (translatedTop === null) return null
+    const start = minuteFromTimelinePoint(translatedTop, event.over.rect, preference, duration)
+    const range = placeTimelineRange("move", start, data.localRange, preference)
+    const candidate = candidates.find(item => (
+      item.plan_id === data.block.plan_id && item.action_id === data.block.action_id
+    ))
+    const availableMinutes = candidate?.available_minutes
+    const result = validateTimelinePlacement({
+      date,
+      range,
+      preference,
+      blocks,
+      ignoredBlockId: data.block.block_id,
+      ...(typeof availableMinutes === "number"
+        ? { maximumDurationMinutes: duration + availableMinutes }
+        : {}),
+    })
+    return {
+      result,
+      preview: {
+        id: `move:${data.block.block_id}`,
+        title: data.block.title,
+        range: result.ok ? result.range : range,
+        valid: result.ok,
+        message: result.ok ? null : result.message,
+        pending: false,
+      },
+    }
+  }
+
   function handleDragStart(event: DragStartEvent) {
     if (timelineMutationIdRef.current !== null) return
     const data = event.active.data.current
-    if (isScheduleBlockDragData(data)) return
+    if (isScheduleBlockDragData(data)) {
+      if (data.block.status !== "scheduled") return
+      timelineDragActiveRef.current = true
+      timelineGrabOffsetRef.current = null
+      timelineIdempotencyKeyRef.current = null
+      setScheduleError(null)
+      setDragPreview(null)
+      return
+    }
     if (!isCandidateDragData(data)) return
     const initial = event.active.rect.current.initial
     const activatorY = clientYFromActivator(event)
@@ -468,7 +522,15 @@ export function TodayWorkspace() {
   function handleDragMove(event: DragMoveEvent) {
     if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
     const data = event.active.data.current
-    if (isScheduleBlockDragData(data)) return
+    if (isScheduleBlockDragData(data)) {
+      if (event.over?.id !== "today-timeline") {
+        setDragPreview(null)
+        return
+      }
+      const placement = placementForBlockDrag(event, data)
+      setDragPreview(placement?.preview ?? null)
+      return
+    }
     if (!isCandidateDragData(data)) return
     if (event.over?.id !== "today-timeline") {
       setDragPreview(null)
@@ -481,29 +543,101 @@ export function TodayWorkspace() {
   function handleDragCancel(event: DragCancelEvent) {
     if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
     const data = event.active.data.current
-    if (isScheduleBlockDragData(data) || !isCandidateDragData(data)) return
-    clearCandidateDrag()
+    if (!isScheduleBlockDragData(data) && !isCandidateDragData(data)) return
+    clearTimelineDrag()
   }
 
   function handleDragEnd(event: DragEndEvent) {
     if (timelineMutationIdRef.current !== null || !timelineDragActiveRef.current) return
     const data = event.active.data.current
-    if (isScheduleBlockDragData(data)) return
+    if (isScheduleBlockDragData(data)) {
+      const placement = placementForBlockDrag(event, data)
+      if (placement === null) {
+        clearTimelineDrag()
+        return
+      }
+      if (!placement.result.ok) {
+        setScheduleError(placement.result.message)
+        clearTimelineDrag()
+        return
+      }
+
+      const selectedDate = date
+      if (selectedDate === null) {
+        clearTimelineDrag()
+        return
+      }
+      const mutationId = crypto.randomUUID()
+      const interval = placement.result.interval
+      timelineMutationIdRef.current = mutationId
+      setScheduleError(null)
+      setDragPreview({ ...placement.preview, pending: true })
+
+      void (async () => {
+        const isCurrentTimelineMutation = () => (
+          mountedRef.current
+          && timelineMutationIdRef.current === mutationId
+          && dateRef.current === selectedDate
+        )
+        try {
+          const response = await fetch("/api/schedule-block", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              operation: "update",
+              block_id: data.block.block_id,
+              expected_version: data.block.version,
+              start_at: interval.start_at,
+              end_at: interval.end_at,
+            }),
+          })
+          const payload: unknown = await response.json().catch(() => null)
+          if (!response.ok) {
+            const message = responseError(payload, `更新时间块失败（${response.status}）`)
+            if (response.status === 409 && isCurrentTimelineMutation()) {
+              await loadToday(selectedDate, new AbortController(), true)
+              if (isCurrentTimelineMutation()) setScheduleError(message)
+              return
+            }
+            throw new Error(message)
+          }
+          if (!isCurrentTimelineMutation()) return
+          const refreshResult = await loadToday(selectedDate, new AbortController(), true)
+          if (!isCurrentTimelineMutation()) return
+          if (refreshResult === "failed") {
+            setScheduleError("修改已保存，但今日数据刷新失败，请重新加载页面")
+            return
+          }
+          if (refreshResult !== "applied") return
+          window.dispatchEvent(new CustomEvent("goal-mate:data-changed", { detail: { entity: "schedule-block" } }))
+        } catch (mutationError) {
+          if (isCurrentTimelineMutation()) {
+            setScheduleError(mutationError instanceof Error && mutationError.message ? mutationError.message : "更新时间块失败")
+          }
+        } finally {
+          if (isCurrentTimelineMutation()) {
+            timelineMutationIdRef.current = null
+            clearTimelineDrag()
+          }
+        }
+      })()
+      return
+    }
     if (!isCandidateDragData(data)) return
     const candidate = data.candidate
     if (!candidate.can_schedule || candidate.suggested_block_minutes === null) {
       setScheduleError(candidate.schedule_reason ?? "当前事项暂不可安排")
-      clearCandidateDrag()
+      clearTimelineDrag()
       return
     }
     const placement = placementForDrag(event, candidate)
     if (placement === null) {
-      clearCandidateDrag()
+      clearTimelineDrag()
       return
     }
     if (!placement.result.ok) {
       setScheduleError(placement.result.message)
-      clearCandidateDrag()
+      clearTimelineDrag()
       return
     }
     const interval = placement.result.interval
@@ -552,7 +686,7 @@ export function TodayWorkspace() {
       } finally {
         if (isCurrentTimelineMutation()) {
           timelineMutationIdRef.current = null
-          clearCandidateDrag()
+          clearTimelineDrag()
         }
       }
     })()
