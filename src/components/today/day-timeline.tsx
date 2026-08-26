@@ -162,7 +162,7 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
                     <p className="mt-0.5 text-[11px] tabular-nums opacity-70">{formatMinutes(local.start)}–{formatMinutes(local.end)} · {STATUS_LABELS[block.status]}</p>
                   </div>
                   {editable ? (
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                       <button aria-label={`编辑 ${block.title}`} className="rounded-md p-1 hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" onClick={() => onEditBlock(block)} type="button">
                         <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
                       </button>
@@ -177,8 +177,8 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
           })}
 
           {showCurrentTime && currentMinute !== null ? (
-            <div aria-label={`当前时间 ${formatMinutes(currentMinute)}`} className="pointer-events-none absolute inset-x-16 z-20 border-t-2 border-rose-500" style={{ top: `${((currentMinute - preference.day_start_minutes) / durationMinutes) * 100}%` }}>
-              <span className="absolute -top-3 right-4 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-medium text-white">当前时间</span>
+            <div aria-label={`当前时间 ${formatMinutes(currentMinute)}`} className="pointer-events-none absolute left-[4.5rem] right-3 z-20 border-t-2 border-rose-500/60" style={{ top: `${((currentMinute - preference.day_start_minutes) / durationMinutes) * 100}%` }}>
+              <span className="absolute -top-3 right-[4.25rem] rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-medium text-white">当前时间</span>
             </div>
           ) : null}
 

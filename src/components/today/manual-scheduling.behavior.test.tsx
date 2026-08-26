@@ -183,8 +183,20 @@ describe("manual scheduling components", () => {
       </DndContext>,
     )
 
+    const currentTimeRule = screen.getByLabelText("当前时间 10:15")
+    expect(currentTimeRule.className).toContain("left-[4.5rem]")
+    expect(currentTimeRule.className).toContain("right-3")
+    expect(currentTimeRule.className).toContain("border-rose-500/60")
+
     const currentTimeBadge = screen.getByText("当前时间")
-    expect(currentTimeBadge.className).toContain("right-4")
+    expect(currentTimeBadge.className).toContain("right-[4.25rem]")
+
+    const actionGroup = screen.getByRole("button", { name: "编辑 写发布说明" }).parentElement
+    expect(actionGroup).not.toBeNull()
+    expect(actionGroup?.className).toContain("opacity-0")
+    expect(actionGroup?.className).toContain("hover:opacity-100")
+    expect(actionGroup?.className).toContain("focus-within:opacity-100")
+    expect(actionGroup?.className).toContain("[@media(hover:none)]:opacity-100")
     expect(screen.getByText("写发布说明")).toBeTruthy()
     expect(screen.getByText("已完成")).toBeTruthy()
     expect(screen.getByText("已跳过")).toBeTruthy()
