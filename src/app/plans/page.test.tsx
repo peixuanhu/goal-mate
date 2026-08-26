@@ -65,9 +65,11 @@ const planFixture = {
     remaining_minutes: 195,
     reserved_action_minutes: 90,
     unallocated_remaining_minutes: 105,
+    scheduled_block_count: 0,
+    scheduled_minutes: 0,
+    schedulable_minutes: 105,
     suggested_block_minutes: 45,
     budget_status: "ok",
-    has_scheduled_direct_block: false,
     actions: {},
   },
 }
