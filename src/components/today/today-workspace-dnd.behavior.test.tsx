@@ -189,9 +189,12 @@ describe("TodayWorkspace timeline drag interactions", () => {
 
   it("uses the translated drag rect plus grab offset and immediately creates", async () => {
     vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "timeline-key") })
-    const fetchMock = vi.fn((url: RequestInfo | URL, _init?: RequestInit) => String(url) === "/api/schedule-block"
-      ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
-      : Promise.resolve(todayResponse(dateFromUrl(url))))
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      void init
+      return String(url) === "/api/schedule-block"
+        ? Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
+        : Promise.resolve(todayResponse(dateFromUrl(url)))
+    })
     vi.stubGlobal("fetch", fetchMock)
     render(<TodayWorkspace />)
 
@@ -247,7 +250,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
   it("shows an exact invalid DST preview and does not write on drop", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 2, 8, 12))
-    const fetchMock = vi.fn((url: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(todayResponse(dateFromUrl(url), {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => Promise.resolve(todayResponse(dateFromUrl(url), {
       preference: { timezone: "America/New_York", day_start_minutes: 0, day_end_minutes: 600 },
     })))
     vi.stubGlobal("fetch", fetchMock)
@@ -623,10 +626,13 @@ describe("TodayWorkspace timeline drag interactions", () => {
   it("rejects a resize that exceeds the matching candidate budget before PUT", async () => {
     const existing = draggableBlock()
     const matchingCandidate = { ...candidate, id: "plan_drag", plan_id: "plan_drag", available_minutes: 0 }
-    const fetchMock = vi.fn((url: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(todayResponse(dateFromUrl(url), {
-      blocks: [existing],
-      candidate: matchingCandidate,
-    })))
+    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+      void init
+      return Promise.resolve(todayResponse(dateFromUrl(url), {
+        blocks: [existing],
+        candidate: matchingCandidate,
+      }))
+    })
     vi.stubGlobal("fetch", fetchMock)
     render(<TodayWorkspace />)
 
@@ -672,7 +678,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
     let externalEventCount = 0
     const onDataChanged = () => { externalEventCount += 1 }
     window.addEventListener("goal-mate:data-changed", onDataChanged)
-    const fetchMock = vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
       if (String(url) === "/api/schedule-block") {
         return Promise.resolve(new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } }))
       }
