@@ -2,28 +2,14 @@
 -- Formal source of truth: prisma/migrations/20260823090000_add_today_workspace_foundation/migration.sql
 -- Extended by: prisma/migrations/20260825120000_add_plan_time_budget/migration.sql
 -- Extended by: prisma/migrations/20260825233000_add_goal_position/migration.sql
+-- Extended by: prisma/migrations/20260826140000_allow_multiple_schedule_blocks/migration.sql
 
 DO $$
 DECLARE
-    duplicate_plan_ids text;
     oversized_plan_ids text;
     oversized_action_ids text;
     oversized_preference_ids text;
 BEGIN
-    SELECT string_agg("plan_id", ', ' ORDER BY "plan_id")
-    INTO duplicate_plan_ids
-    FROM (
-        SELECT "plan_id"
-        FROM "ScheduleBlock"
-        WHERE "action_id" IS NULL AND "status" = 'scheduled'
-        GROUP BY "plan_id"
-        HAVING count(*) > 1
-    ) duplicates;
-
-    IF duplicate_plan_ids IS NOT NULL THEN
-        RAISE EXCEPTION 'plans have multiple active direct schedule blocks: %', duplicate_plan_ids;
-    END IF;
-
     SELECT string_agg("plan_id", ', ' ORDER BY "plan_id")
     INTO oversized_plan_ids
     FROM "Plan"
@@ -329,10 +315,5 @@ EXCEPTION
 END
 $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_per_action_idx"
-ON "ScheduleBlock"("action_id")
-WHERE "action_id" IS NOT NULL AND "status" = 'scheduled';
-
-CREATE UNIQUE INDEX IF NOT EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx"
-ON "ScheduleBlock"("plan_id")
-WHERE "action_id" IS NULL AND "status" = 'scheduled';
+DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_per_action_idx";
+DROP INDEX IF EXISTS "ScheduleBlock_one_scheduled_direct_per_plan_idx";

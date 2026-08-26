@@ -143,6 +143,11 @@ function CandidateCard({
                 {candidate.suggested_block_minutes !== null ? <span>下次 {candidate.suggested_block_minutes} 分钟</span> : null}
               </>
             )}
+            {candidate.scheduled_block_count > 0 ? (
+              <span className="font-medium text-violet-600">
+                已安排 {candidate.scheduled_block_count} 段，共 {candidate.scheduled_minutes} 分钟
+              </span>
+            ) : null}
             {candidate.goal_name ? <span className="truncate">{candidate.goal_name}</span> : null}
             {candidate.due_date ? <time dateTime={candidate.due_date}>截止 {candidate.due_date}</time> : null}
           </div>

@@ -362,6 +362,8 @@ describe("loadTodayView", () => {
       remaining_minutes: 60,
       reserved_action_minutes: 120,
       available_minutes: 60,
+      scheduled_block_count: 0,
+      scheduled_minutes: 0,
       suggested_block_minutes: 60,
       budget_status: "ok",
       can_schedule: true,
@@ -393,6 +395,8 @@ describe("loadTodayView", () => {
       remaining_minutes: 120,
       reserved_action_minutes: 120,
       available_minutes: 0,
+      scheduled_block_count: 0,
+      scheduled_minutes: 0,
       suggested_block_minutes: null,
       budget_status: "ok",
       can_schedule: false,
@@ -615,7 +619,7 @@ describe("loadTodayView", () => {
     },
   )
 
-  it("keeps an action with a globally active scheduled block visible but disabled", async () => {
+  it("keeps an action with a globally active scheduled block visible and schedulable within budget", async () => {
     const sibling = {
       ...openPlan.actionItems[0],
       action_id: "action_design",
@@ -651,7 +655,7 @@ describe("loadTodayView", () => {
           block_id: "block_copy_tomorrow",
           action_id: "action_copy",
           start_at: new Date("2026-08-24T02:00:00.000Z"),
-          end_at: new Date("2026-08-24T03:00:00.000Z"),
+          end_at: new Date("2026-08-24T02:30:00.000Z"),
           status: "scheduled",
         }],
       }],
@@ -663,9 +667,12 @@ describe("loadTodayView", () => {
     expect(view.blocks).toEqual([])
     expect(view.candidates.map(item => item.id)).toEqual(["action_copy", "action_design", "plan_launch"])
     expect(view.candidates.find(item => item.id === "action_copy")).toEqual(expect.objectContaining({
-      can_schedule: false,
-      suggested_block_minutes: null,
-      schedule_reason: "已有待执行时间块",
+      can_schedule: true,
+      available_minutes: 30,
+      scheduled_block_count: 1,
+      scheduled_minutes: 30,
+      suggested_block_minutes: 30,
+      schedule_reason: null,
     }))
   })
 
@@ -792,7 +799,7 @@ describe("loadTodayView", () => {
     ])
   })
 
-  it("keeps a direct candidate with a scheduled block visible but disabled", async () => {
+  it("keeps a direct candidate with a scheduled block visible and schedulable within budget", async () => {
     const db = makeDb({
       plans: [{
         ...openPlan,
@@ -808,9 +815,38 @@ describe("loadTodayView", () => {
     })
 
     expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
+      can_schedule: true,
+      available_minutes: 60,
+      scheduled_block_count: 1,
+      scheduled_minutes: 60,
+      suggested_block_minutes: 60,
+      schedule_reason: null,
+    }))
+  })
+
+  it("disables a direct candidate when scheduled blocks consume its available budget", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 60,
+        actionItems: [],
+        scheduleBlocks: [{
+          block_id: "block_scheduled",
+          action_id: null,
+          start_at: new Date("2026-08-26T00:00:00.000Z"),
+          end_at: new Date("2026-08-26T01:00:00.000Z"),
+          status: "scheduled",
+        }],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates[0]).toEqual(expect.objectContaining({
       can_schedule: false,
+      available_minutes: 0,
+      scheduled_block_count: 1,
+      scheduled_minutes: 60,
       suggested_block_minutes: null,
-      schedule_reason: "已有待执行时间块",
+      schedule_reason: "剩余时间已全部安排",
     }))
   })
 
@@ -862,6 +898,43 @@ describe("loadTodayView", () => {
         invested_minutes: 45,
         remaining_minutes: 75,
         reserved_action_minutes: 0,
+        suggested_block_minutes: 60,
+      }),
+    ])
+  })
+
+  it("keeps scheduled siblings from a completed Action committed in the parent candidate", async () => {
+    const db = makeDb({
+      plans: [{
+        ...openPlan,
+        estimated_minutes: 120,
+        actionItems: [],
+        scheduleBlocks: [
+          {
+            block_id: "block_completed_action",
+            action_id: "action_already_completed",
+            start_at: new Date("2026-08-20T00:00:00.000Z"),
+            end_at: new Date("2026-08-20T00:30:00.000Z"),
+            status: "completed",
+          },
+          {
+            block_id: "block_scheduled_sibling",
+            action_id: "action_already_completed",
+            start_at: new Date("2026-08-24T00:00:00.000Z"),
+            end_at: new Date("2026-08-24T00:30:00.000Z"),
+            status: "scheduled",
+          },
+        ],
+      }],
+    })
+
+    expect((await loadTodayView(db, "2026-08-23")).candidates).toEqual([
+      expect.objectContaining({
+        kind: "plan",
+        invested_minutes: 30,
+        remaining_minutes: 90,
+        reserved_action_minutes: 0,
+        available_minutes: 60,
         suggested_block_minutes: 60,
       }),
     ])

@@ -339,8 +339,7 @@ describe("/api/schedule-block", () => {
     ["VALIDATION", 400],
     ["NOT_FOUND", 404],
     ["SCHEDULE_CONFLICT", 409],
-    ["ACTION_ALREADY_SCHEDULED", 409],
-    ["PLAN_ALREADY_SCHEDULED", 409],
+    ["SCHEDULE_BUDGET_EXCEEDED", 409],
     ["STALE_VERSION", 409],
   ] as const)("maps %s to %i", async (code, status) => {
     mocks.createScheduleBlock.mockRejectedValue(new ScheduleServiceError(code, "domain failure", ["busy"]))
@@ -388,11 +387,10 @@ describe("/api/schedule-block", () => {
     })
   })
 
-  it("returns a stable 409 response when a Plan already has an active direct block", async () => {
+  it("returns a stable 409 response when a block exceeds the remaining schedule budget", async () => {
     mocks.createScheduleBlock.mockRejectedValue(new ScheduleServiceError(
-      "PLAN_ALREADY_SCHEDULED",
-      "计划已有待执行时间块",
-      ["block_existing"],
+      "SCHEDULE_BUDGET_EXCEEDED",
+      "时间块超过剩余可安排时间",
     ))
 
     const response = await POST(request("http://localhost/api/schedule-block", {
@@ -408,9 +406,8 @@ describe("/api/schedule-block", () => {
 
     expect(response.status).toBe(409)
     expect(await json(response)).toEqual({
-      error: "计划已有待执行时间块",
-      code: "PLAN_ALREADY_SCHEDULED",
-      conflictIds: ["block_existing"],
+      error: "时间块超过剩余可安排时间",
+      code: "SCHEDULE_BUDGET_EXCEEDED",
     })
   })
 })

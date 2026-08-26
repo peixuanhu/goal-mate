@@ -51,6 +51,8 @@ export type SchedulableCandidate = {
   remaining_minutes: number | null
   reserved_action_minutes: number
   available_minutes: number | null
+  scheduled_block_count: number
+  scheduled_minutes: number
   suggested_block_minutes: number | null
   budget_status: TimeBudgetStatus
   can_schedule: boolean

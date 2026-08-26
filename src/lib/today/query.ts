@@ -236,18 +236,22 @@ async function loadFocus(db: TodayQueryDb, dateKey: string) {
 }
 
 function actionScheduleReason(actionBudget: ActionTimeBudget): string | null {
-  if (actionBudget.has_scheduled_block) return "已有待执行时间块"
   if (actionBudget.remaining_minutes === 0) return "行动项预计投入已用尽"
+  if (actionBudget.schedulable_minutes === 0 && actionBudget.scheduled_minutes > 0) {
+    return "剩余时间已全部安排"
+  }
   if (actionBudget.suggested_block_minutes === null) return "暂无可安排时间"
   return null
 }
 
 function directScheduleReason(budget: PlanTimeBudget): string | null {
-  if (budget.has_scheduled_direct_block) return "已有待执行时间块"
   if (budget.budget_status === "overrun") return "总预计投入已超支"
   if (budget.remaining_minutes === 0) return "总预计投入已用尽"
   if (budget.unallocated_remaining_minutes === 0 && budget.reserved_action_minutes > 0) {
     return "剩余时间已预留给行动项"
+  }
+  if (budget.schedulable_minutes === 0 && budget.scheduled_minutes > 0) {
+    return "剩余时间已全部安排"
   }
   if (budget.suggested_block_minutes === null) return "暂无可安排时间"
   return null
@@ -276,11 +280,12 @@ function actionCandidate(
     invested_minutes: actionBudget.invested_minutes,
     remaining_minutes: actionBudget.remaining_minutes,
     reserved_action_minutes: budget.reserved_action_minutes,
-    available_minutes: actionBudget.remaining_minutes,
+    available_minutes: actionBudget.schedulable_minutes,
+    scheduled_block_count: actionBudget.scheduled_block_count,
+    scheduled_minutes: actionBudget.scheduled_minutes,
     suggested_block_minutes: actionBudget.suggested_block_minutes,
     budget_status: budget.budget_status,
-    can_schedule: !actionBudget.has_scheduled_block
-      && actionBudget.suggested_block_minutes !== null,
+    can_schedule: actionBudget.suggested_block_minutes !== null,
     schedule_reason: scheduleReason,
     energy_level: normalizeEnergyLevel(action.energy_level),
     effective_quadrant: normalizeQuadrant(action.priority_quadrant ?? plan.priority_quadrant),
@@ -311,11 +316,12 @@ function planCandidate(
     invested_minutes: budget.invested_minutes,
     remaining_minutes: budget.remaining_minutes,
     reserved_action_minutes: budget.reserved_action_minutes,
-    available_minutes: budget.unallocated_remaining_minutes,
+    available_minutes: budget.schedulable_minutes,
+    scheduled_block_count: budget.scheduled_block_count,
+    scheduled_minutes: budget.scheduled_minutes,
     suggested_block_minutes: budget.suggested_block_minutes,
     budget_status: budget.budget_status,
-    can_schedule: !budget.has_scheduled_direct_block
-      && budget.suggested_block_minutes !== null,
+    can_schedule: budget.suggested_block_minutes !== null,
     schedule_reason: scheduleReason,
     energy_level: normalizeEnergyLevel(plan.energy_level),
     effective_quadrant: normalizeQuadrant(plan.priority_quadrant),

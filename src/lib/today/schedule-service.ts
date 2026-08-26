@@ -2,6 +2,8 @@ import { createHash } from "node:crypto"
 
 import { PrismaClient, type Prisma } from "@prisma/client"
 
+import { normalizePlanTiming } from "@/lib/plan-input"
+
 import {
   getDefaultPlanningPreference,
   toPlanningPreferenceView,
@@ -23,6 +25,10 @@ import {
   zonedDateStartToUtc,
   zonedMinuteToUtc,
 } from "./timezone"
+import {
+  calculatePlanTimeBudget,
+  type PlanTimeBudgetInput,
+} from "./time-budget"
 import type {
   PlanningPreferenceView,
   ScheduleBlockSource,
@@ -37,8 +43,7 @@ export type ScheduleErrorCode =
   | "VALIDATION"
   | "NOT_FOUND"
   | "SCHEDULE_CONFLICT"
-  | "ACTION_ALREADY_SCHEDULED"
-  | "PLAN_ALREADY_SCHEDULED"
+  | "SCHEDULE_BUDGET_EXCEEDED"
   | "STALE_VERSION"
 
 export class ScheduleServiceError extends Error {
@@ -91,6 +96,24 @@ type LockedPlanRow = {
   plan_id: string
 }
 
+type ScheduleBudgetPlanRow = {
+  is_recurring: boolean
+  estimated_minutes: number | null
+  default_block_minutes: number | null
+  actionItems: Array<{
+    action_id: string
+    estimated_minutes: number | null
+    is_completed: boolean
+  }>
+  scheduleBlocks: Array<{
+    block_id: string
+    action_id: string | null
+    start_at: Date
+    end_at: Date
+    status: string
+  }>
+}
+
 type LockedScheduleBlockRow = {
   block_id: string
   plan_id: string
@@ -126,6 +149,13 @@ type NormalizedUpdate = {
 type NormalizedCancel = {
   blockId: string
   expectedVersion: number
+}
+
+type ScheduleBudgetRequest = Pick<
+  NormalizedCreate,
+  "planId" | "actionId" | "startAt" | "endAt"
+> & {
+  ignoredBlockId?: string
 }
 
 const DEFAULT_PREFERENCE_ID = "default"
@@ -489,17 +519,6 @@ async function assertPlanAndAction(
     throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
   }
   if (actionId === null) {
-    const active = await db.scheduleBlock.findFirst({
-      where: { plan_id: planId, action_id: null, status: "scheduled" },
-      select: { block_id: true },
-    })
-    if (active) {
-      throw new ScheduleServiceError(
-        "PLAN_ALREADY_SCHEDULED",
-        "计划已有待执行时间块",
-        [active.block_id],
-      )
-    }
     return
   }
 
@@ -513,16 +532,79 @@ async function assertPlanAndAction(
   if (actionRow.is_completed) {
     validation("已完成行动项不能排期")
   }
+}
 
-  const active = await db.scheduleBlock.findFirst({
-    where: { action_id: actionId, status: "scheduled" },
-    select: { block_id: true },
-  })
-  if (active) {
+async function assertScheduleBudget(
+  db: Prisma.TransactionClient,
+  input: ScheduleBudgetRequest,
+  preferenceDefaultBlockMinutes: number,
+): Promise<void> {
+  const plan = await db.plan.findUnique({
+    where: { plan_id: input.planId },
+    select: {
+      is_recurring: true,
+      estimated_minutes: true,
+      default_block_minutes: true,
+      actionItems: {
+        select: {
+          action_id: true,
+          estimated_minutes: true,
+          is_completed: true,
+        },
+      },
+      scheduleBlocks: {
+        select: {
+          block_id: true,
+          action_id: true,
+          start_at: true,
+          end_at: true,
+          status: true,
+        },
+      },
+    },
+  }) as ScheduleBudgetPlanRow | null
+  if (!plan) {
+    throw new ScheduleServiceError("NOT_FOUND", "计划不存在")
+  }
+
+  const relations = {
+    default_block_minutes: plan.default_block_minutes,
+    actions: plan.actionItems,
+    blocks: plan.scheduleBlocks.filter(block => block.block_id !== input.ignoredBlockId),
+  }
+  let budgetInput: PlanTimeBudgetInput
+  if (plan.is_recurring) {
+    budgetInput = {
+      ...relations,
+      is_recurring: true,
+      estimated_minutes: null,
+    }
+  } else {
+    const defaultTiming = normalizePlanTiming({}, { mode: "create" })
+    const estimatedMinutes = plan.estimated_minutes ?? defaultTiming.estimated_minutes
+    if (typeof estimatedMinutes !== "number") {
+      validation("普通计划必须提供总预计投入")
+    }
+    budgetInput = {
+      ...relations,
+      is_recurring: false,
+      estimated_minutes: estimatedMinutes,
+    }
+  }
+
+  const budget = calculatePlanTimeBudget(budgetInput, preferenceDefaultBlockMinutes)
+  const schedulableMinutes = input.actionId === null
+    ? budget.schedulable_minutes
+    : budget.actions[input.actionId]?.schedulable_minutes
+  if (schedulableMinutes === undefined) {
+    validation("行动项不属于指定计划")
+  }
+
+  const requestedMinutes = (input.endAt.getTime() - input.startAt.getTime()) / 60_000
+  if (schedulableMinutes !== null && requestedMinutes > schedulableMinutes) {
     throw new ScheduleServiceError(
-      "ACTION_ALREADY_SCHEDULED",
-      "行动项已有活动排期",
-      [active.block_id],
+      "SCHEDULE_BUDGET_EXCEEDED",
+      "时间块超过剩余可安排时间",
     )
   }
 }
@@ -560,37 +642,6 @@ function isPrismaError(error: unknown, code: string): boolean {
     && (error as { code?: unknown }).code === code
 }
 
-function prismaErrorTargets(error: unknown): string[] {
-  if (typeof error !== "object" || error === null || !("meta" in error)) {
-    return []
-  }
-  const target = (error as { meta?: { target?: unknown } }).meta?.target
-  if (typeof target === "string") {
-    return [target]
-  }
-  return Array.isArray(target)
-    ? target.filter((value): value is string => typeof value === "string")
-    : []
-}
-
-function isActionScheduleUniqueError(error: unknown): boolean {
-  if (!isPrismaError(error, "P2002")) {
-    return false
-  }
-  return prismaErrorTargets(error).some(target => (
-    target === "action_id" || target.includes("ScheduleBlock_one_scheduled_per_action_idx")
-  ))
-}
-
-function isPlanScheduleUniqueError(error: unknown): boolean {
-  if (!isPrismaError(error, "P2002")) {
-    return false
-  }
-  return prismaErrorTargets(error).some(target => (
-    target === "plan_id" || target.includes("ScheduleBlock_one_scheduled_direct_per_plan_idx")
-  ))
-}
-
 export async function createScheduleBlock(
   db: ScheduleDb,
   rawInput: CreateScheduleBlockInput,
@@ -609,6 +660,7 @@ export async function createScheduleBlock(
       const localDate = localDateAndAssertBounds(input.startAt, input.endAt, preference)
       await lockScheduleLocalDates(tx, [localDate])
       await assertPlanAndAction(tx, input.planId, input.actionId)
+      await assertScheduleBudget(tx, input, preference.default_block_minutes)
       throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt))
 
       const created = await tx.scheduleBlock.create({
@@ -630,36 +682,6 @@ export async function createScheduleBlock(
     if (error instanceof ScheduleServiceError) throw error
     if (isPrismaError(error, "P2003")) {
       throw new ScheduleServiceError("NOT_FOUND", "计划或行动项不存在")
-    }
-    if (isActionScheduleUniqueError(error)) {
-      let conflictIds: string[] | undefined
-      if (input.actionId !== null && isPrismaClient(db)) {
-        const existing = await db.scheduleBlock.findFirst({
-          where: { action_id: input.actionId, status: "scheduled" },
-          select: { block_id: true },
-        })
-        conflictIds = existing ? [existing.block_id] : undefined
-      }
-      throw new ScheduleServiceError(
-        "ACTION_ALREADY_SCHEDULED",
-        "行动项已有活动排期",
-        conflictIds,
-      )
-    }
-    if (isPlanScheduleUniqueError(error)) {
-      let conflictIds: string[] | undefined
-      if (isPrismaClient(db)) {
-        const existing = await db.scheduleBlock.findFirst({
-          where: { plan_id: input.planId, action_id: null, status: "scheduled" },
-          select: { block_id: true },
-        })
-        conflictIds = existing ? [existing.block_id] : undefined
-      }
-      throw new ScheduleServiceError(
-        "PLAN_ALREADY_SCHEDULED",
-        "计划已有待执行时间块",
-        conflictIds,
-      )
     }
     if (isPrismaError(error, "P2002")) {
       throw new ScheduleServiceError("SCHEDULE_CONFLICT", "时间块幂等键冲突", [input.blockId])
@@ -712,6 +734,13 @@ export async function updateScheduleBlock(
       }
     }
 
+    await assertScheduleBudget(tx, {
+      planId: current.plan_id,
+      actionId: current.action_id,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      ignoredBlockId: current.block_id,
+    }, preference.default_block_minutes)
     throwIfConflicts(await findConflicts(tx, input.startAt, input.endAt, input.blockId))
     const updated = await tx.scheduleBlock.updateMany({
       where: {

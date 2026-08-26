@@ -29,6 +29,15 @@ const plan = {
   name: "准备发布",
   energy_level: "high",
   goal: { goal_id: "goal_product", name: "发布 Goal Mate v1" },
+  is_recurring: false,
+  estimated_minutes: 120,
+  default_block_minutes: 60,
+  actionItems: [{
+    action_id: "action_copy",
+    estimated_minutes: 60,
+    is_completed: false,
+  }],
+  scheduleBlocks: [],
 }
 
 const action = {
@@ -669,71 +678,6 @@ describe("ScheduleBlock service", () => {
     expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
   })
 
-  it("maps a root-client action partial-unique race and loads its conflict id after rollback", async () => {
-    const db = makeDb()
-    db.$transaction.mockRejectedValue(
-      prismaError("P2002", "ScheduleBlock_one_scheduled_per_action_idx"),
-    )
-    db.scheduleBlock.findFirst.mockResolvedValue({ block_id: "block_action_busy" })
-
-    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
-      code: "ACTION_ALREADY_SCHEDULED",
-      conflictIds: ["block_action_busy"],
-    })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { action_id: "action_copy", status: "scheduled" },
-      select: { block_id: true },
-    })
-  })
-
-  it.each([
-    "ScheduleBlock_one_scheduled_direct_per_plan_idx",
-    ["ScheduleBlock_one_scheduled_direct_per_plan_idx"],
-    "plan_id",
-    ["plan_id"],
-  ])("maps a root-client direct-plan partial-unique race for target %j", async target => {
-    const db = makeDb()
-    db.$transaction.mockRejectedValue(prismaError("P2002", target))
-    db.scheduleBlock.findFirst.mockResolvedValue({ block_id: "block_plan_busy" })
-
-    await expect(createScheduleBlock(db, { ...validCreate, action_id: null })).rejects.toMatchObject({
-      code: "PLAN_ALREADY_SCHEDULED",
-      message: "计划已有待执行时间块",
-      conflictIds: ["block_plan_busy"],
-    })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { plan_id: "plan_launch", action_id: null, status: "scheduled" },
-      select: { block_id: true },
-    })
-  })
-
-  it("maps a transaction-client direct-plan unique race without querying an aborted transaction", async () => {
-    const db = makeDb({ root: false })
-    db.scheduleBlock.create.mockRejectedValue(prismaError("P2002", ["plan_id"]))
-
-    await expect(createScheduleBlock(db, { ...validCreate, action_id: null })).rejects.toMatchObject({
-      code: "PLAN_ALREADY_SCHEDULED",
-      message: "计划已有待执行时间块",
-      conflictIds: undefined,
-    })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledTimes(1)
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { plan_id: "plan_launch", action_id: null, status: "scheduled" },
-      select: { block_id: true },
-    })
-  })
-
-  it("maps a transaction-client action unique race without querying an aborted transaction", async () => {
-    const db = makeDb({ root: false })
-    db.scheduleBlock.create.mockRejectedValue(prismaError("P2002", ["action_id"]))
-
-    await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
-      code: "ACTION_ALREADY_SCHEDULED",
-      conflictIds: undefined,
-    })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledTimes(1)
-  })
-
   it("keeps a block_id unique collision mapped to SCHEDULE_CONFLICT", async () => {
     const db = makeDb()
     db.$transaction.mockRejectedValue(prismaError("P2002", ["block_id"]))
@@ -797,27 +741,32 @@ describe("ScheduleBlock service", () => {
     expect(db.scheduleBlock.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ action_id: null }),
     }))
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { plan_id: "plan_launch", action_id: null, status: "scheduled" },
-      select: { block_id: true },
-    })
   })
 
-  it("rejects a second active direct block for the same Plan", async () => {
+  it("allows a second non-overlapping active direct block within the Plan budget", async () => {
     const db = makeDb()
     db.scheduleBlock.findFirst.mockResolvedValue({ block_id: "block_existing" })
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 120,
+      actionItems: [],
+      scheduleBlocks: [{
+        block_id: "block_existing",
+        action_id: null,
+        start_at: new Date("2026-08-23T03:00:00.000Z"),
+        end_at: new Date("2026-08-23T04:00:00.000Z"),
+        status: "scheduled",
+      }],
+    })
+    db.scheduleBlock.create.mockResolvedValue({
+      ...createdBlock(),
+      action_id: null,
+      action: null,
+    })
 
-    await expect(createScheduleBlock(db, { ...validCreate, action_id: null })).rejects.toMatchObject({
-      code: "PLAN_ALREADY_SCHEDULED",
-      message: "计划已有待执行时间块",
-      conflictIds: ["block_existing"],
-    })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledOnce()
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { plan_id: "plan_launch", action_id: null, status: "scheduled" },
-      select: { block_id: true },
-    })
-    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+    await expect(createScheduleBlock(db, { ...validCreate, action_id: null })).resolves.toEqual(
+      expect.objectContaining({ action_id: null }),
+    )
   })
 
   it("rejects a missing Plan, mismatched Action, and completed Action", async () => {
@@ -834,19 +783,93 @@ describe("ScheduleBlock service", () => {
     await expect(createScheduleBlock(completedDb, validCreate)).rejects.toMatchObject({ code: "VALIDATION" })
   })
 
-  it("rejects a second active scheduled block for the same Action", async () => {
+  it("allows a second non-overlapping active block for the same Action within budget", async () => {
     const db = makeDb()
     db.scheduleBlock.findFirst.mockResolvedValue({ block_id: "block_action_busy" })
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 180,
+      actionItems: [{
+        action_id: "action_copy",
+        estimated_minutes: 120,
+        is_completed: false,
+      }],
+      scheduleBlocks: [{
+        block_id: "block_action_busy",
+        action_id: "action_copy",
+        start_at: new Date("2026-08-23T03:00:00.000Z"),
+        end_at: new Date("2026-08-23T04:00:00.000Z"),
+        status: "scheduled",
+      }],
+    })
+    db.scheduleBlock.create.mockResolvedValue(createdBlock())
+
+    await expect(createScheduleBlock(db, validCreate)).resolves.toEqual(
+      expect.objectContaining({ action_id: "action_copy" }),
+    )
+  })
+
+  it("rejects an Action block that exceeds its remaining schedulable budget", async () => {
+    const db = makeDb()
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      actionItems: [{
+        action_id: "action_copy",
+        estimated_minutes: 60,
+        is_completed: false,
+      }],
+      scheduleBlocks: [{
+        block_id: "block_action_busy",
+        action_id: "action_copy",
+        start_at: new Date("2026-08-23T03:00:00.000Z"),
+        end_at: new Date("2026-08-23T03:30:00.000Z"),
+        status: "scheduled",
+      }],
+    })
 
     await expect(createScheduleBlock(db, validCreate)).rejects.toMatchObject({
-      code: "ACTION_ALREADY_SCHEDULED",
-      conflictIds: ["block_action_busy"],
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+      message: "时间块超过剩余可安排时间",
     })
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledOnce()
-    expect(db.scheduleBlock.findFirst).toHaveBeenCalledWith({
-      where: { action_id: "action_copy", status: "scheduled" },
-      select: { block_id: true },
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects direct overfill while a completed Action still has a scheduled sibling", async () => {
+    const db = makeDb()
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 120,
+      actionItems: [{
+        action_id: "action_copy",
+        estimated_minutes: 60,
+        is_completed: true,
+      }],
+      scheduleBlocks: [
+        {
+          block_id: "block_action_done",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-22T01:00:00.000Z"),
+          end_at: new Date("2026-08-22T01:30:00.000Z"),
+          status: "completed",
+        },
+        {
+          block_id: "block_action_sibling",
+          action_id: "action_copy",
+          start_at: new Date("2026-08-23T03:00:00.000Z"),
+          end_at: new Date("2026-08-23T03:30:00.000Z"),
+          status: "scheduled",
+        },
+      ],
     })
+
+    await expect(createScheduleBlock(db, {
+      ...validCreate,
+      action_id: null,
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+    })
+    expect(db.scheduleBlock.create).not.toHaveBeenCalled()
   })
 
   it("updates an active direct block without treating the block itself as a duplicate", async () => {
@@ -877,6 +900,57 @@ describe("ScheduleBlock service", () => {
       end_at: "2026-08-23T04:00:00.000Z",
     })).resolves.toEqual(expect.objectContaining({ block_id: "block_direct", version: 2 }))
     expect(db.scheduleBlock.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("rejects expanding an Action block beyond its budget", async () => {
+    const db = makeDb()
+    db.scheduleBlock.findUnique.mockResolvedValue(baseBlock)
+
+    await expect(updateScheduleBlock(db, {
+      block_id: "block_existing",
+      expected_version: 1,
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+      message: "时间块超过剩余可安排时间",
+    })
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("rejects expanding a direct Plan block beyond its budget", async () => {
+    const db = makeDb()
+    const directBlock = {
+      ...baseBlock,
+      action_id: null,
+      action: null,
+    }
+    db.scheduleBlock.findUnique.mockResolvedValue(directBlock)
+    db.plan.findUnique.mockResolvedValue({
+      ...plan,
+      estimated_minutes: 60,
+      actionItems: [],
+      scheduleBlocks: [{
+        block_id: directBlock.block_id,
+        action_id: null,
+        start_at: directBlock.start_at,
+        end_at: directBlock.end_at,
+        status: "scheduled",
+      }],
+    })
+    db.$queryRaw.mockImplementation(async (...call: unknown[]) => (
+      rawSqlTemplate(call).includes('FROM "ScheduleBlock"') ? [directBlock] : [{ plan_id: "plan_launch" }]
+    ))
+
+    await expect(updateScheduleBlock(db, {
+      block_id: directBlock.block_id,
+      expected_version: 1,
+      start_at: "2026-08-23T01:00:00.000Z",
+      end_at: "2026-08-23T02:15:00.000Z",
+    })).rejects.toMatchObject({
+      code: "SCHEDULE_BUDGET_EXCEEDED",
+    })
+    expect(db.scheduleBlock.updateMany).not.toHaveBeenCalled()
   })
 
   it("allows touching intervals but returns overlap ids for half-open conflicts", async () => {

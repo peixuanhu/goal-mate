@@ -57,6 +57,8 @@ const candidate: SchedulableCandidate = {
   remaining_minutes: 60,
   reserved_action_minutes: 0,
   available_minutes: 60,
+  scheduled_block_count: 0,
+  scheduled_minutes: 0,
   suggested_block_minutes: 60,
   budget_status: "ok",
   can_schedule: true,
