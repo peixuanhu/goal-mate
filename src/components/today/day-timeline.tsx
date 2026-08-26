@@ -178,7 +178,7 @@ export function DayTimeline({ date, preference, blocks, loading, error, onEditBl
 
           {showCurrentTime && currentMinute !== null ? (
             <div aria-label={`当前时间 ${formatMinutes(currentMinute)}`} className="pointer-events-none absolute inset-x-16 z-20 border-t-2 border-rose-500" style={{ top: `${((currentMinute - preference.day_start_minutes) / durationMinutes) * 100}%` }}>
-              <span className="absolute -top-3 right-0 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-medium text-white">当前时间</span>
+              <span className="absolute -top-3 right-4 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-medium text-white">当前时间</span>
             </div>
           ) : null}
 
