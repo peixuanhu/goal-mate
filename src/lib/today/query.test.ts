@@ -67,7 +67,6 @@ const scheduledCopyBlock = {
   end_at: new Date("2026-08-23T02:00:00.000Z"),
   status: "scheduled",
   source: "manual",
-  result_note: null,
   create_fingerprint: "copy-fingerprint",
   version: 2,
   plan: {
@@ -565,7 +564,6 @@ describe("loadTodayView", () => {
         end_at: "2026-08-22T16:30:00.000Z",
         status: "scheduled",
         source: "manual",
-        result_note: null,
         version: 2,
       },
       expect.objectContaining({

@@ -40,7 +40,6 @@ function block(start: string, end: string, status: ScheduleBlockView["status"] =
     end_at: end,
     status,
     source: "manual",
-    result_note: null,
     version: 1,
   }
 }

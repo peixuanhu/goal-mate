@@ -13,7 +13,6 @@ export type ScheduleCompletionPayload = {
   outcome: "completed" | "partial" | "skipped"
   content?: string
   thinking?: string
-  result_note?: string
   plan_progress?: number
 }
 
@@ -30,7 +29,6 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
   const [outcome, setOutcome] = useState<ScheduleCompletionPayload["outcome"]>("completed")
   const [content, setContent] = useState("")
   const [thinking, setThinking] = useState("")
-  const [resultNote, setResultNote] = useState("")
   const [planProgress, setPlanProgress] = useState(50)
   const [updatePlanProgress, setUpdatePlanProgress] = useState(false)
   const firstOutcomeRef = useRef<HTMLInputElement>(null)
@@ -49,7 +47,6 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
       outcome,
       ...(outcome !== "skipped" && content ? { content } : {}),
       ...(outcome !== "skipped" && thinking ? { thinking } : {}),
-      ...(resultNote ? { result_note: resultNote } : {}),
       ...(isOrdinaryPlan && updatePlanProgress ? { plan_progress: planProgress / 100 } : {}),
     })
   }
@@ -97,10 +94,6 @@ export function ScheduleCompletionSheet({ block, isOrdinaryPlan, loading, error,
               </label>
             </>
           ) : null}
-          <label className="block text-sm font-medium text-gray-700">结果备注
-            <textarea aria-label="结果备注" className="mt-1 min-h-16 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" disabled={loading} onChange={event => setResultNote(event.currentTarget.value)} value={resultNote} />
-          </label>
-
           {isOrdinaryPlan ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700">

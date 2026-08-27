@@ -158,7 +158,6 @@ function isScheduleBlockView(value: unknown): value is ScheduleBlockView {
     && isIsoInstant(value.end_at)
     && (value.status === "scheduled" || value.status === "completed" || value.status === "partial" || value.status === "skipped" || value.status === "cancelled")
     && (value.source === "manual" || value.source === "ai_check" || value.source === "ai_chat")
-    && isNullableString(value.result_note)
     && typeof value.version === "number"
     && Number.isInteger(value.version)
     && value.version >= 1

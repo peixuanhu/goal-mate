@@ -20,7 +20,6 @@ export type CompleteScheduleBlockInput = {
   outcome: "completed" | "partial" | "skipped"
   content?: string
   thinking?: string
-  result_note?: string
   plan_progress?: number
 }
 
@@ -30,7 +29,6 @@ type NormalizedCompletionInput = {
   outcome: "completed" | "partial" | "skipped"
   content: string | null
   thinking: string | null
-  resultNote: string | null
   planProgress: number | undefined
 }
 
@@ -58,7 +56,6 @@ const COMPLETION_FIELDS = new Set([
   "outcome",
   "content",
   "thinking",
-  "result_note",
   "plan_progress",
 ])
 
@@ -119,7 +116,6 @@ function normalizeInput(value: CompleteScheduleBlockInput): NormalizedCompletion
     outcome,
     content: optionalText(value.content, "content"),
     thinking: optionalText(value.thinking, "thinking"),
-    resultNote: optionalText(value.result_note, "result_note"),
     planProgress,
   }
 }
@@ -207,7 +203,6 @@ export async function completeScheduleBlock(
         },
         data: {
           status: input.outcome,
-          result_note: input.resultNote,
           version: { increment: 1 },
         },
       })

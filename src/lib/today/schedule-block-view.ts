@@ -33,7 +33,6 @@ export type ScheduleBlockProjectionRow = {
   end_at: Date
   status: string
   source: string
-  result_note: string | null
   version: number
   plan: {
     plan_id: string
@@ -77,7 +76,6 @@ export function toScheduleBlockView(row: ScheduleBlockProjectionRow): ScheduleBl
     end_at: row.end_at.toISOString(),
     status: row.status as ScheduleBlockStatus,
     source: row.source as ScheduleBlockSource,
-    result_note: row.result_note,
     version: row.version,
   }
 }

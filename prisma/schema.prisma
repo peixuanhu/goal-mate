@@ -111,7 +111,6 @@ model ScheduleBlock {
   end_at             DateTime
   status             String          @default("scheduled")
   source             String          @default("manual")
-  result_note        String?
   create_fingerprint String?
   version            Int             @default(1)
   plan               Plan            @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)

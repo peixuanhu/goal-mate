@@ -51,7 +51,6 @@ function completedBlock(overrides: Record<string, unknown> = {}) {
     end_at: new Date("2026-08-23T02:00:00.000Z"),
     status: "completed",
     source: "manual",
-    result_note: "发布完成",
     create_fingerprint: "fingerprint",
     version: 2,
     plan,
@@ -135,7 +134,6 @@ const validInput: CompleteScheduleBlockInput = {
   outcome: "completed",
   content: "发布了首版",
   thinking: "先保护深度工作时段",
-  result_note: "发布完成",
 }
 
 describe("ScheduleBlock completion service", () => {
@@ -165,7 +163,6 @@ describe("ScheduleBlock completion service", () => {
       },
       data: {
         status: "completed",
-        result_note: "发布完成",
         version: { increment: 1 },
       },
     })
@@ -190,7 +187,6 @@ describe("ScheduleBlock completion service", () => {
     expect(result).toEqual(expect.objectContaining({
       block_id: "block_copy",
       status: "completed",
-      result_note: "发布完成",
       version: 2,
     }))
   })
@@ -199,7 +195,6 @@ describe("ScheduleBlock completion service", () => {
     const db = makeDb({
       refreshed: completedBlock({
         status: "partial",
-        result_note: "完成一半",
         action,
       }),
     })
@@ -209,7 +204,6 @@ describe("ScheduleBlock completion service", () => {
       expected_version: 1,
       outcome: "partial",
       content: "写完初稿",
-      result_note: "完成一半",
     })
 
     expect(db.progressRecord.create).toHaveBeenCalledWith({
@@ -226,22 +220,20 @@ describe("ScheduleBlock completion service", () => {
     expect(result.status).toBe("partial")
   })
 
-  it("skips a block with its note and creates no ProgressRecord", async () => {
+  it("skips a block without creating a ProgressRecord", async () => {
     const db = makeDb({
-      refreshed: completedBlock({ status: "skipped", result_note: "等待外部反馈", action }),
+      refreshed: completedBlock({ status: "skipped", action }),
     })
 
     const result = await completeScheduleBlock(db, {
       block_id: "block_copy",
       expected_version: 1,
       outcome: "skipped",
-      result_note: "等待外部反馈",
     })
 
     expect(db.scheduleBlock.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: {
         status: "skipped",
-        result_note: "等待外部反馈",
         version: { increment: 1 },
       },
     }))
@@ -295,6 +287,7 @@ describe("ScheduleBlock completion service", () => {
     ["null input", null],
     ["array input", []],
     ["unexpected field", { ...validInput, operation: "complete" }],
+    ["removed result note", { ...validInput, result_note: "legacy" }],
     ["blank id", { ...validInput, block_id: "  " }],
     ["zero version", { ...validInput, expected_version: 0 }],
     ["fractional version", { ...validInput, expected_version: 1.5 }],

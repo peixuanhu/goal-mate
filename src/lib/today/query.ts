@@ -71,7 +71,6 @@ type ScheduleBlockRow = {
   end_at: Date
   status: string
   source: string
-  result_note: string | null
   create_fingerprint: string | null
   version: number
   plan: {

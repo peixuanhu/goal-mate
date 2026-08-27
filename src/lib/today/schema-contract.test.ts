@@ -228,6 +228,9 @@ const timeBudgetMigration = readRootFile(
 const multipleBlocksMigration = readRootFile(
   "prisma/migrations/20260826140000_allow_multiple_schedule_blocks/migration.sql",
 )
+const removeResultNoteMigration = readRootFile(
+  "prisma/migrations/20260827000000_remove_schedule_block_result_note/migration.sql",
+)
 const formalIntegritySql = `${migration}\n${timeBudgetMigration}\n${multipleBlocksMigration}`
 const integrityOverlay = readRootFile("prisma/today-workspace-integrity.sql")
 const packageJson = JSON.parse(readRootFile("package.json")) as {
@@ -351,6 +354,13 @@ describe("today workspace Prisma contract", () => {
   it("links schedule-generated progress exactly once", () => {
     expect(schema).toMatch(/schedule_block_id\s+String\?\s+@unique/)
     expect(schema).toMatch(/counts_toward_recurrence\s+Boolean\s+@default\(true\)/)
+  })
+
+  it("removes the unused schedule block result note without compatibility", () => {
+    expect(schema).not.toMatch(/\bresult_note\b/)
+    expect(removeResultNoteMigration).toContain(
+      'ALTER TABLE "ScheduleBlock" DROP COLUMN "result_note";',
+    )
   })
 
   it("records the complete database integrity contract in the formal migration", () => {
