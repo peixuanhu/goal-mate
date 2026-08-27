@@ -241,13 +241,13 @@ Expected: FAIL because the highlighted row never calls `scrollIntoView`.
 Extend `DraggableTableRow` with an optional row ref and attach it to `TableRow`:
 
 ```tsx
-function DraggableTableRow({ 
-  plan, 
+function DraggableTableRow({
+  plan,
   highlightPlanId,
   rowRef,
   children,
-}: { 
-  plan: Plan; 
+}: {
+  plan: Plan;
   highlightPlanId: string | null;
   rowRef?: React.Ref<HTMLTableRowElement>;
   children: React.ReactNode;
@@ -257,7 +257,7 @@ function DraggableTableRow({
 Then add the ref to the existing opening `TableRow` tag:
 
 ```tsx
-<TableRow 
+<TableRow
   ref={rowRef}
   className={`
     ${highlightPlanId === plan.plan_id ? 'bg-yellow-100 dark:bg-yellow-900/20 animate-pulse' : ''}
