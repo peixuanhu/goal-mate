@@ -6,6 +6,7 @@ import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 let suspendSearchParams = false
+let currentSearchParams = new URLSearchParams()
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -13,7 +14,7 @@ vi.mock("next/navigation", () => ({
     if (suspendSearchParams) {
       throw new Promise<never>(() => undefined)
     }
-    return new URLSearchParams()
+    return currentSearchParams
   },
 }))
 
@@ -131,22 +132,48 @@ function findWriteBody(fetchMock: ReturnType<typeof setupFetch>, method: "POST" 
 }
 
 async function renderLoadedPage() {
-  render(<PlansPage />)
+  const result = render(<PlansPage />)
   await waitFor(() => expect(screen.getByRole("heading", { name: "计划管理" })).toBeTruthy())
   await waitFor(() => expect(screen.queryByText("加载中...")).toBeNull())
+  return result
 }
 
 beforeEach(() => {
   suspendSearchParams = false
+  currentSearchParams = new URLSearchParams()
 })
 
 afterEach(() => {
   cleanup()
+  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
 
 describe("PlansPage", () => {
+  it("scrolls the query-selected plan row into view and highlights it without editing", async () => {
+    currentSearchParams = new URLSearchParams("highlight=plan_ddia")
+    const scrollIntoView = vi.fn()
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout")
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    setupFetch({ plans: [planFixture] })
+
+    const page = await renderLoadedPage()
+
+    const row = screen.getByText("读完 DDIA").closest("tr")
+    expect(row?.className).toContain("bg-yellow-100")
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" })
+    })
+    expect(screen.getByRole("button", { name: "编辑" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "新增" })).toBeTruthy()
+    page.unmount()
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+  })
+
   it("keeps URL search parameter reads inside a Suspense boundary", () => {
     suspendSearchParams = true
     const html = renderToString(<PlansPage />)

@@ -179,10 +179,12 @@ type SortConfig = {
 function DraggableTableRow({ 
   plan, 
   highlightPlanId, 
+  rowRef,
   children,
 }: { 
   plan: Plan; 
   highlightPlanId: string | null;
+  rowRef?: React.Ref<HTMLTableRowElement>;
   children: React.ReactNode;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -200,6 +202,7 @@ function DraggableTableRow({
 
   return (
     <TableRow 
+      ref={rowRef}
       className={`
         ${highlightPlanId === plan.plan_id ? 'bg-yellow-100 dark:bg-yellow-900/20 animate-pulse' : ''}
         ${isDragging ? 'opacity-50' : ''}
@@ -235,6 +238,7 @@ function PlansPageContent() {
   const initialUrlGoalId = searchParams.get('goal_id');
   const lastAppliedUrlGoalIdRef = useRef<string | null>(initialUrlGoalId);
   const fetchPlansRequestIdRef = useRef(0);
+  const highlightedPlanRowRef = useRef<HTMLTableRowElement>(null);
   const [plans, setPlans] = useState<Plan[]>([])
   const [allPlans, setAllPlans] = useState<Plan[]>([])  // 存储所有计划用于本地排序
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -393,16 +397,16 @@ function PlansPageContent() {
       setForm(f => ({ ...f, goal_id: null }));
     }
     
-    // 如果URL有highlight参数，设置高亮计划
-    const highlightId = searchParams.get('highlight');
-    if (highlightId) {
-      setHighlightPlanId(highlightId);
-      // 5秒后取消高亮
-      setTimeout(() => {
-        setHighlightPlanId(null);
-      }, 5000);
-    }
   }, [searchParams, selectedTags]);
+
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    setHighlightPlanId(highlightId);
+    if (!highlightId) return;
+
+    const timeoutId = window.setTimeout(() => setHighlightPlanId(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchParams]);
 
   // 当筛选条件或排序配置变化时重新筛选和排序
   useEffect(() => {
@@ -458,6 +462,11 @@ function PlansPageContent() {
       setPlans(paginatedPlans);
     }
   }, [pageNum, highlightPlanId, allPlans, sortConfig, selectedTags, difficulty, taskTypeFilter, progressFilter, goalFilter, searchQuery, pageSize]);
+
+  useEffect(() => {
+    if (!highlightPlanId || !plans.some(plan => plan.plan_id === highlightPlanId)) return;
+    highlightedPlanRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightPlanId, plans]);
 
   useEffect(() => { 
     fetchPlans();
@@ -1077,6 +1086,7 @@ function PlansPageContent() {
                         key={plan.plan_id}
                         plan={plan}
                         highlightPlanId={highlightPlanId}
+                        rowRef={highlightPlanId === plan.plan_id ? highlightedPlanRowRef : undefined}
                       >
                         <TableCell className="w-[220px] min-w-[220px] font-medium" style={{ width: '220px', maxWidth: '220px', overflow: 'hidden' }}>
                           <TextPreview
