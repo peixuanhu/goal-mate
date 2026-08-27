@@ -31,7 +31,6 @@ export type ScheduleBlockView = {
   end_at: string
   status: ScheduleBlockStatus
   source: ScheduleBlockSource
-  result_note: string | null
   version: number
 }
 

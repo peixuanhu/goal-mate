@@ -30,7 +30,6 @@ const completedView = {
   end_at: "2026-08-23T02:00:00.000Z",
   status: "completed",
   source: "manual",
-  result_note: "发布完成",
   version: 2,
 }
 
@@ -62,7 +61,6 @@ describe("POST /api/schedule-block/complete", () => {
       outcome: "completed",
       content: "发布了首版",
       thinking: "保护深度工作时段",
-      result_note: "发布完成",
       plan_progress: 0.75,
     })))
 
@@ -73,7 +71,6 @@ describe("POST /api/schedule-block/complete", () => {
       outcome: "completed",
       content: "发布了首版",
       thinking: "保护深度工作时段",
-      result_note: "发布完成",
       plan_progress: 0.75,
     })
     expect(await json(response)).toEqual(completedView)
@@ -119,6 +116,12 @@ describe("POST /api/schedule-block/complete", () => {
       expected_version: 1,
       outcome: "completed",
       operation: "complete",
+    })],
+    ["removed result note", JSON.stringify({
+      block_id: "block_copy",
+      expected_version: 1,
+      outcome: "completed",
+      result_note: "legacy",
     })],
     ["missing block id", JSON.stringify({ expected_version: 1, outcome: "completed" })],
     ["zero version", JSON.stringify({ block_id: "block_copy", expected_version: 0, outcome: "completed" })],

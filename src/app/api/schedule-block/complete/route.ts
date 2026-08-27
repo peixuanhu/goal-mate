@@ -17,7 +17,6 @@ const POST_FIELDS = new Set([
   "outcome",
   "content",
   "thinking",
-  "result_note",
   "plan_progress",
 ])
 
@@ -55,7 +54,7 @@ function requiredString(value: unknown, field: string): string {
 
 function optionalText(
   body: Record<string, unknown>,
-  field: "content" | "thinking" | "result_note",
+  field: "content" | "thinking",
 ): string | undefined {
   if (!Object.prototype.hasOwnProperty.call(body, field)) return undefined
   const value = body[field]
@@ -86,14 +85,12 @@ function parseBody(body: Record<string, unknown>): CompleteScheduleBlockInput {
 
   const content = optionalText(body, "content")
   const thinking = optionalText(body, "thinking")
-  const resultNote = optionalText(body, "result_note")
   return {
     block_id: requiredString(body.block_id, "block_id"),
     expected_version: expectedVersion,
     outcome: body.outcome,
     ...(content !== undefined ? { content } : {}),
     ...(thinking !== undefined ? { thinking } : {}),
-    ...(resultNote !== undefined ? { result_note: resultNote } : {}),
     ...(typeof body.plan_progress === "number" ? { plan_progress: body.plan_progress } : {}),
   }
 }

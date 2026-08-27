@@ -22,7 +22,7 @@ vi.mock("@dnd-kit/core", () => {
     block: {
       block_id: "block_drag", plan_id: "plan_drag", action_id: null, title: "拖动时间块", goal_id: null, goal_name: null,
       energy_level: null, start_at: "2026-08-27T00:40:00.000Z", end_at: "2026-08-27T01:40:00.000Z",
-      status: "scheduled", source: "manual", result_note: null, version: 1,
+      status: "scheduled", source: "manual", version: 1,
     },
     localRange: { start: 520, end: 580 },
   }
@@ -31,7 +31,7 @@ vi.mock("@dnd-kit/core", () => {
     block: {
       block_id: "block_legacy", plan_id: "plan_legacy", action_id: null, title: "旧刻度时间块", goal_id: null, goal_name: null,
       energy_level: null, start_at: "2026-08-27T01:00:00.000Z", end_at: "2026-08-27T02:00:00.000Z",
-      status: "scheduled", source: "manual", result_note: null, version: 3,
+      status: "scheduled", source: "manual", version: 3,
     },
     localRange: { start: 540, end: 600 },
   }
@@ -124,7 +124,7 @@ function draggableBlock(overrides: Partial<ScheduleBlockView> = {}): ScheduleBlo
   return {
     block_id: "block_drag", plan_id: "plan_drag", action_id: null, title: "拖动时间块", goal_id: null, goal_name: null,
     energy_level: null, start_at: "2026-08-27T00:40:00.000Z", end_at: "2026-08-27T01:40:00.000Z",
-    status: "scheduled", source: "manual", result_note: null, version: 1,
+    status: "scheduled", source: "manual", version: 1,
     ...overrides,
   }
 }
@@ -319,7 +319,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
     const existing: ScheduleBlockView = {
       block_id: "existing", plan_id: "existing-plan", action_id: null, title: "已有安排", goal_id: null, goal_name: null,
       energy_level: null, start_at: "2026-08-27T02:00:00.000Z", end_at: "2026-08-27T03:00:00.000Z",
-      status: "scheduled", source: "manual", result_note: null, version: 1,
+      status: "scheduled", source: "manual", version: 1,
     }
     const fetchMock = vi.fn((url: RequestInfo | URL) => String(url) === "/api/schedule-block"
       ? postPromise
@@ -368,7 +368,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
       if (todayCalls === 1) return Promise.resolve(todayResponse(date, { blocks: [{
         block_id: "existing", plan_id: "existing-plan", action_id: null, title: "已有安排", goal_id: null, goal_name: null,
         energy_level: null, start_at: `${date}T02:00:00.000Z`, end_at: `${date}T03:00:00.000Z`,
-        status: "scheduled", source: "manual", result_note: null, version: 1,
+        status: "scheduled", source: "manual", version: 1,
       }] }))
       if (todayCalls === 2) return timelineGet
       if (todayCalls === 3) return completionGet
@@ -419,7 +419,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
       if (todayCalls === 1) return Promise.resolve(todayResponse(date, { blocks: [{
         block_id: "existing", plan_id: "existing-plan", action_id: null, title: "已有安排", goal_id: null, goal_name: null,
         energy_level: null, start_at: `${date}T02:00:00.000Z`, end_at: `${date}T03:00:00.000Z`,
-        status: "scheduled", source: "manual", result_note: null, version: 1,
+        status: "scheduled", source: "manual", version: 1,
       }] }))
       if (todayCalls === 2) return timelineGet
       if (todayCalls === 3) return completionGet
@@ -445,13 +445,13 @@ describe("TodayWorkspace timeline drag interactions", () => {
     resolveCompletionGet?.(todayResponse(selectedDate, { blocks: [{
       block_id: "new", plan_id: "new-plan", action_id: null, title: "最新刷新", goal_id: null, goal_name: null,
       energy_level: null, start_at: `${selectedDate}T01:00:00.000Z`, end_at: `${selectedDate}T01:30:00.000Z`,
-      status: "scheduled", source: "manual", result_note: null, version: 1,
+      status: "scheduled", source: "manual", version: 1,
     }] }))
     await screen.findByText("最新刷新")
     resolveTimelineGet?.(todayResponse(selectedDate, { blocks: [{
       block_id: "old", plan_id: "old-plan", action_id: null, title: "旧刷新", goal_id: null, goal_name: null,
       energy_level: null, start_at: `${selectedDate}T01:30:00.000Z`, end_at: `${selectedDate}T02:00:00.000Z`,
-      status: "scheduled", source: "manual", result_note: null, version: 1,
+      status: "scheduled", source: "manual", version: 1,
     }] }))
     await waitFor(() => expect(screen.queryByTestId("timeline-placement-preview")).toBeNull())
     expect(screen.getByText("最新刷新")).toBeTruthy()
@@ -487,7 +487,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
       return Promise.resolve(todayResponse(date, { blocks: [{
         block_id: "conflict", plan_id: "other", action_id: null, title: "冲突", goal_id: null, goal_name: null,
         energy_level: null, start_at: `${date}T00:40:00.000Z`, end_at: `${date}T01:40:00.000Z`,
-        status: "scheduled", source: "manual", result_note: null, version: 1,
+        status: "scheduled", source: "manual", version: 1,
       }] }))
     })
     vi.stubGlobal("fetch", fetchMock)
@@ -1140,7 +1140,7 @@ describe("TodayWorkspace timeline drag interactions", () => {
         blocks: mode === "editor" ? [] : [{
           block_id: "existing", plan_id: "existing-plan", action_id: null, title: "已有安排", goal_id: null, goal_name: null,
           energy_level: null, start_at: `${date}T00:40:00.000Z`, end_at: `${date}T01:40:00.000Z`,
-          status: "scheduled", source: "manual", result_note: null, version: 1,
+          status: "scheduled", source: "manual", version: 1,
         }],
       }))
     })

@@ -70,7 +70,6 @@ describe("GET /api/today", () => {
         end_at: "2026-08-23T02:00:00.000Z",
         status: "scheduled",
         source: "manual",
-        result_note: null,
         version: 2,
       }],
       checks: [],

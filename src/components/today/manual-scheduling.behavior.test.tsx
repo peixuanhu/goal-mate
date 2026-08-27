@@ -114,7 +114,6 @@ function scheduledBlock(overrides: Partial<ScheduleBlockView> = {}): ScheduleBlo
     end_at: "2026-08-23T02:00:00.000Z",
     status: "scheduled",
     source: "manual",
-    result_note: null,
     version: 2,
     ...overrides,
   }
@@ -1096,7 +1095,7 @@ describe("manual scheduling components", () => {
 
     fireEvent.change(screen.getByLabelText("完成内容"), { target: { value: "保留的内容草稿" } })
     fireEvent.change(screen.getByLabelText("过程思考"), { target: { value: "保留的思考草稿" } })
-    fireEvent.change(screen.getByLabelText("结果备注"), { target: { value: "跳过原因" } })
+    expect(screen.queryByLabelText("结果备注")).toBeNull()
     fireEvent.click(screen.getByRole("radio", { name: "跳过" }))
     expect(screen.queryByLabelText("完成内容")).toBeNull()
     expect(screen.queryByLabelText("过程思考")).toBeNull()
@@ -1105,7 +1104,6 @@ describe("manual scheduling components", () => {
       block_id: "block_copy",
       expected_version: 2,
       outcome: "skipped",
-      result_note: "跳过原因",
     }))
 
     fireEvent.click(screen.getByRole("radio", { name: "部分完成" }))

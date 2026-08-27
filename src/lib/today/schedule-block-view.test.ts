@@ -26,7 +26,7 @@ describe("schedule block view projection", () => {
   })
 
   it("projects normalized rendering data without mutation dependencies", () => {
-    expect(toScheduleBlockView({
+    const view = toScheduleBlockView({
       block_id: "block_1",
       plan_id: "plan_1",
       action_id: "action_1",
@@ -34,7 +34,6 @@ describe("schedule block view projection", () => {
       end_at: new Date("2026-08-23T02:00:00.000Z"),
       status: "scheduled",
       source: "manual",
-      result_note: null,
       version: 3,
       plan: {
         plan_id: "plan_1",
@@ -49,7 +48,10 @@ describe("schedule block view projection", () => {
         energy_level: "high",
         is_completed: false,
       },
-    })).toEqual(expect.objectContaining({
+    })
+
+    expect(view).not.toHaveProperty("result_note")
+    expect(view).toEqual(expect.objectContaining({
       block_id: "block_1",
       title: "行动",
       goal_name: "目标",
