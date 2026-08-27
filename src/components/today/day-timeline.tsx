@@ -438,7 +438,7 @@ export function DayTimeline({
             return (
               <div
                 aria-busy={activePreview.pending}
-                className={`pointer-events-none absolute left-[4.5rem] right-3 z-30 overflow-hidden rounded-xl border px-3 py-2 shadow-sm ${previewClass} ${activePreview.pending ? "opacity-75" : ""}`}
+                className={`pointer-events-none absolute left-[4.5rem] right-3 z-30 overflow-hidden rounded-lg border px-3 py-2 shadow-sm ${previewClass} ${activePreview.pending ? "opacity-75" : ""}`}
                 data-testid="timeline-placement-preview"
                 data-valid={String(activePreview.valid)}
                 key={activePreview.id}

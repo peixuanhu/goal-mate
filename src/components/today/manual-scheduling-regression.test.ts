@@ -13,6 +13,7 @@ describe("manual scheduling UI source contract", () => {
   it("keeps the planned DnD, timeline, editor, completion, and mutation seams", () => {
     const candidateSource = source("goal-candidate-panel.tsx")
     const timelineSource = source("day-timeline.tsx")
+    const interactiveBlockSource = source("interactive-schedule-block.tsx")
     const editorSource = source("schedule-block-editor.tsx")
     const completionSource = source("schedule-completion-sheet.tsx")
     const workspaceSource = source("today-workspace.tsx")
@@ -22,6 +23,10 @@ describe("manual scheduling UI source contract", () => {
     expect(timelineSource).toContain("useDroppable")
     expect(timelineSource).toContain("当前时间")
     expect(timelineSource).toContain("onEditBlock")
+    expect(interactiveBlockSource).toContain("overflow-hidden rounded-lg border shadow-sm")
+    expect(interactiveBlockSource).not.toContain("overflow-hidden rounded-xl border shadow-sm")
+    expect(timelineSource).toContain("overflow-hidden rounded-lg border px-3 py-2 shadow-sm")
+    expect(timelineSource).not.toContain("overflow-hidden rounded-xl border px-3 py-2 shadow-sm")
     expect(editorSource).toContain("expected_version")
     expect(completionSource).toContain('value="partial"')
     expect(workspaceSource).toContain('method: "POST"')

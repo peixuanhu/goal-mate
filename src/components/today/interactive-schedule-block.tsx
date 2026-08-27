@@ -54,7 +54,7 @@ export function InteractiveScheduleBlock({
   return (
     <article
       aria-label={`${block.title}，${statusLabel}`}
-      className={`absolute overflow-hidden rounded-xl border shadow-sm ${scheduled ? "pointer-events-auto left-[4.5rem] right-3 z-20" : "pointer-events-none left-[4.75rem] right-2 z-10 opacity-75"} ${statusClassName} ${isDragging ? "opacity-60 shadow-lg ring-2 ring-violet-400/70" : ""}`}
+      className={`absolute overflow-hidden rounded-lg border shadow-sm ${scheduled ? "pointer-events-auto left-[4.5rem] right-3 z-20" : "pointer-events-none left-[4.75rem] right-2 z-10 opacity-75"} ${statusClassName} ${isDragging ? "opacity-60 shadow-lg ring-2 ring-violet-400/70" : ""}`}
       ref={setNodeRef}
       style={{ ...style, transform: dragTransform ?? style.transform }}
     >
