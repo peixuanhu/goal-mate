@@ -476,4 +476,40 @@ describe("GoalCandidatePanel hierarchy", () => {
     expect(screen.getAllByText("尚未归类计划").length).toBeGreaterThan(0)
     expect(screen.queryByText("目标内计划")).toBeNull()
   })
+
+  it("links goal and plan names to encoded management-page highlights without changing scheduling", () => {
+    const onSchedule = vi.fn()
+    const plan = candidate({
+      id: "plan/中文",
+      kind: "plan",
+      name: "跨页计划",
+      plan_id: "plan/中文",
+      goal_id: "goal/中文",
+      goal_name: "跨页目标",
+    })
+    const action = candidate({
+      id: "action-1",
+      kind: "action",
+      name: "保持原样的行动项",
+      plan_id: "plan/中文",
+      goal_id: "goal/中文",
+      goal_name: "跨页目标",
+    })
+
+    render(
+      <GoalCandidatePanel candidates={[action, plan]} error={null} focus={null} loading={false} onSchedule={onSchedule} />,
+    )
+
+    expect(screen.getByRole("link", { name: "跨页目标" }).getAttribute("href"))
+      .toBe("/goals?highlight=goal%2F%E4%B8%AD%E6%96%87")
+    expect(screen.getAllByRole("link", { name: "跨页计划" }).map(link => link.getAttribute("href")))
+      .toEqual([
+        "/plans?highlight=plan%2F%E4%B8%AD%E6%96%87",
+        "/plans?highlight=plan%2F%E4%B8%AD%E6%96%87",
+      ])
+    expect(screen.queryByRole("link", { name: "保持原样的行动项" })).toBeNull()
+
+    fireEvent.click(screen.getAllByRole("button", { name: "安排到今天" }).at(-1) as HTMLButtonElement)
+    expect(onSchedule).toHaveBeenCalledWith(plan)
+  })
 })

@@ -2,6 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core"
 import { CalendarClock, CircleDot, Flag, Layers3 } from "lucide-react"
+import Link from "next/link"
 import React, { useId } from "react"
 
 import { QuadrantBoard } from "@/components/workspace/quadrant-board"
@@ -29,6 +30,10 @@ interface PlanCandidateGroup {
   planId: string
   actions: SchedulableCandidate[]
   plan: SchedulableCandidate | null
+}
+
+function highlightHref(pathname: "/goals" | "/plans", id: string): string {
+  return `${pathname}?${new URLSearchParams({ highlight: id }).toString()}`
 }
 
 function groupByPlan(candidates: SchedulableCandidate[]): PlanCandidateGroup[] {
@@ -115,7 +120,16 @@ function CandidateCard({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 text-sm font-medium leading-5 text-stone-800">{candidate.name}</p>
+            <p className="min-w-0 text-sm font-medium leading-5 text-stone-800">
+              {isAction ? candidate.name : (
+                <Link
+                  className="rounded-sm hover:text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  href={highlightHref("/plans", candidate.plan_id)}
+                >
+                  {candidate.name}
+                </Link>
+              )}
+            </p>
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
               {candidate.budget_status === "overrun" ? (
                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600">预算已超出</span>
@@ -200,7 +214,14 @@ function PlanGroups({
             key={group.planId}
           >
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <h4 className="truncate text-xs font-semibold text-stone-600" id={headingId}>{planName}</h4>
+              <h4 className="truncate text-xs font-semibold text-stone-600" id={headingId}>
+                <Link
+                  className="rounded-sm hover:text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  href={highlightHref("/plans", group.planId)}
+                >
+                  {planName}
+                </Link>
+              </h4>
               {group.actions.length > 0 ? (
                 <span className="shrink-0 text-[10px] text-stone-400">{group.actions.length} 个行动项</span>
               ) : null}
@@ -249,7 +270,12 @@ function GoalTree({
               style={{ backgroundColor: group.focused ? focus?.color ?? "#7c3aed" : "#d6d3d1" }}
             />
             <h3 id={`goal-group-${group.key}`} className="truncate text-sm font-semibold text-stone-800">
-              {group.name}
+              <Link
+                className="rounded-sm hover:text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                href={highlightHref("/goals", group.key)}
+              >
+                {group.name}
+              </Link>
             </h3>
             {group.focused ? (
               <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600">
