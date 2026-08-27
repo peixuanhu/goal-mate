@@ -1,5 +1,5 @@
 "use client"
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
 import { GoalPlanList } from "@/components/goals/goal-plan-list"
 import { GoalOrderEditor } from "@/components/goals/goal-order-editor"
 import { ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
 interface Goal {
   id: number
@@ -25,7 +26,19 @@ interface Goal {
 }
 
 export default function GoalsPage() {
+  return (
+    <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">正在加载目标…</div>}>
+      <GoalsPageContent />
+    </Suspense>
+  )
+}
+
+function GoalsPageContent() {
+  const searchParams = useSearchParams()
+  const highlightedGoalId = searchParams.get("highlight")
+  const highlightedGoalRowRef = useRef<HTMLTableRowElement>(null)
   const [goals, setGoals] = useState<Goal[]>([])
+  const [activeHighlightGoalId, setActiveHighlightGoalId] = useState<string | null>(highlightedGoalId)
   const [tag, setTag] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [pageNum, setPageNum] = useState(1)
@@ -71,6 +84,35 @@ export default function GoalsPage() {
   }, [])
 
   useEffect(() => { fetchGoals() }, [fetchGoals])
+
+  useEffect(() => {
+    let cancelled = false
+    setActiveHighlightGoalId(highlightedGoalId)
+
+    if (!highlightedGoalId) return
+
+    const timeoutId = window.setTimeout(() => setActiveHighlightGoalId(null), 5000)
+    void fetch('/api/goal?all=true')
+      .then(response => response.json())
+      .then((data: { list?: Goal[] }) => {
+        if (cancelled) return
+        const targetIndex = (data.list ?? []).findIndex(goal => goal.goal_id === highlightedGoalId)
+        setPageNum(targetIndex >= 0 ? Math.floor(targetIndex / pageSize) + 1 : 1)
+      })
+      .catch(() => {
+        if (!cancelled) setPageNum(1)
+      })
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [highlightedGoalId, pageSize])
+
+  useEffect(() => {
+    if (!activeHighlightGoalId || !goals.some(goal => goal.goal_id === activeHighlightGoalId)) return
+    highlightedGoalRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+  }, [activeHighlightGoalId, goals])
 
   function startSorting() {
     setSortingSaving(false)
@@ -279,7 +321,12 @@ export default function GoalsPage() {
 
                         return (
                           <React.Fragment key={goal.goal_id}>
-                            <TableRow>
+                            <TableRow
+                              ref={activeHighlightGoalId === goal.goal_id ? highlightedGoalRowRef : undefined}
+                              className={activeHighlightGoalId === goal.goal_id
+                                ? "bg-yellow-100 animate-pulse dark:bg-yellow-900/20"
+                                : undefined}
+                            >
                               <TableCell className="w-[48px]">
                                 <Button
                                   type="button"
