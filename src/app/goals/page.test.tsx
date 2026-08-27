@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import React from "react"
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const orderEditorState = vi.hoisted(() => ({ unavailable: false }))
@@ -236,6 +236,50 @@ describe("GoalsPage sorting mode", () => {
 })
 
 describe("GoalsPage highlighted row", () => {
+  it("keeps a newer highlighted page when the initial page response arrives last", async () => {
+    currentSearchParams = new URLSearchParams("highlight=goal-11")
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const goals = Array.from({ length: 12 }, (_, index) => ({
+      id: index + 1,
+      goal_id: `goal-${index + 1}`,
+      tag: "长期",
+      name: `目标 ${index + 1}`,
+      description: "",
+    }))
+    let resolveFirstPage!: (response: Response) => void
+    let markFirstPageRead!: () => void
+    const firstPageResponse = new Promise<Response>(resolve => { resolveFirstPage = resolve })
+    const firstPageRead = new Promise<void>(resolve => { markFirstPageRead = resolve })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith("/api/tag")) return jsonResponse([])
+      if (url.includes("all=true")) return jsonResponse({ list: goals, total: goals.length })
+      if (url.includes("pageNum=2")) return jsonResponse({ list: goals.slice(10), total: goals.length })
+      if (url.startsWith("/api/goal?")) return firstPageResponse
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<GoalsPage />)
+    await screen.findByText("目标 11")
+
+    await act(async () => {
+      resolveFirstPage({
+        json: async () => {
+          markFirstPageRead()
+          return { list: goals.slice(0, 10), total: goals.length }
+        },
+      } as Response)
+      await firstPageRead
+    })
+
+    expect(screen.getByText("目标 11")).toBeTruthy()
+    expect(screen.queryByText("目标 1")).toBeNull()
+  })
+
   it("loads the highlighted goal's page, scrolls its row, and does not enter edit mode", async () => {
     currentSearchParams = new URLSearchParams("highlight=goal-11")
     const scrollIntoView = vi.fn()

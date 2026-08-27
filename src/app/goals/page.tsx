@@ -37,6 +37,7 @@ function GoalsPageContent() {
   const searchParams = useSearchParams()
   const highlightedGoalId = searchParams.get("highlight")
   const highlightedGoalRowRef = useRef<HTMLTableRowElement>(null)
+  const fetchGoalsRequestIdRef = useRef(0)
   const [goals, setGoals] = useState<Goal[]>([])
   const [activeHighlightGoalId, setActiveHighlightGoalId] = useState<string | null>(highlightedGoalId)
   const [tag, setTag] = useState('')
@@ -65,6 +66,8 @@ function GoalsPageContent() {
   }
 
   const fetchGoals = useCallback(async () => {
+    const requestId = fetchGoalsRequestIdRef.current + 1
+    fetchGoalsRequestIdRef.current = requestId
     setLoading(true)
     const params = new URLSearchParams({ 
       tag, 
@@ -74,6 +77,7 @@ function GoalsPageContent() {
     })
     const res = await fetch(`/api/goal?${params}`)
     const data = await res.json()
+    if (requestId !== fetchGoalsRequestIdRef.current) return
     setGoals(data.list)
     setTotal(data.total)
     setLoading(false)
