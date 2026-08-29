@@ -1,7 +1,6 @@
 "use client"
 
 import { useDraggable } from "@dnd-kit/core"
-import { CSS } from "@dnd-kit/utilities"
 import { CheckCircle2, ChevronDown, ChevronUp, GripVertical, Pencil } from "lucide-react"
 import React from "react"
 
@@ -38,12 +37,11 @@ export function InteractiveScheduleBlock({
 }: InteractiveScheduleBlockProps) {
   const scheduled = block.status === "scheduled"
   const compact = localRange.end - localRange.start <= 15
-  const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef, transform } = useDraggable({
+  const { attributes, isDragging, listeners, setActivatorNodeRef, setNodeRef } = useDraggable({
     id: `schedule-block:${block.block_id}`,
     data: { kind: "schedule-block", block, localRange },
     disabled: disabled || timelineInteractionDisabled || block.status !== "scheduled",
   })
-  const dragTransform = CSS.Transform.toString(transform)
   const openEditorFromResizeHandle = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== "Enter" && event.key !== " ") return
     event.preventDefault()
@@ -56,7 +54,7 @@ export function InteractiveScheduleBlock({
       aria-label={`${block.title}，${statusLabel}`}
       className={`absolute overflow-hidden rounded-lg border shadow-sm ${scheduled ? "pointer-events-auto left-[4.5rem] right-3 z-20" : "pointer-events-none left-[4.75rem] right-2 z-10 opacity-75"} ${statusClassName} ${isDragging ? "opacity-60 shadow-lg ring-2 ring-violet-400/70" : ""}`}
       ref={setNodeRef}
-      style={{ ...style, transform: dragTransform ?? style.transform }}
+      style={style}
     >
       {scheduled ? (
         <>
