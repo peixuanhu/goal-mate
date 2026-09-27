@@ -56,6 +56,7 @@ interface WorkspaceSnapshot {
 
 interface MainLayoutProps {
   children: ReactNode
+  initialSidebarState?: 'open' | 'closed'
   workspaceDate?: string | null
   workspaceSnapshot?: WorkspaceSnapshot
   onScheduleCandidate?: (candidate: SchedulableCandidate) => void
@@ -67,6 +68,7 @@ interface MainLayoutProps {
 
 export function MainLayout({
   children,
+  initialSidebarState = 'open',
   workspaceDate,
   workspaceSnapshot,
   onScheduleCandidate,
@@ -75,8 +77,8 @@ export function MainLayout({
   onWorkspaceDragCancel,
   onWorkspaceDragEnd,
 }: MainLayoutProps) {
-  const [leftOpen, setLeftOpen] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
+  const [leftOpen, setLeftOpen] = useState(initialSidebarState === 'open')
+  const [rightOpen, setRightOpen] = useState(initialSidebarState === 'open')
   const [mobilePanel, setMobilePanel] = useState<"workspace" | "ai" | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -122,6 +124,8 @@ export function MainLayout({
         <div className="relative flex min-h-0 flex-1">
           <aside
             aria-label="目标工作台"
+            aria-hidden={!leftOpen || undefined}
+            inert={!leftOpen}
             className={`relative hidden shrink-0 border-r border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${leftOpen ? "w-[380px] opacity-100 xl:w-[400px]" : "w-0 overflow-hidden opacity-0"}`}
           >
             <div className="h-full min-h-0 p-2">{renderWorkspace()}</div>
@@ -159,6 +163,8 @@ export function MainLayout({
 
           <aside
             aria-label="AI 助手"
+            aria-hidden={!rightOpen || undefined}
+            inert={!rightOpen}
             className={`relative z-10 hidden min-h-0 shrink-0 border-l border-stone-200/80 bg-white transition-[width,opacity] duration-300 lg:block ${rightOpen ? "w-[360px] opacity-100 xl:w-[400px]" : "w-0 overflow-hidden opacity-0"}`}
           >
             <button
@@ -177,7 +183,7 @@ export function MainLayout({
       <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-2 rounded-2xl border border-stone-200 bg-white/95 p-2 shadow-lg backdrop-blur lg:hidden">
         <button
           aria-label="打开目标工作台"
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+          className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
           onClick={() => setMobilePanel("workspace")}
           type="button"
         >
@@ -186,7 +192,7 @@ export function MainLayout({
         </button>
         <button
           aria-label="打开 AI 助手"
-          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+          className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
           onClick={() => setMobilePanel("ai")}
           type="button"
         >

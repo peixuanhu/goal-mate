@@ -3,7 +3,7 @@
 import { Target } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import React from "react"
+import React, { useEffect, useRef } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -14,6 +14,7 @@ const navigation = [
   { href: "/goals", label: "目标" },
   { href: "/plans", label: "计划" },
   { href: "/progress", label: "进展" },
+  { href: "/journal", label: "手账" },
   { href: "/reports", label: "回顾" },
 ]
 
@@ -24,6 +25,16 @@ interface AppHeaderProps {
 
 export function AppHeader({ className, showUserMenu = true }: AppHeaderProps) {
   const pathname = usePathname() ?? "/"
+  const navigationRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const revealCurrentPage = () => {
+      const nav = navigationRef.current, active = nav?.querySelector<HTMLElement>('[aria-current="page"]')
+      if (!nav || !active) return
+      nav.scrollLeft += active.getBoundingClientRect().left - nav.getBoundingClientRect().left - (nav.clientWidth - active.clientWidth) / 2
+    }
+    revealCurrentPage(); window.addEventListener('resize', revealCurrentPage)
+    return () => window.removeEventListener('resize', revealCurrentPage)
+  }, [pathname])
 
   return (
     <header className={cn("shrink-0 border-b border-stone-200/80 bg-white/95 backdrop-blur", className)}>
@@ -35,7 +46,7 @@ export function AppHeader({ className, showUserMenu = true }: AppHeaderProps) {
           <span className="hidden text-sm font-semibold tracking-tight text-stone-950 sm:inline">Goal Mate</span>
         </Link>
 
-        <nav aria-label="主导航" className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav ref={navigationRef} aria-label="主导航" className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex w-max items-center gap-1 rounded-xl bg-stone-100/80 p-1">
             {navigation.map(item => {
               const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)

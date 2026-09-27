@@ -968,7 +968,7 @@ export function useJournalMonth(month:string|null) {
 
 **Files:** Create `src/app/journal/page.tsx`, `src/components/journal/monthly-journal.tsx`, `journal-sheet.tsx`, `journal-sheet.module.css`, `journal-cell.tsx`, `monthly-journal.behavior.test.tsx`, `journal-cell.behavior.test.tsx`; Modify `src/components/app-header.tsx`, `main-layout.tsx`, `main-layout.test.tsx`。
 
-- [ ] **Step 1: 写用户可见行为测试。** mock useJournalMonth 返回完整九月 DTO；断言 30 个日期按钮、名称为“2026-09-12 运动：未记录”的格子按钮、明确 false/0/skipped 状态、空月份引导、导航“手账”。MainLayout 添加默认收起测试，同时保留现有默认展开行为。
+- [x] **Step 1: 写用户可见行为测试。** mock useJournalMonth 返回完整九月 DTO；断言 30 个日期按钮、名称为“2026-09-12 运动：未记录”的格子按钮、明确 false/0/skipped 状态、空月份引导、导航“手账”。MainLayout 添加默认收起测试，同时保留现有默认展开行为。
 
 ```tsx
 // journal-cell.behavior.test.tsx
@@ -989,8 +989,8 @@ it('announces false instead of treating it as an empty cell',()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/components/journal/monthly-journal.behavior.test.tsx src/components/journal/journal-cell.behavior.test.tsx src/components/main-layout.test.tsx`。
-- [ ] **Step 3: 接入口和外壳。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/components/journal/monthly-journal.behavior.test.tsx src/components/journal/journal-cell.behavior.test.tsx src/components/main-layout.test.tsx`。
+- [x] **Step 3: 接入口和外壳。**
 
 MainLayoutProps 增加 `initialSidebarState?:'open'|'closed'`，解构默认 open，两处 useState 改为 `useState(initialSidebarState==='open')`；收起 aside 加 inert 与 aria-hidden，防止 Tab 进入零宽度隐藏内容。不按 pathname 隐式改旧页面。AppHeader navigation 在进展之后增加 `{href:'/journal',label:'手账'}`。
 
@@ -1009,7 +1009,7 @@ export default function JournalPage() {
 }
 ```
 
-- [ ] **Step 4: 实现网格与类型表达。** `JournalSheet` props 为 `{view:JournalMonthView;group:string|null;onCell:(cell:JournalCell)=>void;onTracker:(tracker:TrackerView)=>void;onDate:(date:string)=>void;onEvent:(event:JournalEventView)=>void}`。所有 row 使用同一 CSS 网格列；列头、日期与格子都是语义按钮；多日轨道按 day index + CSS grid-row 起止在同一日期轴排列。
+- [x] **Step 4: 实现网格与类型表达。** `JournalSheet` props 为 `{view:JournalMonthView;group:string|null;onCell:(cell:JournalCell)=>void;onTracker:(tracker:TrackerView)=>void;onDate:(date:string)=>void;onEvent:(event:JournalEventView)=>void}`。所有 row 使用同一 CSS 网格列；列头、日期与格子都是语义按钮；多日轨道按 day index + CSS grid-row 起止在同一日期轴排列。
 
 ```css
 /* journal-sheet.module.css */
@@ -1034,14 +1034,14 @@ export default function JournalPage() {
 
 `MonthlyJournal` 控制 month、group、列分页、选中列摘要和编辑器状态。月份前后用 date-only 加月份，URL `?month=YYYY-MM` 同步；“本月”设置 null 并让服务按 preference 时区解析。空月允许加列/加事件，空数据提示不能用演示值填充。顶部只保留月份、前后、本月、添加列/事件；摘要根据选中列显示类型化统计。
 
-- [ ] **Step 5: 验证 GREEN。** 同测试命令；补闰月、month loading 不能改旧格、超过三列可翻到第四列、记录数不丢失、区间点击、键盘 Enter/Space。现有 MainLayout 所有测试通过。
-- [ ] **Step 6: 提交。** `git add src/app/journal src/components/journal src/components/app-header.tsx src/components/main-layout* && git commit -m "feat: render journal month with configurable daily cells"`。
+- [x] **Step 5: 验证 GREEN。** 同测试命令；补闰月、month loading 不能改旧格、超过三列可翻到第四列、记录数不丢失、区间点击、键盘 Enter/Space。现有 MainLayout 所有测试通过。
+- [x] **Step 6: 提交。** `git add src/app/journal src/components/journal src/components/app-header.tsx src/components/main-layout* && git commit -m "feat: render journal month with configurable daily cells"`。
 
 ## Task 11: 列配置、格子和当天事件编辑器
 
 **Files:** Create `src/components/journal/tracker-editor.tsx`, `cell-editor.tsx`, `day-detail.tsx`, `event-editor.tsx`, `editors.behavior.test.tsx`; Modify `monthly-journal.tsx`, `journal-sheet.tsx`。
 
-- [ ] **Step 1: 写完整保存与失败保留用例。** Testing Library 操作新建列、输入数量 0、false、跳过、归档、修改原进展、跨月事件。断言请求体的原值、request_id 和 expected_version，不仅断言函数是否调用。
+- [x] **Step 1: 写完整保存与失败保留用例。** Testing Library 操作新建列、输入数量 0、false、跳过、归档、修改原进展、跨月事件。断言请求体的原值、request_id 和 expected_version，不仅断言函数是否调用。
 
 ```tsx
 // @vitest-environment jsdom
@@ -1069,8 +1069,8 @@ it('keeps a zero input available after a failed save',async()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/components/journal/editors.behavior.test.tsx`。
-- [ ] **Step 3: 明确编辑状态与请求生命周期。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/components/journal/editors.behavior.test.tsx`。
+- [x] **Step 3: 明确编辑状态与请求生命周期。**
 
 ```ts
 type JournalEditor =
@@ -1099,7 +1099,7 @@ try {
 } finally {setSaving(false)}
 ```
 
-- [ ] **Step 4: 配置与编辑器逐项接通。**
+- [x] **Step 4: 配置与编辑器逐项接通。**
 
 TrackerEditor 接收 `{tracker:TrackerView|null;today:string;onClose:()=>void;onSaved:()=>void}`，读取 tracker GET、plan GET/pageSize1000 和 goal GET。四种起点使用 types.ts 的完整默认 config；空白自定义也由用户选类型。表单提供来源、可选计划/目标、适用星期、单位、编码、小格单位、范围/阈值和同步完成；按 type/source 显示相关项，样例日解释一格含义。类型有已存数据时不可更改；首版直接禁止创建后改 kind，替换提示新建列。显示设置和语义版本分别保存；新语义日期默认下月首日且不能追溯覆盖已用版本；归档采用 today。枚举修改标签保持原 ID。列顺序使用上移/下移按钮发送完整 ids 和 expected_versions，无需再建一套拖拽。
 
@@ -1109,14 +1109,14 @@ DayDetail 接收 `{date:string;view:JournalMonthView;onCell;onEvent;onClose}`；
 
 EventEditor 接收 `{date:string;event:JournalEventView|null;today:string;onClose;onSaved}`。字段按 JournalEventInput；仅自定义 source 可编辑，其他展示原入口。日期可跨月；同步完成开关只有关联 plan 时可开启；未来 actual completed 保存被客户端和服务两处拒绝。保存/删除使用 event.version；取消完成也不删除当天其他记录。
 
-- [ ] **Step 5: 验证 GREEN。** 同命令；补自动来源只走 progress_record、现有其他 metrics 被保留、409 不关闭、重复重试同键、修改载荷换键、删除来源标记、所有事件可展开、Dialog 键盘焦点与手机输入。
-- [ ] **Step 6: 提交。** `git add src/components/journal && git commit -m "feat: edit journal trackers values and dated events"`。
+- [x] **Step 5: 验证 GREEN。** 同命令；补自动来源只走 progress_record、现有其他 metrics 被保留、409 不关闭、重复重试同键、修改载荷换键、删除来源标记、所有事件可展开、Dialog 键盘焦点与手机输入。
+- [x] **Step 6: 提交。** `git add src/components/journal && git commit -m "feat: edit journal trackers values and dated events"`。
 
 ## Task 12: 进展页联动与发布前验收
 
 **Files:** Create `src/components/journal/progress-metric-fields.tsx`, `progress-metric-fields.behavior.test.tsx`, `src/app/progress/page.behavior.test.tsx`; Modify `src/app/progress/page.tsx`, `src/lib/journal/postgres.integration.test.ts`, `docs/superpowers/specs/2026-09-27-monthly-journal-design.md` 的实现状态。
 
-- [ ] **Step 1: 写进展页跨入口用例。** `?record_id=…` 单条查询必须能编辑 100 条列表以外的原记录；数量 0 正确提交；选 plan/date 后只显示匹配的 progress_field 列；explicit percent 与 metric 同一请求；成功发共享刷新、失败保留输入。
+- [x] **Step 1: 写进展页跨入口用例。** `?record_id=…` 单条查询必须能编辑 100 条列表以外的原记录；数量 0 正确提交；选 plan/date 后只显示匹配的 progress_field 列；explicit percent 与 metric 同一请求；成功发共享刷新、失败保留输入。
 
 ```tsx
 // @vitest-environment jsdom
@@ -1140,8 +1140,8 @@ it('emits a typed numeric zero without turning it into a missing value',()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/components/journal/progress-metric-fields.behavior.test.tsx src/app/progress/page.behavior.test.tsx`。
-- [ ] **Step 3: 接现有表单。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/components/journal/progress-metric-fields.behavior.test.tsx src/app/progress/page.behavior.test.tsx`。
+- [x] **Step 3: 接现有表单。**
 
 ProgressMetricFields props 为 Step 1 的形状，value 为 ProgressMetricInput[]。按 revisionForDate/启用/归档/plan/source 过滤，按 TrackerKind 渲染；缺席值不提交成 0，清空提交 cleared。表单完全受控，不独立保存。
 
@@ -1165,7 +1165,7 @@ notifyJournalChanged({entity:'progress-record'})
 
 result 保存后才清空表单；删除提交 expected_version，成功同样通知。当前窗口进展页监听 `goal-mate:data-changed` 重读列表/计划；事件监听不覆盖打开的未保存表单。跨窗口通过 focus 重读；不新增定时轮询。普通进展新建保留 legacy 计次行为；有 metrics 的新记录显示“仅记录数据 / 已完成一次”显式选择，默认仅记录数据。schedule 来源 outcome 不可改。
 
-- [ ] **Step 4: 完成真实库行为验收。** 在 Task 6 integration 文件中补全 Task 2/7 的约束和联动场景。专库准备命令单独运行：
+- [x] **Step 4: 完成真实库行为验收。** 在 Task 6 integration 文件中补全 Task 2/7 的约束和联动场景。专库准备命令单独运行：
 
 ```bash
 test -n "$JOURNAL_TEST_DATABASE_URL"
@@ -1189,7 +1189,7 @@ const trackers=await Promise.all([0,1].map(index=>db.trackerDefinition.create({d
 
 每例只删除自己的测量→事件→revision→definition→progress→plan，afterAll disconnect；不能 deleteMany({}) 清空其他数据。使用 `vi.useFakeTimers({toFake:['Date']})` 和 `vi.setSystemTime(new Date('2026-09-27T04:00:00Z'))` 固定实际日期，只替换 Date，不冻结数据库驱动的计时器；结束 `vi.useRealTimers()`。PlanningPreference 时区固定 Asia/Shanghai，测试结束恢复测试库此前的 preference。真实库断言包含 manual partial unique、复合 FK 拒绝错 tracker、数值/状态 CHECK、两个列并发只一次、两个真实原进展仍两次、撤销不删共享/非拥有来源、幂等重放、版本冲突、进展改期及删除保留、计划删除留测量、失败事务回滚。最终独立运行 schema.integration.test.ts 与 postgres.integration.test.ts，均不可 skip。
 
-- [ ] **Step 5: 运行最终回归。**
+- [x] **Step 5: 运行最终回归。**
 
 ```bash
 npm test
@@ -1199,9 +1199,9 @@ npm run build
 
 预期原有 792 项加新增测试全部 PASS，TypeScript 无错误，Next production build 成功且列出 `/journal` 和四个 `/api/journal/*` 路由。实际数量以输出为准。不要用旧版 `next lint` 作为新必需验收；build/TypeScript 失败按 systematic-debugging 找原因，不能归为“原有问题”而跳过。
 
-- [ ] **Step 6: 浏览器验收并记录结果。** 用本地专库 `npm run dev`，访问 `/journal`；在 1024px、736px、320px 和 coarse pointer 检查九月全 30 行、列/组切换、日期固定、44px 触控区域、弹窗焦点、保存失败、0/false、跨月延续轨道。桌面和手机截图与已评审草图比对；必须在实际应用页面检验，不能只复用 HTML 草图的 QA。建 150 条来源后核对月查询/当天详情完整，进展页、今日工作台与手账来回修改同一来源并确认联动。运行后停止本任务开的服务。
+- [x] **Step 6: 浏览器验收并记录结果。** 用本地专库 `npm run dev`，访问 `/journal`；在 1024px、736px、320px 和 coarse pointer 检查九月全 30 行、列/组切换、日期固定、44px 触控区域、弹窗焦点、保存失败、0/false、跨月延续轨道。桌面和手机截图与已评审草图比对；必须在实际应用页面检验，不能只复用 HTML 草图的 QA。建 150 条来源后核对月查询/当天详情完整，进展页、今日工作台与手账来回修改同一来源并确认联动。运行后停止本任务开的服务。
 
-- [ ] **Step 7: 提交与交付。** 更新规格“实现状态”只记录实际通过的验收与限制；`git diff --check` 通过，提交应用代码与明确文档：
+- [x] **Step 7: 提交与交付。** 更新规格“实现状态”只记录实际通过的验收与限制；`git diff --check` 通过，提交应用代码与明确文档：
 
 ```bash
 git add src/components/journal src/app/progress src/lib/journal/postgres.integration.test.ts
@@ -1232,3 +1232,16 @@ git commit -m "feat: integrate journal metrics with progress records"
 ## 规划阶段自检记录
 
 2026-09-27：规格覆盖表已逐项核对；12 个任务、代码围栏成对，未留下待定占位。根据实际仓库修正了不存在的 Dialog 组件引用、Plan.plan_id 必填和 recurrence_value 字符串类型。将新增模型与反向关系拼入临时 schema，`npx prisma validate` 通过；未生成新客户端、未写实际数据库。隔离工作树的原有 55 文件/792 项测试通过。以上只验证规划和代码基线，不表示新功能或真实数据库行为已实现。
+
+
+## 实施验收记录
+
+2026-09-27：Task 1–12 已实现。Task 10 的格子测试与月表测试合并到 `journal-sheet.behavior.test.tsx`；Task 10–12 的 UI、编辑器与进展页在一个提交中集成，服务修正单独提交。手动值按日期唯一；进展字段按原记录唯一使用部分索引，避免同一原来源改期时误限制独立的手动日期值。
+
+最终验证使用独立 PostgreSQL 16 专库，不连接现有应用数据库：全量 75 文件 / 898 项通过，无跳过；TypeScript 通过；Next 生产构建通过，包含 `/journal` 和四个手账 API；`db:push` 连续两次成功，独立数据库约束/手动联动 11 项通过。原有 TodayWorkspace、FocusPeriod、进展和布局测试均在全量回归中通过。
+
+实际 Chrome 页面验收通过 1024px、736px、320px、coarse pointer 和深色偏好：全部 30 个日期、组/列分页、44px 触控行、弹窗 Esc 与焦点恢复、0 值、手动打卡/撤销、自动格编辑保留其他字段、150 条来源完整展开、100 条列表外的单条原进展编辑、保存失败保留输入和重试、列创建/排序/归档、未来口径版本、跨月计划事件。浏览器 pageerror 为 0。实际截图保存在本任务可视化目录。
+
+独立审查发现的问题已先复现失败，再以回归测试修复：显式仅记录数据不计完成、冲突重读合并未修改字段、文字编辑保留原发生时间、失效字段仍可清除、原计划删除后的事件编辑和历史名称、同步事件改期的口径一致性。相同口径跨版本重新投影；不同单位拒绝并回滚。
+
+新表仍沿用项目现有 `npm run db:push` 部署方式。运行服务已停止。新功能推送到 `codex/monthly-journal`，保留隔离工作树以便继续使用。

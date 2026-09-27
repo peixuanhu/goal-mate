@@ -1,0 +1,81 @@
+.page { max-width:1400px; margin:0 auto; padding:40px 44px 96px; color:#30372d; }
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; margin-bottom:26px; }
+.title { display:flex; gap:17px; align-items:center; }
+.monthNumber { font-size:76px; font-weight:650; line-height:1; letter-spacing:-6px; color:#ad4e32; }
+.monthMeta { display:grid; gap:3px; }
+.monthMeta strong { font-size:22px; font-weight:500; }
+.eyebrow { font-size:11px; letter-spacing:3px; color:#757e6b; }
+.monthMeta p { font-size:13px; color:#798071; margin:4px 0 0; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.actions button,.pager button,.groupBar button,.secondary { min-height:40px; padding:8px 13px; border:1px solid #d9ded0; border-radius:9px; background:#fff; font-size:13px; }
+.actions button:hover,.groupBar button:hover { background:#eef2e8; }
+.actions .primary,.primary { background:#3e5137; color:#fff; border:1px solid #3e5137; border-radius:9px; padding:9px 16px; min-height:40px; }
+.groupBar { display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:18px; }
+.groupBar button { border-color:transparent; background:transparent; min-height:34px; padding:6px 12px; color:#6b7363; }
+.groupBar .selected { color:#3d5036; background:#e7eedf; border-color:#d0dcc3; }
+.groupBar span { font-size:12px; color:#85907b; margin-left:auto; }
+.paper { border:1px solid #dce1d1; border-radius:16px; overflow:hidden; background:#fafbf6; box-shadow:0 8px 30px #3e4a3110; }
+.scroll { overflow:auto; max-height:calc(100dvh - 290px); min-height:280px; overscroll-behavior:contain; }
+.sheet { --row-size:34px; --tracker-size:84px; min-width:var(--sheet-width); position:relative; color:#30372d; background-color:#fafbf6; background-image:radial-gradient(#59634b29 .7px,transparent .7px); background-size:12px 12px; }
+.row { display:grid; grid-template-columns:var(--columns); height:var(--row-size); border-bottom:1px solid #59634b22; }
+.head { height:76px; position:sticky; top:0; z-index:5; background:#f8f9f1f5; border-bottom:1px solid #7b886855; }
+.columnHead { padding:10px 4px; display:flex; flex-direction:column; gap:5px; align-items:center; justify-content:center; border-right:1px solid #59634b18; overflow:hidden; }
+.columnHead strong { font-size:12px; font-weight:550; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.columnHead small { font-size:10px; color:#879079; }
+.columnHead i { width:19px; height:5px; border-radius:1px; transform:rotate(-3deg); opacity:.7; }
+.dateHead,.laneHead { display:grid; place-items:center; font-size:11px; color:#7d866f; }
+.dateHead { border-right:1px solid #65705155; }
+.eventHead { padding:20px 16px 10px; font-size:13px; letter-spacing:1px; display:flex; flex-direction:column; gap:7px; }
+.eventHead small { font-size:10px; color:#909782; letter-spacing:0; }
+.body { position:relative; }
+.cell { position:relative; border-right:1px solid #59634b18; min-width:0; min-height:var(--row-size); display:flex; gap:3px; align-items:center; justify-content:center; font-size:12px; font-variant-numeric:tabular-nums; }
+.cell:hover { background:#c4d5ae24; }
+.cell:focus-visible,.date:focus-visible,.columnHead:focus-visible,.interval:focus-visible { outline:2px solid #596b48; outline-offset:-2px; }
+.mutedCell { color:#b4bbab; }
+.highlight { width:29px; height:24px; display:grid; place-items:center; background:var(--ink); opacity:.85; clip-path:polygon(4% 8%,98% 0,94% 94%,0 100%); color:#384b2c; font-size:12px; }
+.falseValue { color:#8b867c; font-size:17px; }
+.symbol { color:#536a40; font-size:17px; }
+.enumValue { width:28px; height:26px; background:color-mix(in srgb,var(--ink) 40%,transparent); font-size:19px; color:#4e6246; display:grid; place-items:center; }
+.number { z-index:1; font-size:11px; background:#fafbf680; border-radius:3px; padding:1px 3px; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.blocks { position:absolute; display:flex; gap:2px; left:4px; right:4px; height:24px; opacity:.65; align-items:center; }
+.blocks i { width:11px; height:22px; border:1px solid color-mix(in srgb,var(--ink) 70%,transparent); }
+.heat { position:absolute; inset:4px; background:var(--ink); }
+.date { position:sticky; left:0; z-index:3; background:#fafbf6; border-right:1px solid #65705166; display:flex; justify-content:center; align-items:center; gap:4px; font-variant-numeric:tabular-nums; }
+.date b { font-size:13px; font-weight:500; }
+.date small { font-size:9px; color:#96a087; }
+.weekend b { color:#b77163; }
+.weekStart { border-top:1px solid #59634b55; }
+.today { background:#dce8cc50; }
+.today .date { background:#dce8cc; border-left:3px solid #697e54; }
+.futureRow { color:#929c86; }
+.dailyEvents { display:flex; gap:12px; min-width:0; align-items:center; padding:0 13px; overflow:hidden; }
+.dailyEvents button { min-width:0; display:flex; align-items:center; gap:6px; font-size:11px; max-width:70%; white-space:nowrap; text-align:left; }
+.dailyEvents button span:last-of-type { overflow:hidden; text-overflow:ellipsis; }
+.dailyEvents button small { font-size:9px; color:#88957d; }
+.doneMark { color:#607e44; background:#d6e5c3; padding:0 3px; border-radius:3px; }
+.plannedMark { color:#9d9d89; }
+.dailyEvents .more { flex-shrink:0; font-size:10px; color:#8b957d; }
+.overlays { position:absolute; inset:0; display:grid; pointer-events:none; }
+.trend { width:100%; height:100%; opacity:.6; pointer-events:none; }
+.interval { pointer-events:auto; margin:8px 5px 8px 10px; padding:4px 7px 6px 10px; display:flex; flex-direction:column; align-items:flex-start; gap:7px; border-left:2px solid #7f9465; position:relative; font-size:11px; text-align:left; min-width:0; background:#eef2e33d; }
+.interval:before,.interval:after { content:''; width:6px; height:6px; border-radius:50%; background:#7f9465; position:absolute; left:-4px; }
+.interval:before { top:0; } .interval:after { bottom:0; }
+.interval span { overflow-wrap:anywhere; }
+.interval small { font-size:9px; color:#97a186; }
+.plannedInterval { border-left-style:dashed; opacity:.72; }
+.pager { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid #dce1d1; font-size:12px; color:#6b775d; }
+.pager button { padding:4px 12px; }
+.legend { display:flex; flex-wrap:wrap; gap:16px; padding:13px 16px; font-size:11px; color:#879178; border-top:1px solid #dce1d1; }
+.summary { margin-top:18px; display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:16px 18px; border:1px solid #dce1d1; border-radius:12px; background:#fff; font-size:12px; }
+.summary strong { font-size:14px; }
+.summary select { background:transparent; border:1px solid #dce1d1; border-radius:6px; padding:5px 9px; max-width:180px; }
+.summary b { font-size:18px; color:#536747; font-weight:500; margin-right:4px; }
+.status { font-size:13px; padding:15px; color:#758168; }
+.error { font-size:13px; color:#a64330; background:#fff3ee; border:1px solid #efcdbf; padding:12px; border-radius:8px; margin-bottom:15px; }
+.empty { padding:32px 20px; text-align:center; font-size:13px; color:#879178; }
+.toast { position:fixed; z-index:40; bottom:90px; left:50%; transform:translateX(-50%); background:#33482d; color:#fff; padding:12px 16px; border-radius:12px; box-shadow:0 6px 20px #0002; display:flex; gap:18px; font-size:13px; max-width:calc(100vw - 32px); }
+.toast button { text-decoration:underline; white-space:nowrap; }
+@media(max-width:736px) { .page { padding:24px 12px 100px; } .toolbar { gap:18px; margin-bottom:20px; } .monthNumber { font-size:64px; } .monthMeta strong { font-size:19px; } .actions { gap:6px; width:100%; } .actions button { min-height:44px; } .actions .primary { margin-left:auto; } .sheet { --row-size:44px; --tracker-size:72px; } .scroll { max-height:calc(100dvh - 265px); } .groupBar span { margin-left:0; width:100%; } .summary { padding:12px; gap:10px; } .dailyEvents button { min-height:44px; } }
+@media(pointer:coarse) { .sheet { --row-size:44px; } .actions button,.groupBar button,.pager button { min-height:44px; } }
+@media(max-width:400px) { .actions { display:grid; grid-template-columns:44px 44px 1fr 1fr; } .actions button:nth-child(3) { grid-column:3 / 5; } .actions button:nth-child(4) { grid-column:1 / 3; } .actions .primary { grid-column:3 / 5; margin-left:0; } }
+@media(prefers-reduced-motion:no-preference) { .cell,.columnHead,.date { transition:background .15s; } }

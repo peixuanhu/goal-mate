@@ -134,6 +134,8 @@ export function WysiwygEditor({
             hideToolbar={true}
             height={isFullscreen ? "calc(100vh - 100px)" : minHeight}
             textareaProps={{
+              id,
+              'aria-label': label,
               placeholder,
               disabled,
             }}

@@ -56,6 +56,14 @@ vi.mock("./today/ai-workspace", () => ({
 afterEach(cleanup)
 
 describe("MainLayout", () => {
+  it("can start with both sidebars collapsed and excludes their controls from focus", () => {
+    const { container } = render(<MainLayout initialSidebarState="closed"><section>手账</section></MainLayout>)
+    const workspace = container.querySelector('aside[aria-label="目标工作台"]')
+    expect(workspace?.hasAttribute('inert')).toBe(true)
+    expect(workspace?.getAttribute('aria-hidden')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '展开目标工作台' }))
+    expect(workspace?.hasAttribute('inert')).toBe(false)
+  })
   it("renders one shared header, workspace sidebar, central page, and AI sidebar", () => {
     render(
       <MainLayout workspaceDate="2026-08-24">

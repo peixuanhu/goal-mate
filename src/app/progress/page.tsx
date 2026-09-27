@@ -1,11 +1,10 @@
 "use client"
-import React, { Suspense, type FormEvent, useEffect, useState } from 'react'
+import React, { Suspense } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Combobox } from "@/components/ui/combobox"
 import { MainLayout } from "@/components/main-layout"
@@ -13,25 +12,10 @@ import { AppPage, PageHeader } from "@/components/app-page"
 import { TextPreview } from "@/components/ui/text-preview"
 import AuthGuard from "@/components/AuthGuard"
 import { Slider } from '@/components/ui/slider'
-import { refreshQuadrantSidebar } from "@/lib/utils"
+import { ProgressMetricFields } from '@/components/journal/progress-metric-fields'
+import { WriteError } from '@/components/journal/editor-shared'
+import { useProgressJournal } from './use-progress-journal'
 import { WysiwygEditor } from "@/components/ui/wysiwyg-editor"
-
-interface Plan {
-  plan_id: string
-  name: string
-  is_recurring?: boolean
-  progress?: number
-}
-interface ProgressRecord {
-  id: number
-  plan_id: string
-  plan_name?: string
-  content: string
-  thinking: string
-  gmt_create: string
-  custom_time?: string
-  progress_update?: number
-}
 
 export default function ProgressPage() {
   return (
@@ -42,205 +26,9 @@ export default function ProgressPage() {
 }
 
 function ProgressPageContent() {
-  const [plans, setPlans] = useState<Plan[]>([])
-  const [planId, setPlanId] = useState('all') // 默认显示所有计划
-  const [records, setRecords] = useState<ProgressRecord[]>([])
-  const [form, setForm] = useState<Partial<ProgressRecord>>({})
-  const [editingId, setEditingId] = useState<number | null>(null) // 新增：编辑状态
-  const [loading, setLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<'all' | 'single'>('all') // 新增视图模式
-  const [searchQuery, setSearchQuery] = useState('')
-  const searchParams = useSearchParams();
-
-  const fetchPlans = async () => {
-    const res = await fetch('/api/plan?pageSize=1000')
-    const data = await res.json()
-    setPlans(data.list || data)
-  }
-  
-  const fetchAllRecords = async () => {
-    setLoading(true)
-    try {
-      // 获取所有进展记录，按时间排序
-      const params = new URLSearchParams({ 
-        pageSize: '100', 
-        orderBy: 'gmt_create', 
-        order: 'desc',
-        ...(searchQuery && { search: searchQuery })
-      })
-      const res = await fetch(`/api/progress_record?${params}`)
-      const data = await res.json()
-      
-      // 为每条记录添加计划名称
-      const recordsWithPlanNames = data.list.map((record: ProgressRecord) => {
-        const plan = plans.find(p => p.plan_id === record.plan_id)
-        return {
-          ...record,
-          plan_name: plan?.name || '未知计划'
-        }
-      })
-      
-      setRecords(recordsWithPlanNames)
-    } catch (error) {
-      console.error('获取进展记录失败:', error)
-    }
-    setLoading(false)
-  }
-  
-  const fetchRecords = async (pid: string) => {
-    if (!pid || pid === 'all') {
-      await fetchAllRecords()
-      return
-    }
-    setLoading(true)
-    const params = new URLSearchParams({ 
-      plan_id: pid,
-      ...(searchQuery && { search: searchQuery })
-    })
-    const res = await fetch(`/api/progress_record?${params}`)
-    const data = await res.json()
-    setRecords(data.list)
-    setLoading(false)
-  }
-  
-  useEffect(() => { fetchPlans() }, [])
-  
-  useEffect(() => {
-    if (plans.length > 0) {
-      fetchRecords(planId)
-    }
-  }, [planId, plans, searchQuery])
-  
-  useEffect(() => {
-    const urlPlanId = searchParams.get('plan_id');
-    if (urlPlanId && urlPlanId !== planId) {
-      setPlanId(urlPlanId);
-      setViewMode('single');
-    }
-  }, [searchParams]);
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    
-    // 确定要使用的plan_id
-    let submitPlanId = planId;
-    if (editingId && form.plan_id) {
-      // 如果是编辑状态且表单中有plan_id，使用表单中的plan_id
-      submitPlanId = form.plan_id;
-    } else if (planId === 'all' && !editingId) {
-      alert('请选择具体的计划来添加进展')
-      return
-    }
-    
-    setLoading(true)
-    try {
-      // 准备提交数据
-      const submitData = {
-        ...form,
-        plan_id: submitPlanId
-      }
-
-      if (editingId) {
-        // 更新记录
-        await fetch('/api/progress_record', {
-          method: 'PUT',
-          body: JSON.stringify({ 
-            ...submitData, 
-            id: editingId
-          }),
-          headers: { 'Content-Type': 'application/json' }
-        })
-      } else {
-        // 新增记录
-        await fetch('/api/progress_record', {
-          method: 'POST',
-          body: JSON.stringify(submitData),
-          headers: { 'Content-Type': 'application/json' }
-        })
-      }
-
-      // 如果有进度更新，同时更新计划进度
-      if (form.progress_update !== undefined) {
-        await fetch('/api/plan', {
-          method: 'PUT',
-          body: JSON.stringify({
-            plan_id: submitPlanId,
-            progress: form.progress_update
-          }),
-          headers: { 'Content-Type': 'application/json' }
-        })
-      }
-      
-      setForm({})
-      setEditingId(null)
-      await fetchRecords(planId)
-      await fetchPlans() // 重新获取计划数据以更新进度显示
-      // Refresh quadrant sidebar to reflect progress changes
-      refreshQuadrantSidebar()
-    } catch (error) {
-      console.error('保存进展记录失败:', error)
-      alert('保存失败，请重试')
-    }
-    setLoading(false)
-  }
-
-  // 新增：编辑记录
-  const handleEdit = (record: ProgressRecord) => {
-    // 将记录时间转换为datetime-local格式（本地时间）
-    const recordTime = new Date(record.gmt_create)
-    
-    // 获取本地时间的各个部分
-    const year = recordTime.getFullYear()
-    const month = String(recordTime.getMonth() + 1).padStart(2, '0')
-    const day = String(recordTime.getDate()).padStart(2, '0')
-    const hours = String(recordTime.getHours()).padStart(2, '0')
-    const minutes = String(recordTime.getMinutes()).padStart(2, '0')
-    
-    // 构造本地时间格式的字符串 YYYY-MM-DDTHH:mm
-    const formattedTime = `${year}-${month}-${day}T${hours}:${minutes}`
-    
-    setForm({
-      ...record,
-      custom_time: formattedTime
-    })
-    setEditingId(record.id)
-  }
-
-  // 新增：取消编辑
-  const handleCancelEdit = () => {
-    setForm({})
-    setEditingId(null)
-  }
-
-  // 新增：删除记录
-  const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这条进展记录吗？')) {
-      return
-    }
-    
-    setLoading(true)
-    try {
-      await fetch(`/api/progress_record?id=${id}`, {
-        method: 'DELETE'
-      })
-      await fetchRecords(planId)
-    } catch (error) {
-      console.error('删除进展记录失败:', error)
-      alert('删除失败，请重试')
-    }
-    setLoading(false)
-  }
-
-  const handleViewModeChange = (mode: 'all' | 'single') => {
-    setViewMode(mode)
-    if (mode === 'all') {
-      setPlanId('all')
-      setEditingId(null) // 切换模式时取消编辑
-      setForm({})
-    } else if (plans.length > 0) {
-      setPlanId(plans[0].plan_id)
-    }
-  }
+  const { plans, planId, setPlanId, records, form, setForm, editingId, loading, saving, viewMode,
+    searchQuery, setSearchQuery, handleSubmit, handleEdit, handleCancelEdit, handleDelete, handleViewModeChange,
+    trackers, timezone, today, metrics, onMetricsChange, outcome, onOutcomeChange, error, conflict, readError, reloadOriginal } = useProgressJournal()
 
   return (
     <AuthGuard>
@@ -252,6 +40,7 @@ function ProgressPageContent() {
             title="进展记录"
           />
 
+          {readError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{readError}</p> : null}
           <Card className="min-w-0 overflow-hidden border-stone-200/80 shadow-sm">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="flex flex-col gap-3 text-lg sm:flex-row sm:items-center sm:justify-between sm:text-xl">
@@ -326,6 +115,8 @@ function ProgressPageContent() {
                   </CardHeader>
                   <CardContent className="px-4 sm:px-6">
                     <form onSubmit={handleSubmit} className="space-y-6">
+                      <WriteError error={error} conflict={conflict} onReload={reloadOriginal} />
+                      <fieldset disabled={loading} className="space-y-6">
                       {/* 如果是编辑状态，显示所属计划选择器 */}
                       {editingId && (
                         <div className="space-y-2">
@@ -422,6 +213,24 @@ function ProgressPageContent() {
                         </div>
                       </div>
 
+                      <p className="text-xs text-stone-500">发生时间按 {timezone} 解释。</p>
+                      <ProgressMetricFields trackers={trackers} planId={editingId ? form.plan_id ?? planId : planId}
+                        date={form.custom_time?.slice(0, 10) || today} value={metrics} onChange={onMetricsChange}
+                        disabled={saving || !!form.custom_time && form.custom_time.slice(0, 10) > today} />
+                      <div className="space-y-2">
+                        <Label htmlFor="progressOutcome">完成状态</Label>
+                        <select id="progressOutcome" className="min-h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm"
+                          value={outcome} disabled={saving || !!form.schedule_block_id}
+                          onChange={event => onOutcomeChange(event.target.value as typeof outcome)}>
+                          <option value="legacy">保留原有计次规则</option>
+                          <option value="data">仅记录数据，不计完成</option>
+                          <option value="completed">已完成一次</option>
+                          <option value="partial">部分完成</option>
+                          <option value="skipped">跳过</option>
+                        </select>
+                        <p className="text-xs text-stone-500">填写结构化数据时，默认仅记录数据。安排的完成状态在今日工作台调整。</p>
+                      </div>
+
                       {/* 思考总结 */}
                       <WysiwygEditor
                         id="thinking"
@@ -449,6 +258,7 @@ function ProgressPageContent() {
                           </Button>
                         )}
                       </div>
+                      </fieldset>
                     </form>
                   </CardContent>
                 </Card>
@@ -496,7 +306,7 @@ function ProgressPageContent() {
                       records.map(r => (
                         <TableRow key={r.id} className={editingId === r.id ? 'bg-blue-50 dark:bg-blue-950' : ''}>
                           <TableCell className="w-[120px] text-sm font-mono">
-                            {new Date(r.gmt_create).toLocaleString()}
+                            {new Date(r.gmt_create).toLocaleString('zh-CN', { timeZone: timezone })}
                           </TableCell>
                           {planId === 'all' && (
                             <TableCell className="w-[128px] min-w-0 overflow-hidden font-medium">
