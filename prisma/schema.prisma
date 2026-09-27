@@ -24,6 +24,9 @@ model Goal {
   position     Int?
   plans        Plan[]
 
+  trackerRevisions TrackerRevision[]
+  journalEvents    JournalEvent[]
+
   @@index([position])
 }
 
@@ -53,6 +56,9 @@ model Plan {
   actionItems           ActionItem[]
   scheduleBlocks        ScheduleBlock[]
 
+  trackerRevisions TrackerRevision[]
+  journalEvents    JournalEvent[]
+
   @@index([goal_id, goal_position])
 }
 
@@ -77,6 +83,14 @@ model ProgressRecord {
   counts_toward_recurrence Boolean        @default(true)
   plan                     Plan           @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
   scheduleBlock            ScheduleBlock? @relation(fields: [schedule_block_id], references: [block_id], onDelete: SetNull)
+
+  version                Int                  @default(1)
+  journal_completion_key String?              @unique
+  journal_request_id     String?              @unique
+  journalMeasurements    TrackerMeasurement[]
+  journalEvents          JournalEvent[]
+
+  @@index([gmt_create])
 }
 
 model ActionItem {
@@ -160,4 +174,92 @@ model FocusPeriod {
 
   @@index([year, start_date])
   @@index([goal_id])
+}
+
+model TrackerDefinition {
+  tracker_id    String               @id @default(uuid())
+  gmt_create    DateTime             @default(now())
+  gmt_modified  DateTime             @updatedAt
+  name          String
+  kind          String
+  group         String               @default("默认")
+  color         String               @default("#b6d99d")
+  position      Int                  @default(0)
+  version       Int                  @default(1)
+  enabled_from  DateTime             @db.Date
+  archived_from DateTime?            @db.Date
+  revisions     TrackerRevision[]
+  measurements  TrackerMeasurement[]
+
+  @@index([position, tracker_id])
+}
+
+model TrackerRevision {
+  revision_id    String               @id @default(uuid())
+  tracker_id     String
+  effective_from DateTime             @db.Date
+  config         Json
+  plan_id        String?
+  goal_id        String?
+  plan_name      String?
+  goal_name      String?
+  tracker        TrackerDefinition    @relation(fields: [tracker_id], references: [tracker_id], onDelete: Restrict)
+  plan           Plan?                @relation(fields: [plan_id], references: [plan_id], onDelete: SetNull)
+  goal           Goal?                @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
+  measurements   TrackerMeasurement[]
+
+  @@unique([tracker_id, effective_from])
+  @@unique([revision_id, tracker_id])
+  @@index([plan_id])
+}
+
+model TrackerMeasurement {
+  measurement_id     String            @id @default(uuid())
+  gmt_create         DateTime          @default(now())
+  gmt_modified       DateTime          @updatedAt
+  tracker_id         String
+  revision_id        String
+  local_date         DateTime          @db.Date
+  recorded_at        DateTime          @default(now())
+  status             String            @default("recorded")
+  origin             String
+  boolean_value      Boolean?
+  numeric_value      Decimal?          @db.Decimal(20, 4)
+  enum_value         String?
+  note               String            @default("")
+  version            Int               @default(1)
+  request_id         String?
+  progress_record_id Int?
+  source_record_id   Int?
+  tracker            TrackerDefinition @relation(fields: [tracker_id], references: [tracker_id], onDelete: Restrict)
+  revision           TrackerRevision   @relation(fields: [revision_id, tracker_id], references: [revision_id, tracker_id], onDelete: Restrict)
+  progressRecord     ProgressRecord?   @relation(fields: [progress_record_id], references: [id], onDelete: SetNull)
+
+  @@unique([tracker_id, progress_record_id])
+  @@index([tracker_id, local_date])
+  @@index([progress_record_id])
+}
+
+model JournalEvent {
+  event_id             String          @id @default(uuid())
+  gmt_create           DateTime        @default(now())
+  gmt_modified         DateTime        @updatedAt
+  title                String
+  start_date           DateTime        @db.Date
+  end_date             DateTime        @db.Date
+  note                 String          @default("")
+  status               String          @default("planned")
+  version              Int             @default(1)
+  plan_id              String?
+  goal_id              String?
+  plan_name            String?
+  goal_name            String?
+  completion_record_id Int?
+  sync_completion      Boolean         @default(false)
+  request_id           String          @unique
+  plan                 Plan?           @relation(fields: [plan_id], references: [plan_id], onDelete: SetNull)
+  goal                 Goal?           @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
+  completionRecord     ProgressRecord? @relation(fields: [completion_record_id], references: [id], onDelete: SetNull)
+
+  @@index([start_date, end_date])
 }

@@ -253,7 +253,7 @@ export function isJournalCompletion(
 
 **Files:** Modify `prisma/schema.prisma`, `package.json`; Create `prisma/journal-integrity.sql`, `src/lib/journal/schema.integration.test.ts`。
 
-- [ ] **Step 1: 写真实数据库约束测试。** 使用独立 JOURNAL_TEST_DATABASE_URL，缺少变量时 skip，不能回落到现有 DATABASE_URL。创建两个定义/版本，验证数据库拒绝第二个同日期手动值和错 tracker 的 revision。测试不用字符串匹配 schema 来代替 SQL 行为。
+- [x] **Step 1: 写真实数据库约束测试。** 使用独立 JOURNAL_TEST_DATABASE_URL，缺少变量时 skip，不能回落到现有 DATABASE_URL。创建两个定义/版本，验证数据库拒绝第二个同日期手动值和错 tracker 的 revision。测试不用字符串匹配 schema 来代替 SQL 行为。
 
 ```ts
 import { PrismaClient } from '@prisma/client'
@@ -289,8 +289,8 @@ describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('journal persistence',()
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/schema.integration.test.ts`；配置专用测试库后，预期新模型/SQL 尚未存在而失败，skip 不能作为 RED 或 GREEN 证据。
-- [ ] **Step 3: 追加模型。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/schema.integration.test.ts`；配置专用测试库后，预期新模型/SQL 尚未存在而失败，skip 不能作为 RED 或 GREEN 证据。
+- [x] **Step 3: 追加模型。**
 
 ```prisma
 model TrackerDefinition {
@@ -429,8 +429,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 }
 ```
 
-- [ ] **Step 4: 验证。** `npx prisma validate`、`npm run db:generate`；测试数据库上运行 `npm run db:push` 两次，第二次成功。`JOURNAL_TEST_DATABASE_URL="$JOURNAL_TEST_DATABASE_URL" npm test -- src/lib/journal/schema.integration.test.ts` 全部 PASS。补真实 SQL 测试拒绝非法状态、无值 recorded 和倒置事件日期。schema 模式以现有 `db push` 部署方式为准，不切换全仓迁移体系。
-- [ ] **Step 5: 提交。** `git add prisma/schema.prisma prisma/journal-integrity.sql package.json src/lib/journal/schema.integration.test.ts && git commit -m "feat: persist versioned journal trackers measurements and events"`。
+- [x] **Step 4: 验证。** `npx prisma validate`、`npm run db:generate`；测试数据库上运行 `npm run db:push` 两次，第二次成功。`JOURNAL_TEST_DATABASE_URL="$JOURNAL_TEST_DATABASE_URL" npm test -- src/lib/journal/schema.integration.test.ts` 全部 PASS。补真实 SQL 测试拒绝非法状态、无值 recorded 和倒置事件日期。schema 模式以现有 `db push` 部署方式为准，不切换全仓迁移体系。
+- [x] **Step 5: 提交。** `git add prisma/schema.prisma prisma/journal-integrity.sql package.json src/lib/journal/schema.integration.test.ts && git commit -m "feat: persist versioned journal trackers measurements and events"`。
 
 ## Task 3: 请求校验与历史版本选择
 

@@ -9,14 +9,16 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push:schema": "prisma db push",
-    "db:integrity": "prisma db execute --file prisma/today-workspace-integrity.sql --schema prisma/schema.prisma",
+    "db:integrity": "npm run db:integrity:today && npm run db:integrity:journal",
     "db:push": "npm run db:push:schema && npm run db:integrity",
     "db:deploy": "npm run db:push",
     "db:studio": "prisma studio",
     "db:reset": "prisma db push --force-reset && npm run db:integrity",
     "setup": "npm install && npm run db:generate && npm run db:push",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:integrity:today": "prisma db execute --file prisma/today-workspace-integrity.sql --schema prisma/schema.prisma",
+    "db:integrity:journal": "prisma db execute --file prisma/journal-integrity.sql --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@copilotkit/react-core": "^1.8.13",
