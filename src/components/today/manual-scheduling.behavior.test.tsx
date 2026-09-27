@@ -245,6 +245,30 @@ describe("manual scheduling components", () => {
     expect(onSchedule).toHaveBeenNthCalledWith(2, planCandidate)
   })
 
+  it("keeps the source candidate anchored while the timeline preview represents a drag", async () => {
+    render(
+      <DndContext>
+        <GoalCandidatePanel
+          candidates={[planCandidate]}
+          error={null}
+          focus={null}
+          loading={false}
+          onSchedule={vi.fn()}
+        />
+      </DndContext>,
+    )
+
+    const dragButton = screen.getByRole("button", { name: "拖动 上线产品" })
+    const sourceCard = dragButton.closest("article") as HTMLElement
+    fireEvent.keyDown(dragButton, { code: "Space", key: " " })
+    fireEvent.keyDown(dragButton, { code: "ArrowRight", key: "ArrowRight" })
+
+    await waitFor(() => expect(sourceCard.className).toContain("opacity-50"))
+    expect(sourceCard.style.transform).toBe("")
+
+    fireEvent.keyDown(dragButton, { code: "Escape", key: "Escape" })
+  })
+
   it("renders positioned statuses and only a timezone-correct current-time rule on the actual date", () => {
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
     vi.setSystemTime(new Date("2026-08-23T02:15:00.000Z"))

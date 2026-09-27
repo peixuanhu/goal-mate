@@ -95,7 +95,7 @@ function CandidateCard({
 }) {
   const isAction = candidate.kind === "action"
   const schedulingDisabled = !candidate.can_schedule || candidate.suggested_block_minutes === null
-  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
     id: candidate.id,
     data: { kind: "candidate", candidate },
     disabled: schedulingDisabled,
@@ -105,7 +105,6 @@ function CandidateCard({
     <article
       className={`rounded-xl border border-stone-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(28,25,23,0.04)] transition-shadow hover:shadow-sm ${isDragging ? "opacity-50" : ""}`}
       ref={setNodeRef}
-      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
     >
       <div className="flex items-start gap-2.5">
         <button
