@@ -46,4 +46,10 @@ describe('journal daily and monthly aggregation', () => {
       [{ date: '2026-09-03', value: 110 }, { date: '2026-09-04', value: 0 }],
     ])
   })
+  it('does not connect snapshot values recorded under different units or revisions', () => {
+    expect(trendSegments([
+      { date: '2026-10-15', state: 'recorded', value: '1000', revision_id: 'old' },
+      { date: '2026-10-16', state: 'recorded', value: '1', revision_id: 'new' },
+    ])).toEqual([[{ date: '2026-10-15', value: 1000 }], [{ date: '2026-10-16', value: 1 }]])
+  })
 })

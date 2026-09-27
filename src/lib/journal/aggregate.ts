@@ -45,17 +45,19 @@ export function summarizeHabitDays(days: { date: string; state: CellState; passe
   return { streak, completion_rate }
 }
 
-export function trendSegments(cells: Pick<JournalCell, 'date' | 'state' | 'value'>[]) {
+export function trendSegments(cells: (Pick<JournalCell, 'date' | 'state' | 'value'> & { revision_id?: string | null })[]) {
   const segments: { date: string; value: number }[][] = []
   let previous: string | null = null
+  let previousRevision: string | null | undefined
   for (const cell of [...cells].sort((a, b) => a.date.localeCompare(b.date))) {
     if (cell.state !== 'recorded' || typeof cell.value !== 'string' || !Number.isFinite(Number(cell.value))) {
       previous = null
       continue
     }
-    if (previous === null || addDays(previous, 1) !== cell.date) segments.push([])
+    if (previous === null || addDays(previous, 1) !== cell.date || previousRevision !== cell.revision_id) segments.push([])
     segments[segments.length - 1].push({ date: cell.date, value: Number(cell.value) })
     previous = cell.date
+    previousRevision = cell.revision_id
   }
   return segments
 }

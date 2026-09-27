@@ -45,4 +45,17 @@ describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('journal persistence',()
       start_date:new Date('2026-09-13T00:00:00Z'),end_date:new Date('2026-09-12T00:00:00Z'),
       request_id:crypto.randomUUID()}})).rejects.toThrow(/JournalEvent_valid_check/)
   })
+  it('enforces one field per source record while allowing independent manual days to share that source', async () => {
+    const tracker = await db.trackerDefinition.create({ data: { name: 'source uniqueness', kind: 'boolean', enabled_from: new Date('2026-09-01T00:00:00Z'),
+      revisions: { create: { effective_from: new Date('2026-09-01T00:00:00Z'), config: {} } } }, include: { revisions: true } }); ids.push(tracker.tracker_id)
+    const plan = await db.plan.create({ data: { plan_id: crypto.randomUUID(), name: 'source uniqueness' } })
+    try {
+      const record = await db.progressRecord.create({ data: { plan_id: plan.plan_id } })
+      const data = { tracker_id: tracker.tracker_id, revision_id: tracker.revisions[0].revision_id, origin: 'progress_field', local_date: new Date('2026-09-12T00:00:00Z'), boolean_value: false, progress_record_id: record.id }
+      await db.trackerMeasurement.create({ data })
+      await expect(db.trackerMeasurement.create({ data: { ...data, local_date: new Date('2026-09-13T00:00:00Z') } })).rejects.toMatchObject({ code: 'P2002' })
+      await db.trackerMeasurement.create({ data: { ...data, origin: 'manual' } })
+      await db.trackerMeasurement.create({ data: { ...data, origin: 'manual', local_date: new Date('2026-09-13T00:00:00Z') } })
+    } finally { await db.plan.delete({ where: { plan_id: plan.plan_id } }) }
+  })
 })

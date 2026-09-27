@@ -659,8 +659,10 @@ describe("today workspace Prisma contract", () => {
     expect(packageJson.scripts["db:generate"]).toBe("prisma generate")
     expect(packageJson.scripts["db:push:schema"]).toBe("prisma db push")
     expect(packageJson.scripts["db:integrity"]).toBe(
-      "prisma db execute --file prisma/today-workspace-integrity.sql --schema prisma/schema.prisma",
+      "npm run db:integrity:today && npm run db:integrity:journal",
     )
+    expect(packageJson.scripts["db:integrity:today"]).toBe("prisma db execute --file prisma/today-workspace-integrity.sql --schema prisma/schema.prisma")
+    expect(packageJson.scripts["db:integrity:journal"]).toBe("prisma db execute --file prisma/journal-integrity.sql --schema prisma/schema.prisma")
     expect(packageJson.scripts["db:push"]).toBe(
       "npm run db:push:schema && npm run db:integrity",
     )

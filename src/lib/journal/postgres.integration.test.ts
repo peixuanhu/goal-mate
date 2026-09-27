@@ -4,6 +4,7 @@ import { createTracker } from './tracker-service'
 import { defaultTrackerConfig } from './defaults'
 import { clearMeasurement, putManualMeasurement } from './measurement-service'
 import type { PutMeasurementInput } from './types'
+import { updateProgressRecord } from '@/lib/progress-record-service'
 
 describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('journal transactional writes', () => {
   let db: PrismaClient
@@ -76,5 +77,20 @@ describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('journal transactional w
     await db.progressRecord.update({ where: { id: first.progress_record_id! }, data: { gmt_create: new Date('2026-09-13T04:00:00Z') } })
     await expect(putManualMeasurement(db, { ...input(trackers[0].tracker_id), expected_version: first.version })).rejects.toMatchObject({ code: 'SOURCE_CHANGED' })
     expect((await db.trackerMeasurement.findUniqueOrThrow({ where: { measurement_id: first.measurement_id } })).version).toBe(first.version)
+  })
+  it('preserves independent daily cells when a moved source is reused on its new day', async () => {
+    const { trackers } = await seed()
+    const first = await putManualMeasurement(db, input(trackers[0].tracker_id))
+    await updateProgressRecord(db, { id: first.progress_record_id!, expected_version: 1, custom_time: '2026-09-13T12:00' })
+    const next = await putManualMeasurement(db, { ...input(trackers[0].tracker_id), date: '2026-09-13' })
+    expect(next.progress_record_id).toBe(first.progress_record_id)
+    expect((await db.trackerMeasurement.findUniqueOrThrow({ where: { measurement_id: first.measurement_id } })).boolean_value).toBe(true)
+  })
+  it('does not report an unlinked live source as deleted after recording false', async () => {
+    const { plan, trackers } = await seed()
+    const source = await db.progressRecord.create({ data: { plan_id: plan.plan_id, content: '原记录', outcome: 'completed', gmt_create: new Date('2026-09-12T04:00:00Z') } })
+    const first = await putManualMeasurement(db, input(trackers[0].tracker_id))
+    const next = await putManualMeasurement(db, { ...input(trackers[0].tracker_id), expected_version: first.version, value: false })
+    expect(next.source_deleted).toBe(false); expect(await db.progressRecord.findUnique({ where: { id: source.id } })).not.toBeNull()
   })
 })

@@ -41,6 +41,7 @@ export type JournalEventView = {
   event_id:string; title:string; start_date:string; end_date:string; note:string
   source:'custom'|'progress'|'plan_due'|'action_due'|'focus'|'schedule'
   status:'planned'|'progress'|'completed'; plan_id:string|null; goal_id:string|null
+  plan_name?:string|null; goal_name?:string|null
   progress_record_id:number|null; version:number|null; sync_completion:boolean
 }
 export type EventLane = JournalEventView & {

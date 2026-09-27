@@ -38,7 +38,8 @@ export function progressInput(raw: unknown, update: boolean): ProgressWriteInput
     })
   }
   if (update) return value
-  const { id: _id, ...created } = value
+  const created: Partial<ProgressUpdateInput> = { ...value }
+  delete created.id
   return created as ProgressWriteInput
 }
 

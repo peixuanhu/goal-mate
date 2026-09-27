@@ -2,6 +2,7 @@ import type { JournalEvent } from '@prisma/client'
 import { zonedMinuteToUtc, formatUtcInTimeZone } from '@/lib/today/timezone'
 import { dateOnly } from './date'
 import { requestHash } from './idempotency'
+import { metricsForProgressMove, saveProgressMetrics } from './measurement-service'
 import { associatedNames, journalContext, lockPlans, stale } from './persistence'
 import type { JournalDb, JournalTx } from './persistence'
 import { JournalError } from './types'
@@ -11,7 +12,8 @@ import { parseEventDelete, parseEventInput, parseEventUpdate } from './validatio
 function eventView(row: JournalEvent): JournalEventView {
   return { event_id: row.event_id, title: row.title, note: row.note, start_date: row.start_date.toISOString().slice(0, 10),
     end_date: row.end_date.toISOString().slice(0, 10), source: 'custom', status: row.status as JournalEventView['status'],
-    plan_id: row.plan_id, goal_id: row.goal_id, progress_record_id: row.completion_record_id, version: row.version, sync_completion: row.sync_completion }
+    plan_id: row.plan_id, goal_id: row.goal_id, plan_name: row.plan_name, goal_name: row.goal_name,
+    progress_record_id: row.completion_record_id, version: row.version, sync_completion: row.sync_completion }
 }
 async function release(tx: JournalTx, event: JournalEvent) {
   if (!event.completion_record_id) return
@@ -30,8 +32,12 @@ async function completion(tx: JournalTx, event: JournalEvent, timezone: string) 
   let record = await tx.progressRecord.findUnique({ where: { journal_completion_key: key } })
   const data = { plan_id: event.plan_id, gmt_create: zonedMinuteToUtc(event.end_date.toISOString().slice(0, 10), 720, timezone),
     outcome: 'completed', counts_toward_recurrence: true }
+  const metrics = record && (record.gmt_create.getTime() !== data.gmt_create.getTime() || record.plan_id !== data.plan_id)
+    ? await metricsForProgressMove(tx, await tx.trackerMeasurement.findMany({ where: { progress_record_id: record.id, origin: 'progress_field' } }), event.end_date.toISOString().slice(0, 10))
+    : undefined
   record = record ? await tx.progressRecord.update({ where: { id: record.id }, data: { ...data, version: { increment: 1 } } })
     : await tx.progressRecord.create({ data: { ...data, content: event.title, thinking: event.note, journal_completion_key: key } })
+  if (metrics !== undefined) await saveProgressMetrics(tx, record, metrics)
   await tx.journalEvent.update({ where: { event_id: event.event_id }, data: { completion_record_id: record.id } })
 }
 async function validateWrite(tx: JournalTx, input: JournalEventInput) {
@@ -58,20 +64,24 @@ async function lockEvent(tx: JournalTx, id: string) {
   return tx.journalEvent.findUniqueOrThrow({ where: { event_id: id } })
 }
 export async function updateJournalEvent(db: JournalDb, raw: JournalEventUpdateInput) {
-  const { event_id, expected_version, request_id: _requestId, ...input } = parseEventUpdate(raw)
+  const parsed = parseEventUpdate(raw), hash = requestHash(parsed)
+  const { event_id, expected_version, request_id: requestId, ...input } = parsed
   return db.$transaction(async tx => {
     const initial = await tx.journalEvent.findUnique({ where: { event_id } })
     if (!initial) throw new JournalError('NOT_FOUND', '事件已不存在')
     await lockPlans(tx, [initial.plan_id, input.plan_id])
     const old = await lockEvent(tx, event_id)
+    if (old.write_id === requestId) { if (old.write_hash !== hash) stale('同一请求标识不能用于不同内容'); return eventView(old) }
     if (old.version !== expected_version) stale()
-    const context = await validateWrite(tx, { ...input, request_id: _requestId })
+    const context = await validateWrite(tx, { ...input, request_id: requestId })
     if (old.completion_record_id) {
       const record = await tx.progressRecord.findUnique({ where: { id: old.completion_record_id } })
       if (record?.journal_completion_key === `event:${event_id}` && (record.plan_id !== old.plan_id || formatUtcInTimeZone(record.gmt_create, context.timezone).date !== old.end_date.toISOString().slice(0, 10))) throw new JournalError('SOURCE_CHANGED', '事件关联的完成记录已改期，请先查看原记录')
     }
     const saved = await tx.journalEvent.update({ where: { event_id }, data: { ...input, ...context.names,
-      start_date: dateOnly(input.start_date), end_date: dateOnly(input.end_date), completion_record_id: null, version: { increment: 1 } } })
+      ...(!old.plan_id && !input.plan_id && old.plan_name ? { plan_name: old.plan_name } : {}),
+      ...(!old.goal_id && !input.goal_id && old.goal_name ? { goal_name: old.goal_name } : {}),
+      start_date: dateOnly(input.start_date), end_date: dateOnly(input.end_date), completion_record_id: null, write_id: requestId, write_hash: hash, version: { increment: 1 } } })
     if (!saved.sync_completion || saved.status !== 'completed' || old.plan_id !== saved.plan_id) await release(tx, old)
     await completion(tx, saved, context.timezone)
     return eventView(await tx.journalEvent.findUniqueOrThrow({ where: { event_id } }))

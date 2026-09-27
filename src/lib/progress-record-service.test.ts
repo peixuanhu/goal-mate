@@ -45,6 +45,25 @@ describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('structured progress tra
     const updated = await updateProgressRecord(db, { id: completed.id, expected_version: completed.version, metrics: [metric] })
     expect(updated.outcome).toBe('completed'); expect(updated.counts_toward_recurrence).toBe(true)
   })
+  it('does not count an explicitly data-only text record as completion', async () => {
+    const { plan } = await seed()
+    await db.plan.update({ where: { plan_id: plan.plan_id }, data: { is_recurring: true } })
+    const record = await createProgressRecord(db, { plan_id: plan.plan_id, content: '仅记录观察', thinking: '', outcome: null })
+    expect(record.counts_toward_recurrence).toBe(false)
+  })
+  it('allows editing another metric after a cleared field is archived and the record moves', async () => {
+    const { plan, tracker, metric } = await seed()
+    const other = await createTracker(db, { name: '点赞', kind: 'quantity', group: '测试', color: '#b6d99d', enabled_from: '2026-09-01', plan_id: plan.plan_id, goal_id: null,
+      config: { ...defaultTrackerConfig('quantity'), source: 'progress_field' } }); trackers.push(other.tracker_id)
+    const second = { ...metric, tracker_id: other.tracker_id, revision_id: other.revisions[0].revision_id, value: '2' }
+    const first = await createProgressRecord(db, { plan_id: plan.plan_id, content: '', thinking: '', custom_time: '2026-09-12T12:00', metrics: [metric, second] })
+    const cleared = await updateProgressRecord(db, { id: first.id, expected_version: first.version, metrics: [{ ...metric, status: 'cleared', value: null }, second] })
+    await db.trackerDefinition.update({ where: { tracker_id: tracker.tracker_id }, data: { archived_from: new Date('2026-10-05T00:00:00Z') } })
+    const moved = await updateProgressRecord(db, { id: first.id, expected_version: cleared.version, custom_time: '2026-10-05T12:00' })
+    const edited = await updateProgressRecord(db, { id: first.id, expected_version: moved.version, metrics: [{ ...metric, status: 'cleared', value: null }, { ...second, value: '20' }] })
+    expect(edited.metrics.find(item => item.tracker_id === other.tracker_id)?.value).toBe('20')
+    expect(edited.metrics.find(item => item.tracker_id === tracker.tracker_id)?.status).toBe('cleared')
+  })
   it('rolls back the record and explicit percentage when a measurement is invalid', async () => {
     const { plan, metric } = await seed()
     await expect(createProgressRecord(db, { plan_id: plan.plan_id, content: '数据', thinking: '', plan_progress: .5, metrics: [{ ...metric, value: 'NaN' }] })).rejects.toMatchObject({ code: 'VALIDATION' })
@@ -67,5 +86,13 @@ describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)('structured progress tra
     expect(edited.metrics[0].value).toBe('0')
     const cleared = await updateProgressRecord(db, { id: first.id, expected_version: edited.version, metrics: [] })
     expect(cleared.metrics[0].status).toBe('cleared')
+  })
+  it('replays an update without a second version increment', async () => {
+    const { plan } = await seed()
+    const first = await createProgressRecord(db, { plan_id: plan.plan_id, content: '', thinking: '' })
+    const input = { id: first.id, expected_version: first.version, content: '修改', request_id: crypto.randomUUID() }
+    const updated = await updateProgressRecord(db, input)
+    expect((await updateProgressRecord(db, input)).version).toBe(updated.version)
+    await expect(updateProgressRecord(db, { ...input, content: '不同修改' })).rejects.toMatchObject({ code: 'STALE_VERSION' })
   })
 })

@@ -87,6 +87,8 @@ model ProgressRecord {
   version                Int                  @default(1)
   journal_completion_key String?              @unique
   journal_request_hash   String?
+  journal_write_id       String?
+  journal_write_hash     String?
   journal_request_id     String?              @unique
   journalMeasurements    TrackerMeasurement[]
   journalEvents          JournalEvent[]
@@ -236,7 +238,6 @@ model TrackerMeasurement {
   revision           TrackerRevision   @relation(fields: [revision_id, tracker_id], references: [revision_id, tracker_id], onDelete: Restrict)
   progressRecord     ProgressRecord?   @relation(fields: [progress_record_id], references: [id], onDelete: SetNull)
 
-  @@unique([tracker_id, progress_record_id])
   @@index([tracker_id, local_date])
   @@index([progress_record_id])
 }
@@ -258,6 +259,8 @@ model JournalEvent {
   completion_record_id Int?
   sync_completion      Boolean         @default(false)
   request_hash         String?
+  write_id             String?
+  write_hash           String?
   request_id           String          @unique
   plan                 Plan?           @relation(fields: [plan_id], references: [plan_id], onDelete: SetNull)
   goal                 Goal?           @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)

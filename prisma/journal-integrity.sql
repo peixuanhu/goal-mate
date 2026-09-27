@@ -1,6 +1,9 @@
 CREATE UNIQUE INDEX IF NOT EXISTS "TrackerMeasurement_manual_cell_idx"
 ON "TrackerMeasurement" ("tracker_id", "local_date") WHERE "origin" = 'manual';
 
+CREATE UNIQUE INDEX IF NOT EXISTS "TrackerMeasurement_progress_field_idx"
+ON "TrackerMeasurement" ("tracker_id", "progress_record_id") WHERE "origin" = 'progress_field';
+
 DO $$ BEGIN
   ALTER TABLE "TrackerMeasurement" ADD CONSTRAINT "TrackerMeasurement_value_check"
   CHECK (

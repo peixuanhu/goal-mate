@@ -18,8 +18,8 @@ export async function queryJournalTrackers(db: JournalDb, now = new Date()) {
   return { list: rows.map(trackerView), ...context }
 }
 async function snapshotBaseline(tx: JournalTx, tracker: TrackerView, revision: TrackerRevisionView, first: string, start: Date) {
-  if (!bindingValid(revision)) return null
   const source = revision.config.source
+  if (source !== 'manual' && !bindingValid(revision)) return null
   if (source === 'plan') return null
   const common = { tracker_id: tracker.tracker_id, revision_id: revision.revision_id, status: 'recorded', numeric_value: { not: null } }
   const row = source === 'manual'
@@ -72,8 +72,8 @@ export async function queryJournalMonth(db: JournalDb, month: string | null, now
         else if (date > today) cell.state = 'future'
         else if (revision) {
           if (revision.config.source === 'plan' && bindingValid(revision)) {
-            const records = [...new Map((progressByDay.get(date) ?? []).filter(record => record.plan_id === revision.plan_id && isJournalCompletion(record, record.plan.is_recurring)).map(record => [record.id, record])).values()]
-            Object.assign(cell, aggregateDay(tracker.kind, revision.config.daily_aggregation, records.map(record => ({ id: `p:${record.id}`, timestamp: record.gmt_create.toISOString(), status: 'recorded', value: tracker.kind === 'boolean' ? true : '1' }))))
+            const records = [...new Map((progressByDay.get(date) ?? []).filter(record => record.plan_id === revision.plan_id && (isJournalCompletion(record, record.plan.is_recurring) || record.outcome === 'skipped')).map(record => [record.id, record])).values()]
+            Object.assign(cell, aggregateDay(tracker.kind, revision.config.daily_aggregation, records.map(record => ({ id: `p:${record.id}`, timestamp: record.gmt_create.toISOString(), status: record.outcome === 'skipped' ? 'skipped' : 'recorded', value: record.outcome === 'skipped' ? null : tracker.kind === 'boolean' ? true : '1' }))))
             cell.sources = records.map(record => ({ kind: 'progress', id: String(record.id), label: plainText(record.content).slice(0, 100) || record.plan.name, version: record.version, deleted: false, legacy: record.outcome === null }))
           } else if (revision.config.source !== 'plan') {
             const samples = revision.config.source === 'manual' ? available.filter(row => row.origin === 'manual') : available.filter(row => row.origin === 'progress_field' && row.progressRecord && bindingValid(revision) && (!revision.plan_id || row.progressRecord.plan_id === revision.plan_id))
@@ -101,7 +101,7 @@ export async function queryJournalMonth(db: JournalDb, month: string | null, now
           ...summarizeHabitDays(days.map(cell => ({ date: cell.date, state: cell.state, passed: passed(cell) })), today, habit && (revision.config.active_weekdays.length > 0 || revision.config.threshold !== null)) })
       }
     }
-    const events: JournalEventView[] = custom.map(event => ({ event_id: event.event_id, title: event.title, start_date: civil(event.start_date), end_date: civil(event.end_date), note: event.note, source: 'custom', status: event.status as JournalEventView['status'], plan_id: event.plan_id, goal_id: event.goal_id, progress_record_id: event.completion_record_id, version: event.version, sync_completion: event.sync_completion }))
+    const events: JournalEventView[] = custom.map(event => ({ event_id: event.event_id, title: event.title, start_date: civil(event.start_date), end_date: civil(event.end_date), note: event.note, source: 'custom', status: event.status as JournalEventView['status'], plan_id: event.plan_id, goal_id: event.goal_id, plan_name: event.plan_name, goal_name: event.goal_name, progress_record_id: event.completion_record_id, version: event.version, sync_completion: event.sync_completion }))
     const eventBase = { note: '', sync_completion: false, version: null, progress_record_id: null }
     const linked = new Set(custom.map(event => event.completion_record_id).filter(id => id !== null))
     for (const record of progress) {

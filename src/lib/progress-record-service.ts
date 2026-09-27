@@ -1,13 +1,13 @@
 import type { Prisma } from '@prisma/client'
 import { formatUtcInTimeZone } from '@/lib/today/timezone'
 import { requestHash } from './journal/idempotency'
-import { saveProgressMetrics } from './journal/measurement-service'
-import { journalContext, lockPlans, measurementView, stale, trackerInclude, trackerView } from './journal/persistence'
+import { metricsForProgressMove, saveProgressMetrics } from './journal/measurement-service'
+import { journalContext, lockPlans, measurementView, stale } from './journal/persistence'
 import type { JournalDb, JournalTx } from './journal/persistence'
 import { progressInput, progressOccurrence } from './journal/progress-input'
 import { JournalError } from './journal/types'
 import type { ProgressRecordView, ProgressUpdateInput, ProgressWriteInput } from './journal/types'
-import { parseProgressDelete, revisionForDate } from './journal/validation'
+import { parseProgressDelete } from './journal/validation'
 
 const includeMetrics = { journalMeasurements: { where: { origin: 'progress_field' }, orderBy: { measurement_id: 'asc' as const } } }
 type RecordRow = Prisma.ProgressRecordGetPayload<{ include: typeof includeMetrics }>
@@ -44,7 +44,7 @@ export async function createProgressRecord(db: JournalDb, raw: ProgressWriteInpu
     const context = await journalContext(tx), occurred = progressOccurrence(input.custom_time, context.timezone, new Date())
     if (input.outcome === 'completed' && formatUtcInTimeZone(occurred, context.timezone).date > context.today) throw new JournalError('VALIDATION', '未来日期不能记录已完成')
     const record = await tx.progressRecord.create({ data: { plan_id: input.plan_id, content: input.content, thinking: input.thinking,
-      gmt_create: occurred, outcome: input.outcome ?? null, counts_toward_recurrence: input.outcome === 'completed' || (input.outcome == null && input.metrics === undefined),
+      gmt_create: occurred, outcome: input.outcome ?? null, counts_toward_recurrence: input.outcome === 'completed' || (input.outcome === undefined && input.metrics === undefined),
       journal_request_id: input.request_id, journal_request_hash: input.request_id ? hash : null } })
     if (input.metrics !== undefined) await saveProgressMetrics(tx, record, input.metrics)
     await explicitProgress(tx, record.plan_id, input.plan_progress)
@@ -52,12 +52,16 @@ export async function createProgressRecord(db: JournalDb, raw: ProgressWriteInpu
   }, { timeout: 15000 })
 }
 export async function updateProgressRecord(db: JournalDb, raw: ProgressUpdateInput) {
-  const input = progressInput(raw, true)
+  const input = progressInput(raw, true), hash = requestHash(input)
   return db.$transaction(async tx => {
     const initial = await tx.progressRecord.findUnique({ where: { id: input.id } })
     if (!initial) throw new JournalError('NOT_FOUND', '进展记录已不存在')
     await lockPlans(tx, [initial.plan_id, input.plan_id])
     const old = await recordForWrite(tx, input.id)
+    if (input.request_id && old.journal_write_id === input.request_id) {
+      if (old.journal_write_hash !== hash) stale('同一请求标识不能用于不同内容')
+      return recordView(old)
+    }
     if (old.plan_id !== initial.plan_id) throw new JournalError('SOURCE_CHANGED', '关联计划已变化，请重读原记录')
     if (input.expected_version !== undefined && old.version !== input.expected_version) stale()
     if (old.schedule_block_id && ((input.plan_id !== undefined && input.plan_id !== old.plan_id) || (input.outcome !== undefined && input.outcome !== old.outcome))) throw new JournalError('VALIDATION', '安排的完成状态请在今日工作台调整')
@@ -67,17 +71,11 @@ export async function updateProgressRecord(db: JournalDb, raw: ProgressUpdateInp
     if ((input.outcome ?? old.outcome) === 'completed' && date > context.today) throw new JournalError('VALIDATION', '未来日期不能记录已完成')
     let metrics = input.metrics
     if (metrics === undefined && (occurred.getTime() !== old.gmt_create.getTime() || planId !== old.plan_id)) {
-      metrics = []
-      for (const measurement of old.journalMeasurements.filter(row => row.status !== 'cleared')) {
-        const row = await tx.trackerDefinition.findUniqueOrThrow({ where: { tracker_id: measurement.tracker_id }, include: trackerInclude })
-        const tracker = trackerView(row), prior = tracker.revisions.find(revision => revision.revision_id === measurement.revision_id), next = revisionForDate(tracker.revisions, date)
-        if (!prior || !next || requestHash(prior.config) !== requestHash(next.config) || prior.plan_id !== next.plan_id) throw new JournalError('SOURCE_CHANGED', '改期后的字段口径不同，请重新确认字段值')
-        metrics.push({ tracker_id: tracker.tracker_id, revision_id: next.revision_id, value: measurementView(measurement).value,
-          status: measurement.status as 'recorded' | 'skipped', note: measurement.note })
-      }
+      metrics = await metricsForProgressMove(tx, old.journalMeasurements, date)
     }
     const record = await tx.progressRecord.update({ where: { id: old.id }, data: {
       plan_id: planId, content: input.content, thinking: input.thinking, gmt_create: occurred,
+      journal_write_id: input.request_id ?? null, journal_write_hash: input.request_id ? hash : null,
       ...(input.outcome !== undefined ? { outcome: input.outcome, counts_toward_recurrence: input.outcome === 'completed' } : {}), version: { increment: 1 },
     } })
     if (metrics !== undefined) await saveProgressMetrics(tx, record, metrics)
