@@ -166,7 +166,7 @@ export type TrackerSummary = {
 }
 export type JournalMonthView = {
   month:string; timezone:string; today:string; dates:string[]; trackers:TrackerView[]
-  cells:Record<string,Record<string,JournalCell>>; events:JournalEventView[]
+  cells:Record<string,Record<string,JournalCell>>; measurements:MeasurementView[]; events:JournalEventView[]
   lanes:EventLane[]; summaries:TrackerSummary[]
 }
 export type PutMeasurementInput = {
@@ -593,7 +593,7 @@ export function summarizeHabitDays(
 
 **Files:** Create `src/lib/journal/query.ts`, `query.test.ts`, `events.ts`, `events.test.ts`。
 
-- [ ] **Step 1: 写月范围、来源移动和重叠事件用例。**
+- [x] **Step 1: 写月范围、来源移动和重叠事件用例。**
 
 ```ts
 import { expect,it } from 'vitest'
@@ -617,8 +617,8 @@ it('clips cross-month ranges and separates inclusive overlap',()=>{
 
 在 query.test.ts 使用 Prisma mock（沿用 today/query.test.ts 的依赖注入模式）：设 150 条该月进展及一条移入月内的原月份测量，要求全部来源返回；反向移出月份的记录不留在旧格；已安排块只产生 planned event；普通旧文本不填完成格。
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/query.test.ts src/lib/journal/events.test.ts`。
-- [ ] **Step 3: 实现事件轨道，并装配月查询。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/query.test.ts src/lib/journal/events.test.ts`。
+- [x] **Step 3: 实现事件轨道，并装配月查询。**
 
 ```ts
 import { listMonthDates } from './date'
@@ -665,8 +665,8 @@ progress 事件 ID=`progress:${id}`；plan/action 到期 ID=`plan:${plan_id}` / 
 
 输出 cells 为 date→tracker_id 映射；summaries 按 tracker/revision，来源详情保留版本号。未来日的自动完成格为 future，只显示计划提示。单日事件保留在 events；多日范围 additionally 进入 lanes，不重复入库。
 
-- [ ] **Step 4: 验证 GREEN。** 同测试命令；覆盖 150+ 记录、跨月改期、source 删除、周末、月初基线、跨年 FocusPeriod、重复来源 ID、due_date 在美国时区不前移，以及孤立绑定不扩大查询范围。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/query* src/lib/journal/events* prisma/schema.prisma && git commit -m "feat: project complete monthly journal with event lanes"`。
+- [x] **Step 4: 验证 GREEN。** 同测试命令；覆盖 150+ 记录、跨月改期、source 删除、周末、月初基线、跨年 FocusPeriod、重复来源 ID、due_date 在美国时区不前移，以及孤立绑定不扩大查询范围。
+- [x] **Step 5: 提交。** `git add src/lib/journal/query* src/lib/journal/events* prisma/schema.prisma && git commit -m "feat: project complete monthly journal with event lanes"`。
 
 ## Task 6: 手动格写入、共享完成来源与撤销
 

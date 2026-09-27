@@ -54,6 +54,7 @@ export type TrackerSummary = {
 }
 export type JournalMonthView = {
   month:string; timezone:string; today:string; dates:string[]; trackers:TrackerView[]
+  measurements:MeasurementView[]
   cells:Record<string,Record<string,JournalCell>>; events:JournalEventView[]
   lanes:EventLane[]; summaries:TrackerSummary[]
 }
