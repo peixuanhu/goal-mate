@@ -672,7 +672,7 @@ progress 事件 ID=`progress:${id}`；plan/action 到期 ID=`plan:${plan_id}` / 
 
 **Files:** Create `src/lib/journal/measurement-service.ts`, `measurement-service.test.ts`, `postgres.integration.test.ts`; Modify `completion-link.ts`, `completion-link.test.ts`。
 
-- [ ] **Step 1: 写真实 PostgreSQL 的竞争/回滚测试。** `postgres.integration.test.ts` 用 `describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)`；仅在 beforeAll 创建 `new PrismaClient({datasourceUrl:process.env.JOURNAL_TEST_DATABASE_URL})`，不在缺少变量时回落到正式 DATABASE_URL。每例生成独立 UUID 前缀，建立一个 recurring Plan、两个关联的 boolean/manual tracker，配置 sync_completion=true。
+- [x] **Step 1: 写真实 PostgreSQL 的竞争/回滚测试。** `postgres.integration.test.ts` 用 `describe.skipIf(!process.env.JOURNAL_TEST_DATABASE_URL)`；仅在 beforeAll 创建 `new PrismaClient({datasourceUrl:process.env.JOURNAL_TEST_DATABASE_URL})`，不在缺少变量时回落到正式 DATABASE_URL。每例生成独立 UUID 前缀，建立一个 recurring Plan、两个关联的 boolean/manual tracker，配置 sync_completion=true。
 
 核心断言：
 
@@ -689,8 +689,8 @@ expect(await db.progressRecord.count({where:{plan_id:plan.plan_id}})).toBe(1)
 
 这里 db、plan、trackers 由 beforeAll/beforeEach 的专用测试库种子提供；seed 使用 `createTracker` 的完整配置对象，按 types.ts 的 TrackerConfig 字段填写。后续撤销第二格后要求 count=0；若原先有非手账创建的有效进展，要求它仍在且不新增。服务单测用 mock 模拟关联进展创建失败，要求整个 measurement 写入回滚。
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/measurement-service.test.ts src/lib/journal/completion-link.test.ts`；真实数据库连接准备后单独运行 integration 文件，初始缺失函数失败。
-- [ ] **Step 3: 实现统一写入和完成链接。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/measurement-service.test.ts src/lib/journal/completion-link.test.ts`；真实数据库连接准备后单独运行 integration 文件，初始缺失函数失败。
+- [x] **Step 3: 实现统一写入和完成链接。**
 
 `measurement-service.ts` 导出 `putManualMeasurement(db,input:PutMeasurementInput):Promise<MeasurementView>`、`clearMeasurement(db,input):Promise<MeasurementView>`、`saveProgressMetrics(tx,record,metrics:ProgressMetricInput[])`。第三个方法接受现有事务，不自行嵌套事务；只为 progress_field revision 创建/更新来源行，唯一键是 tracker_id + progress_record_id。
 
@@ -729,8 +729,8 @@ planId/date/timezone/trackerName/measurementId 从已锁定数据和参数取得
 
 撤销先将本格 status=cleared、三种值清空并释放 FK，版本递增；只在原 ProgressRecord.journal_completion_key 为该 cell key、且没有其他有效 measurement/JournalEvent 引用时删除。非手账拥有的来源绝不删除；部分撤销保留被其他格共享的来源。numeric/snapshot/enum 默认 counts 不增加。所有操作用同一个事务，不能先保存格子再向第二个 API 创建进展。
 
-- [ ] **Step 4: 验证。** 运行服务单测与真实库集成；检查 false/0、重复点击、相同请求重试、两个列并发、编辑冲突、事务异常回滚、清空后恢复、已有外部完成、已删除 plan 和 threshold 跨过/撤回。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/measurement-service* src/lib/journal/completion-link* src/lib/journal/postgres.integration.test.ts && git commit -m "feat: save journal cells without duplicate plan completions"`。
+- [x] **Step 4: 验证。** 运行服务单测与真实库集成；检查 false/0、重复点击、相同请求重试、两个列并发、编辑冲突、事务异常回滚、清空后恢复、已有外部完成、已删除 plan 和 threshold 跨过/撤回。
+- [x] **Step 5: 提交。** `git add src/lib/journal/measurement-service* src/lib/journal/completion-link* src/lib/journal/postgres.integration.test.ts && git commit -m "feat: save journal cells without duplicate plan completions"`。
 
 ## Task 7: 进展结构化字段与自定义事件事务
 
