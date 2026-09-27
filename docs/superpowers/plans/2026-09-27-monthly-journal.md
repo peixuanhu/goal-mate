@@ -786,7 +786,7 @@ JournalEvent.request_id 是不可变的新建幂等键，编辑不能覆盖它�
 
 **Files:** Create `src/lib/journal/http.ts`, `http.test.ts`, `src/app/api/journal/month/route.ts`, `trackers/route.ts`, `measurements/route.ts`, `events/route.ts` 及各自 `route.test.ts`；Modify `src/app/api/progress_record/route.ts`。
 
-- [ ] **Step 1: 写路由行为测试。** 使用 `vi.mock('@/lib/auth')`、Prisma 和各服务 mock，向导出的 handler 传真实 NextRequest。每个路由至少验证未登录 401 且服务没运行、格式错误 400；测量写入验证原样交给服务并返回新版本；冲突保留 409。
+- [x] **Step 1: 写路由行为测试。** 使用 `vi.mock('@/lib/auth')`、Prisma 和各服务 mock，向导出的 handler 传真实 NextRequest。每个路由至少验证未登录 401 且服务没运行、格式错误 400；测量写入验证原样交给服务并返回新版本；冲突保留 409。
 
 ```ts
 import { NextRequest } from 'next/server'
@@ -813,8 +813,8 @@ it('returns a version conflict without reporting a successful save',async()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/http.test.ts src/app/api/journal`，预期缺少新路由失败。
-- [ ] **Step 3: 实现统一 wrapper 和输入边界。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/http.test.ts src/app/api/journal`，预期缺少新路由失败。
+- [x] **Step 3: 实现统一 wrapper 和输入边界。**
 
 ```ts
 // src/lib/journal/http.ts
@@ -870,14 +870,14 @@ export async function PUT(req:NextRequest) {
 
 `clearMeasurement` 将 DELETE 参数转成 value=null/status=cleared/note='' 后调用同一测量服务，不创建另一套版本规则。自动来源的 PUT 不走 measurements；编辑已有来源走 progress_record PUT，新增字段来源走 progress_record POST。原进展 list/total GET 保留；只有新单条读取和写入接入统一错误/auth wrapper。
 
-- [ ] **Step 4: 验证 GREEN。** 运行 Step 2 命令及 progress_record/route.test.ts；核对坏 JSON、负版本、未知 action、未知列、已归档日期、幂等重放和 500 不泄漏原异常内容。`npx tsc --noEmit` 通过。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/http* src/lib/journal/validation* src/app/api/journal src/app/api/progress_record && git commit -m "feat: expose authenticated monthly journal APIs"`。
+- [x] **Step 4: 验证 GREEN。** 运行 Step 2 命令及 progress_record/route.test.ts；核对坏 JSON、负版本、未知 action、未知列、已归档日期、幂等重放和 500 不泄漏原异常内容。`npx tsc --noEmit` 通过。
+- [x] **Step 5: 提交。** `git add src/lib/journal/http* src/lib/journal/validation* src/app/api/journal src/app/api/progress_record && git commit -m "feat: expose authenticated monthly journal APIs"`。
 
 ## Task 9: 客户端刷新和月份查询生命周期
 
 **Files:** Create `src/lib/journal/client.ts`, `client.test.ts`, `src/components/journal/use-journal-month.ts`, `use-journal-month.behavior.test.tsx`。
 
-- [ ] **Step 1: 写请求竞争测试。** 两个月份请求按相反顺序返回，最终只呈现后选月份；卸载不 setState；shared data-changed 和窗口 focus 触发刷新；失败有 error，不变成空月。
+- [x] **Step 1: 写请求竞争测试。** 两个月份请求按相反顺序返回，最终只呈现后选月份；卸载不 setState；shared data-changed 和窗口 focus 触发刷新；失败有 error，不变成空月。
 
 ```tsx
 // @vitest-environment jsdom
@@ -903,8 +903,8 @@ it('ignores an old month response even if fetch ignores abort',async()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/client.test.ts src/components/journal/use-journal-month.behavior.test.tsx`。
-- [ ] **Step 3: 实现请求与生命周期。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/client.test.ts src/components/journal/use-journal-month.behavior.test.tsx`。
+- [x] **Step 3: 实现请求与生命周期。**
 
 ```ts
 // client.ts
@@ -961,8 +961,8 @@ export function useJournalMonth(month:string|null) {
 
 新月份加载时，旧 data 只有在 data.month 匹配当前选中 month 时可编辑；保留旧画面只用作明确标为加载中的预览。月份初始 null 等服务解析用户时区本月。每个保存操作只在 response.ok 后 notify；不在 finally 中发送成功事件。401 显示重新登录入口；409 保留编辑器输入、提供“读取最新来源”，不能自动覆盖。
 
-- [ ] **Step 4: 验证 GREEN。** 同命令；增加请求失败不通知、0/false 请求体原样保存、abort 无错误提示、冲突保留输入测试。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/client* src/components/journal/use-journal-month* && git commit -m "feat: keep journal views synchronized with shared data changes"`。
+- [x] **Step 4: 验证 GREEN。** 同命令；增加请求失败不通知、0/false 请求体原样保存、abort 无错误提示、冲突保留输入测试。
+- [x] **Step 5: 提交。** `git add src/lib/journal/client* src/components/journal/use-journal-month* && git commit -m "feat: keep journal views synchronized with shared data changes"`。
 
 ## Task 10: 页面入口、月表和可访问格子
 
