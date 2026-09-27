@@ -74,7 +74,7 @@
 
 **Files:** Create `src/lib/journal/types.ts`, `date.ts`, `date.test.ts`, `completion-link.ts`, `completion-link.test.ts`。
 
-- [ ] **Step 1: 写真实边界测试。**
+- [x] **Step 1: 写真实边界测试。**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -103,9 +103,9 @@ describe('journal calendar', () => {
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/date.test.ts src/lib/journal/completion-link.test.ts`，预期缺少模块失败。
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/date.test.ts src/lib/journal/completion-link.test.ts`，预期缺少模块失败。
 
-- [ ] **Step 3: 定义共享类型并实现日期与完成判定。**
+- [x] **Step 3: 定义共享类型并实现日期与完成判定。**
 
 `types.ts` 的核心接口如下，后续文件以这些字段为准；Prisma Decimal 转换到 DTO 时输出十进制字符串，图形尺寸计算才转换为 Number。
 
@@ -246,8 +246,8 @@ export function isJournalCompletion(
 }
 ```
 
-- [ ] **Step 4: 验证 GREEN。** 同 Step 2 命令；增加无效月份 `2026-00/13`、年末跨年与 skipped 断言。重复 ID 去重属于 Task 4/5 的汇总测试。
-- [ ] **Step 5: 提交。** `git add src/lib/journal && git commit -m "feat: define monthly journal contracts and calendar rules"`。
+- [x] **Step 4: 验证 GREEN。** 同 Step 2 命令；增加无效月份 `2026-00/13`、年末跨年与 skipped 断言。重复 ID 去重属于 Task 4/5 的汇总测试。
+- [x] **Step 5: 提交。** `git add src/lib/journal && git commit -m "feat: define monthly journal contracts and calendar rules"`。
 
 ## Task 2: 持久化模型与可重复执行的完整性 SQL
 
