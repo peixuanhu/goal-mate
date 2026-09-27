@@ -85,6 +85,9 @@ export type TrackerUpdateInput =
      plan_id:string|null;goal_id:string|null;config:TrackerConfig}
 export type TrackerOrderInput={ids:string[];expected_versions:Record<string,number>}
 export type TrackerArchiveInput={tracker_id:string;expected_version:number;archived_from:string}
+export type TrackerMutation = TrackerUpdateInput
+  | ({action:'reorder'} & TrackerOrderInput)
+  | ({action:'archive'} & TrackerArchiveInput)
 export type JournalEventInput={
   title:string;start_date:string;end_date:string;note:string;status:'planned'|'progress'|'completed'
   plan_id:string|null;goal_id:string|null;sync_completion:boolean;request_id:string
