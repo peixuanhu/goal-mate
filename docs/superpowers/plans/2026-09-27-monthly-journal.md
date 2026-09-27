@@ -436,7 +436,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 **Files:** Create `src/lib/journal/validation.ts`, `validation.test.ts`, `tracker-service.ts`, `tracker-service.test.ts`。
 
-- [ ] **Step 1: 写类型/配置失败用例。**
+- [x] **Step 1: 写类型/配置失败用例。**
 
 ```ts
 import { expect,it } from 'vitest'
@@ -455,8 +455,8 @@ it('selects semantic revision by the occurrence date',()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/validation.test.ts src/lib/journal/tracker-service.test.ts`。
-- [ ] **Step 3: 实现值解析、版本选择和列服务。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/validation.test.ts src/lib/journal/tracker-service.test.ts`。
+- [x] **Step 3: 实现值解析、版本选择和列服务。**
 
 ```ts
 import { JournalError, type EnumOption, type TrackerKind } from './types'
@@ -496,14 +496,14 @@ await tx.trackerRevision.create({data:{
 
 此片段放在 `updateTracker` 的语义分支中；input 使用函数内严格解析结果和数据库查询的关联名称，不能信任客户端名称快照。普通显示分支只更新 name/group/color/position 与 version，不覆盖 revision 语义字段。已有同一天生效版本时返回 409；禁止生效日期覆盖已有历史语义。
 
-- [ ] **Step 4: 验证 GREEN。** 覆盖旧月份读取、归档保留、非法类型转换、过期版本、已删除关联计划、重新排序并发新列，以及 enum 选项历史 ID。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/validation* src/lib/journal/tracker-service* && git commit -m "feat: validate journal definitions and preserve historical meaning"`。
+- [x] **Step 4: 验证 GREEN。** 覆盖旧月份读取、归档保留、非法类型转换、过期版本、已删除关联计划、重新排序并发新列，以及 enum 选项历史 ID。
+- [x] **Step 5: 提交。** `git add src/lib/journal/validation* src/lib/journal/tracker-service* && git commit -m "feat: validate journal definitions and preserve historical meaning"`。
 
 ## Task 4: 日/月汇总、适用日期与缺测趋势
 
 **Files:** Create `src/lib/journal/aggregate.ts`, `aggregate.test.ts`。
 
-- [ ] **Step 1: 写防止口径混淆的测试。**
+- [x] **Step 1: 写防止口径混淆的测试。**
 
 ```ts
 import { expect,it } from 'vitest'
@@ -528,8 +528,8 @@ it('uses deterministic observation order for last',()=>{
 })
 ```
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/journal/aggregate.test.ts`。
-- [ ] **Step 3: 实现精确汇总核心。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/journal/aggregate.test.ts`。
+- [x] **Step 3: 实现精确汇总核心。**
 
 ```ts
 import { Prisma } from '@prisma/client'
@@ -586,8 +586,8 @@ export function summarizeHabitDays(
 
 趋势输出只连接日期相邻且均为 recorded 的两个数值；缺测日没有点，不插值。空月快照 last 为 null；baseline 可单独存在，但不能冒充月末值。图形值转换 Number 前检查 finite；原始字符串保留供详情显示。
 
-- [ ] **Step 4: 验证 GREEN。** 同测试命令；补 false、全跳过、归档/启用、只周一/三/五适用、缺测折线断开、不同 revision 不相加，以及乱序来源的测试。
-- [ ] **Step 5: 提交。** `git add src/lib/journal/aggregate* && git commit -m "feat: calculate journal daily values and metric summaries"`。
+- [x] **Step 4: 验证 GREEN。** 同测试命令；补 false、全跳过、归档/启用、只周一/三/五适用、缺测折线断开、不同 revision 不相加，以及乱序来源的测试。
+- [x] **Step 5: 提交。** `git add src/lib/journal/aggregate* && git commit -m "feat: calculate journal daily values and metric summaries"`。
 
 ## Task 5: 完整月查询与跨日事件投影
 
