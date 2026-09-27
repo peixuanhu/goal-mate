@@ -736,7 +736,7 @@ planId/date/timezone/trackerName/measurementId 从已锁定数据和参数取得
 
 **Files:** Create `src/lib/progress-record-service.ts`, `src/lib/progress-record-service.test.ts`, `src/lib/journal/event-service.ts`, `event-service.test.ts`; Modify `src/app/api/progress_record/route.ts`; Create `src/app/api/progress_record/route.test.ts`。
 
-- [ ] **Step 1: 写现有 API 兼容和联动用例。** 原 GET 的 list/total 与 plan_id 分页保持；新 POST 接受 metrics 和 outcome；新 PUT 接受 expected_version；source 记录改期后新月出现、旧月消失；DELETE 后测量保留且源 FK 为 null。metrics-only 新记录默认不计次；明确 completed 才计次；不带新字段的 legacy POST 保持现有 recurrence 语义。
+- [x] **Step 1: 写现有 API 兼容和联动用例。** 原 GET 的 list/total 与 plan_id 分页保持；新 POST 接受 metrics 和 outcome；新 PUT 接受 expected_version；source 记录改期后新月出现、旧月消失；DELETE 后测量保留且源 FK 为 null。metrics-only 新记录默认不计次；明确 completed 才计次；不带新字段的 legacy POST 保持现有 recurrence 语义。
 
 ```ts
 const record=await createProgressRecord(db,{
@@ -754,8 +754,8 @@ expect((await queryJournalMonth(db,'2026-10',new Date('2026-10-05'))).cells['202
 
 服务单测中的 db/planId/viewsTrackerId/viewsRevisionId 用 beforeEach 的明确 mock/fixture 建立；真实改期与 FK 保留断言放入 Task 6 的独立数据库集成套件。
 
-- [ ] **Step 2: 运行 RED。** `npm test -- src/lib/progress-record-service.test.ts src/app/api/progress_record/route.test.ts src/lib/journal/event-service.test.ts`。
-- [ ] **Step 3: 集中进展写入，补事件服务。**
+- [x] **Step 2: 运行 RED。** `npm test -- src/lib/progress-record-service.test.ts src/app/api/progress_record/route.test.ts src/lib/journal/event-service.test.ts`。
+- [x] **Step 3: 集中进展写入，补事件服务。**
 
 `progress-record-service.ts` 导出 `createProgressRecord(db,input:ProgressWriteInput):Promise<ProgressRecordView>`、`updateProgressRecord(db,input:ProgressUpdateInput):Promise<ProgressRecordView>`、`deleteProgressRecord(db,input:{id:number;expected_version?:number}):Promise<void>`。沿用原 plan_id/content/thinking/custom_time 字段，但本地 datetime 必须使用用户 PlanningPreference 时区的 zonedMinuteToUtc，带偏移 ISO 用 Date。`metrics` 缺席表示保留已有字段；`metrics:[]` 表示显式清空该记录所有测量，既有行变 cleared，不级联删除历史值；提交的列表是该记录结构化字段的完整当前集合。新客户端提供 request_id；POST 按 journal_request_id 查同载荷重放，避免网络失败后重复创建；legacy 调用可缺省。
 
@@ -779,8 +779,8 @@ JournalEvent.request_id 是不可变的新建幂等键，编辑不能覆盖它�
 
 原 progress API GET 新增 `id` 参数返回单条含 metrics/source/version 的记录，其余 list/total 契约不变。POST/PUT/DELETE 调服务，领域错误统一 400/404/409；异常 500 返回简短失败消息。source 编辑从月度页使用该 id 查询和同一个 PUT，不另造一份编辑 API。
 
-- [ ] **Step 4: 验证 GREEN。** 同命令及专库集成；涵盖明确 0、分类稳定 ID、metrics 缺席/清空、普通/周期计划旧记录、带偏移 ISO、本地 DST 无效时间、source record plan 变更限制、重复事件请求、撤销时引用保留和 plan.progress 未被自动修改。
-- [ ] **Step 5: 提交。** `git add src/lib/progress-record-service* src/lib/journal/event-service* src/app/api/progress_record && git commit -m "feat: share structured progress and journal event transactions"`。
+- [x] **Step 4: 验证 GREEN。** 同命令及专库集成；涵盖明确 0、分类稳定 ID、metrics 缺席/清空、普通/周期计划旧记录、带偏移 ISO、本地 DST 无效时间、source record plan 变更限制、重复事件请求、撤销时引用保留和 plan.progress 未被自动修改。
+- [x] **Step 5: 提交。** `git add src/lib/progress-record-service* src/lib/journal/event-service* src/app/api/progress_record && git commit -m "feat: share structured progress and journal event transactions"`。
 
 ## Task 8: HTTP 契约、认证与错误响应
 

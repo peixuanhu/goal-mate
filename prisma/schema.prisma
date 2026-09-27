@@ -86,6 +86,7 @@ model ProgressRecord {
 
   version                Int                  @default(1)
   journal_completion_key String?              @unique
+  journal_request_hash   String?
   journal_request_id     String?              @unique
   journalMeasurements    TrackerMeasurement[]
   journalEvents          JournalEvent[]
@@ -256,6 +257,7 @@ model JournalEvent {
   goal_name            String?
   completion_record_id Int?
   sync_completion      Boolean         @default(false)
+  request_hash         String?
   request_id           String          @unique
   plan                 Plan?           @relation(fields: [plan_id], references: [plan_id], onDelete: SetNull)
   goal                 Goal?           @relation(fields: [goal_id], references: [goal_id], onDelete: SetNull)
