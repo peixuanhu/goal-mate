@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies();
     cookieStore.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: request.nextUrl.protocol === 'https:',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7天
       path: '/',
@@ -47,4 +47,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
