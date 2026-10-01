@@ -90,6 +90,8 @@ function ProgressPageContent() {
                         }
                       }}
                       placeholder="请选择计划"
+                      allowCustomOption={false}
+                      emptyMessage="没有匹配的计划"
                       className="w-full"
                     />
                   </div>
@@ -115,7 +117,6 @@ function ProgressPageContent() {
                   </CardHeader>
                   <CardContent className="px-4 sm:px-6">
                     <form onSubmit={handleSubmit} className="space-y-6">
-                      <WriteError error={error} conflict={conflict} onReload={reloadOriginal} />
                       <fieldset disabled={loading} className="space-y-6">
                       {/* 如果是编辑状态，显示所属计划选择器 */}
                       {editingId && (
@@ -135,6 +136,8 @@ function ProgressPageContent() {
                               }
                             }}
                             placeholder="请选择所属计划"
+                            allowCustomOption={false}
+                            emptyMessage="没有匹配的计划"
                             className="w-full"
                           />
                           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -242,6 +245,7 @@ function ProgressPageContent() {
                       />
 
                       {/* 操作按钮 */}
+                      <WriteError error={error} conflict={conflict} onReload={reloadOriginal} />
                       <div className="flex flex-col gap-3 pt-4 sm:flex-row">
                         <Button type="submit" disabled={loading} className="min-h-10 w-full sm:min-w-[120px] sm:w-auto">
                           {loading ? '保存中...' : (editingId ? '更新进展' : '添加进展')}

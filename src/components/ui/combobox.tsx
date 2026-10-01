@@ -19,7 +19,7 @@ export function Combobox({
   onChange,
   placeholder,
   className,
-  allowCustomOption = true,
+  allowCustomOption = false,
   emptyMessage = "没有匹配项",
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)

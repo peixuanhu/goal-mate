@@ -212,6 +212,7 @@ function GoalsPageContent() {
                     <Label htmlFor="tag">标签</Label>
                     <Combobox
                       options={tagOptions}
+                      allowCustomOption
                       value={form.tag || ''}
                       onChange={v => setForm(f => ({ ...f, tag: v }))}
                       placeholder="标签（可自定义）"

@@ -2,6 +2,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useModalAccessibility } from '@/components/today/use-modal-accessibility'
 import { journalRequest, JournalRequestError } from '@/lib/journal/client'
+import { createClientRequestId } from '@/lib/client-request-id'
 import styles from './editor.module.css'
 export { styles as editorStyles }
 export function JournalModal({ title, children, busy = false, onClose }: { title: string; children: React.ReactNode; busy?: boolean; onClose: () => void }) {
@@ -20,13 +21,13 @@ export function useWriteState() {
   const request = useRef<{ payload: string; id: string } | null>(null)
   const identity = (payload: unknown) => {
     const serialized = JSON.stringify(payload)
-    if (request.current?.payload !== serialized) request.current = { payload: serialized, id: crypto.randomUUID() }
+    if (request.current?.payload !== serialized) request.current = { payload: serialized, id: createClientRequestId() }
     return request.current.id
   }
   const write = async (run: () => Promise<void>) => {
     if (busy) return
     setBusy(true); setError(null); setConflict(false)
-    try { await run() }
+    try { await run(); request.current = null }
     catch (error) {
       const stale = error instanceof JournalRequestError && error.status === 409
       setConflict(stale)

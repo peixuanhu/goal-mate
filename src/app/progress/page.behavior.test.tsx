@@ -5,15 +5,18 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ProgressPage from './page'
 import { journalRequest, JournalRequestError, notifyJournalChanged } from '@/lib/journal/client'
 import { trackerFixture } from '@/components/journal/test-fixtures'
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('plan_id=p&record_id=200') }))
+let searchParams = 'plan_id=p&record_id=200'
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(searchParams) }))
 vi.mock('@/components/AuthGuard', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('@/components/main-layout', () => ({ MainLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('@/components/ui/wysiwyg-editor', () => ({ WysiwygEditor: ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => <label>{label}<textarea aria-label={label} value={value} onChange={event => onChange(event.target.value)} /></label> }))
 vi.mock('@/components/ui/slider', () => ({ Slider: ({ value, onValueChange }: { value: number[]; onValueChange: (value: number[]) => void }) => <input aria-label="计划百分比" value={value[0]} onChange={event => onValueChange([Number(event.target.value)])} /> }))
+vi.mock('@/components/ui/text-preview', () => ({ TextPreview: ({ text }: { text: string }) => <span>{text}</span> }))
 vi.mock('@/lib/journal/client', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/journal/client')>(), journalRequest: vi.fn(), notifyJournalChanged: vi.fn() }))
 const tracker = trackerFixture('t', 'quantity')
 tracker.revisions[0].plan_id = 'p'; tracker.revisions[0].config.source = 'progress_field'
 beforeEach(() => {
+  searchParams = 'plan_id=p&record_id=200'
   vi.mocked(journalRequest).mockImplementation(async (url, init) => {
     if (init?.method === 'PUT') return { id: 200 }
     if (url.startsWith('/api/plan')) return { list: [{ plan_id: 'p', name: '自媒体', progress: .2, is_recurring: false }] }
@@ -24,6 +27,41 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ list: [], total: 0 }))))
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals() })
+it.each([false, true])('adds progress and refreshes the list without randomUUID: %s', async withoutRandomUUID => {
+  searchParams = 'plan_id=p'
+  if (withoutRandomUUID) vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
+  let saved = false
+  const initial = vi.mocked(journalRequest).getMockImplementation()!
+  vi.mocked(journalRequest).mockImplementation(async (url, init) => {
+    if (init?.method === 'POST') { saved = true; return { id: 201 } }
+    if (url.startsWith('/api/progress_record')) return { list: saved ? [{ id: 201, plan_id: 'p', content: '新增进展测试', thinking: '', gmt_create: '2026-09-27T12:00:00Z', version: 1 }] : [], total: saved ? 1 : 0 }
+    return initial(url, init)
+  })
+  vi.mocked(notifyJournalChanged).mockImplementation(detail => {
+    window.dispatchEvent(new CustomEvent('goal-mate:data-changed', { detail }))
+  })
+  render(<ProgressPage />)
+  await waitFor(() => expect((screen.getByRole('button', { name: '添加进展' }) as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.change(screen.getByLabelText('进展内容'), { target: { value: '新增进展测试' } })
+  fireEvent.click(screen.getByRole('button', { name: '添加进展' }))
+  await waitFor(() => expect(vi.mocked(journalRequest).mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1))
+  const call = vi.mocked(journalRequest).mock.calls.find(([, init]) => init?.method === 'POST')!
+  expect(JSON.parse(String(call[1]?.body))).toMatchObject({ plan_id: 'p', content: '新增进展测试', request_id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i) })
+  await waitFor(() => expect((screen.getByLabelText('进展内容') as HTMLTextAreaElement).value).toBe(''))
+  await screen.findByText('新增进展测试')
+})
+it.each([0, 1])('keeps plan selector %s limited to existing plans', async index => {
+  render(<ProgressPage />)
+  await waitFor(() => expect((screen.getByLabelText('进展内容') as HTMLTextAreaElement).value).toBe('原内容'))
+  fireEvent.click(screen.getAllByRole('button', { name: '自媒体' })[index])
+  const search = screen.getByPlaceholderText(index === 0 ? '请选择计划' : '请选择所属计划')
+  fireEvent.change(search, { target: { value: '财务报表' } })
+  expect(screen.queryByText(/新建标签/)).toBeNull()
+  expect(screen.getByText('没有匹配的计划')).toBeTruthy()
+  fireEvent.keyDown(search, { key: 'Enter' })
+  expect(screen.getAllByRole('button', { name: '自媒体' })).toHaveLength(2)
+  expect(vi.mocked(journalRequest).mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+})
 it('opens a source outside the first 100 list records with its version and preference timezone', async () => {
   render(<ProgressPage />)
   await waitFor(() => expect((screen.getByLabelText('进展内容') as HTMLTextAreaElement).value).toBe('原内容'))
