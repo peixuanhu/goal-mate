@@ -7,6 +7,7 @@ export function middleware(request: NextRequest) {
   
   // 跳过静态文件和 Next.js 内部路径
   if (
+    pathname === '/api/mcp' || // MCP uses its own Bearer authentication, independent of web cookies.
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/api/auth/login') ||
     pathname.startsWith('/login') ||
@@ -37,4 +38,4 @@ export function middleware(request: NextRequest) {
 // 简化匹配器
 export const config = {
   matcher: ['/((?!_next|favicon.ico).*)'],
-}; 
+};
