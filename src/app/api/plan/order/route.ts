@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient, type Prisma } from '@prisma/client'
 
@@ -25,6 +26,9 @@ async function lockGoalRoute(db: PlanGoalDb, goal_id: string) {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   let data: unknown
   try {
     data = await req.json()

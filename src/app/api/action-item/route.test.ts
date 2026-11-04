@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto"
 
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => ({ username: "test" }) }))
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 

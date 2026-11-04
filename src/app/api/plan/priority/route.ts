@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 
@@ -5,6 +6,9 @@ const prisma = new PrismaClient()
 
 // GET: 获取已安排到四象限的任务列表（按象限分组）
 export async function GET() {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const plans = await prisma.plan.findMany({
       where: {
@@ -65,6 +69,9 @@ export async function GET() {
 
 // PUT: 更新任务象限位置
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const data = await req.json()
     const { plan_id, priority_quadrant, is_scheduled } = data

@@ -88,16 +88,20 @@ codex mcp add goal_mate --url 'https://<你的域名>/api/mcp' --bearer-token-en
 npm ci
 npm run db:generate
 npm test -- src/lib/mcp src/app/api/mcp/route.test.ts
+npm test -- src/lib/auth-token.test.ts src/middleware.test.ts src/app/api/authentication.test.ts
 npm test
 npx tsc --noEmit
-npx eslint src/lib/mcp src/app/api/mcp middleware.ts
+npx eslint src/lib/mcp src/app/api/mcp src/lib/auth.ts src/lib/auth-token.ts src/lib/api-auth.ts src/middleware.ts
 npm run build
+node --experimental-global-webcrypto scripts/test-api-auth-http.mjs
 ```
 
 测试注入内部 fetch 和签名凭据，不依赖在线数据库；协议测试使用真实官方 SDK。Node 18 的 Vitest 需要显式提供 Web Crypto，Next.js 运行时本身已有该兼容层。项目最低 Node 版本保持 18.18，部署沿用 Node 24；SDK 的 Hono Node 适配器间接依赖可能提示 Node 20 要求，此实现使用原生 Web transport，不引入该适配器。
 
 依赖固定为 `@modelcontextprotocol/sdk@1.32.1` 与直接依赖 `zod@3.25.76`。同时将 `@radix-ui/react-tabs` 固定为线上实际使用的 `1.1.21`，避免部署本功能时回退已修复的标签页依赖或引入额外 UI 升级。
 
-部署应先在独立端口验证初始化、工具列表、只读查询与认证失败，再切换正式服务。此功能不需要数据库 schema 变更。`middleware.ts` 仅为精确 `/api/mcp` 路径增加独立认证委托；其他 REST 路径的现有鉴权行为不在本功能修改范围内。
+部署应先在独立端口验证初始化、工具列表、只读查询与认证失败，再切换正式服务。此功能不需要数据库 schema 变更。
 
-已知既有问题：线上实测 `/api/goal` 在没有登录凭据时仍返回 HTTP 200。MCP 的 Bearer 认证只保护 `/api/mcp`，不会自动保护这些旧 REST 入口；该问题需另行修复，本次没有扩展修改全局鉴权。
+旧 REST 入口的匿名访问问题已修复：中间件移至与 `src/app` 同级的 `src/middleware.ts`，并使用 Next.js 15.5 支持的 Node.js runtime 验证 HS256 签名、有效期与配置用户名；同时每个私有 API 方法在解析请求体、访问数据库或 AI 前独立验证登录会话。只有精确的登录入口和独立 Bearer 鉴权的 `/api/mcp` 属于 API 例外，路径中包含点号或类似登录前缀不会绕过鉴权。诊断响应仅保留 API 密钥是否配置的布尔值，不返回密钥片段。中间件位置与 runtime 规则见 [Next.js 15 官方文档](https://nextjs.org/docs/15/app/api-reference/file-conventions/middleware)。
+
+上述认证测试自动发现所有私有 API 导出方法，并使用真实 JWT 检查缺失、伪造、过期和错误身份等会话；独立 HTTP 验证脚本使用临时测试凭据与不可达数据库，检查生产构建实际执行中间件、登录及 MCP 协议兼容性。

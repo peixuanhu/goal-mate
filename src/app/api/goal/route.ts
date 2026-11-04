@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient, type Prisma } from '@prisma/client'
 import { createGoalAtEnd, lockGoalOrder } from '@/lib/goal-order'
@@ -18,6 +19,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 // GET: ListGoals 支持分页和tag筛选
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const tag = searchParams.get('tag')
   const all = searchParams.get('all') === 'true'
@@ -40,6 +44,9 @@ export async function GET(req: NextRequest) {
 
 // POST: InsertGoal
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const data: unknown = await req.json()
   if (!isPlainObject(data)) {
     return NextResponse.json({ error: '请求体必须是有效 JSON 对象' }, { status: 400 })
@@ -63,6 +70,9 @@ export async function POST(req: NextRequest) {
 
 // PUT: UpdateGoal
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const data = await req.json()
   const { goal_id, ...rest } = data
   delete rest.position
@@ -75,6 +85,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: DeleteGoal
 export async function DELETE(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const goal_id = searchParams.get('goal_id') || undefined
   if (!goal_id) return NextResponse.json({ success: false, message: 'goal_id required' }, { status: 400 })

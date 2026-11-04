@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => ({ username: "test" }) }))
+
 const prismaMock = vi.hoisted(() => ({
   plan: {
     findMany: vi.fn(),

@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { Prisma, PrismaClient } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 import {
@@ -99,6 +100,9 @@ async function findGoal(db: FocusPeriodDb, goalId: string): Promise<FocusGoalSum
 }
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const year = parseYear(searchParams.get("year"))
   if (year === null) {
@@ -126,6 +130,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const body = await readJsonObject(req)
   if (!body.ok) {
     return body.response
@@ -176,6 +183,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const body = await readJsonObject(req)
   if (!body.ok) {
     return body.response
@@ -251,6 +261,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const periodId = searchParams.get("period_id")
   if (!periodId) {

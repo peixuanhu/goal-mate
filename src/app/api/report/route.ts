@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { randomUUID } from 'crypto'
@@ -6,6 +7,9 @@ const prisma = new PrismaClient()
 
 // GET: ListReports 支持分页
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const pageNum = parseInt(searchParams.get('pageNum') || '1')
   const pageSize = parseInt(searchParams.get('pageSize') || '10')
@@ -22,6 +26,9 @@ export async function GET(req: NextRequest) {
 
 // POST: InsertReport
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const data = await req.json()
   const report = await prisma.report.create({ data: { ...data, report_id: `report_${randomUUID().replace(/-/g, '').substring(0, 10)}` } })
   return NextResponse.json(report)
@@ -29,6 +36,9 @@ export async function POST(req: NextRequest) {
 
 // PUT: UpdateReport
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const data = await req.json()
   const { report_id, ...rest } = data
   const report = await prisma.report.update({
@@ -40,6 +50,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: DeleteReport
 export async function DELETE(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const report_id = searchParams.get('report_id') || undefined
   if (!report_id) return NextResponse.json({ success: false, message: 'report_id required' }, { status: 400 })

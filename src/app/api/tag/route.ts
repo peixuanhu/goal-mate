@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 
@@ -5,6 +6,9 @@ const prisma = new PrismaClient()
 
 // GET: ListTags - 从 Goal 和 Plan 中获取所有标签
 export async function GET() {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   // 从 Goal 表获取标签
   const goals = await prisma.goal.findMany({ select: { tag: true } })
   const goalTags = goals.map(g => g.tag)

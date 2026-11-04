@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import {
   CopilotRuntime,
   OpenAIAdapter,
@@ -1871,6 +1872,9 @@ const runtime = new CopilotRuntime({
 console.log("✅ CopilotRuntime initialized with", runtime.actions.length, "actions");
 
 export const POST = async (req: NextRequest) => {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   console.log("🚀 CopilotKit API called");
   
   try {

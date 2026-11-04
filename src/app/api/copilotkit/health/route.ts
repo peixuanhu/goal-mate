@@ -1,6 +1,10 @@
+import { requireApiAuth } from "@/lib/api-auth";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  const unauthorized = await requireApiAuth();
+  if (unauthorized) return unauthorized;
+
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     const baseURL = process.env.OPENAI_BASE_URL;
@@ -11,7 +15,6 @@ export async function GET() {
       environment: {
         hasApiKey: !!apiKey,
         hasBaseURL: !!baseURL,
-        apiKeyMasked: apiKey ? `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}` : "未设置",
         baseURL: baseURL || "未设置"
       },
       actions: [

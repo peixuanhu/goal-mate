@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { NextRequest, NextResponse } from "next/server"
 import { PrismaClient } from "@prisma/client"
 
@@ -11,6 +12,9 @@ import {
 const prisma = new PrismaClient()
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const weekStartParam = searchParams.get("weekStart") || undefined
   const range = getShanghaiWeekRange(weekStartParam)

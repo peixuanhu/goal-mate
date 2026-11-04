@@ -1,9 +1,13 @@
+import { requireApiAuth } from "@/lib/api-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient, type Plan } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth();
+  if (unauthorized) return unauthorized;
+
   try {
     const { action, args } = await req.json();
     

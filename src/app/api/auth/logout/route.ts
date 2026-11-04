@@ -1,7 +1,11 @@
+import { requireApiAuth } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 export async function POST() {
+  const unauthorized = await requireApiAuth();
+  if (unauthorized) return unauthorized;
+
   try {
     const cookieStore = await cookies();
     

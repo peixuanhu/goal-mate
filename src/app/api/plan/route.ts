@@ -1,3 +1,4 @@
+import { requireApiAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient, type Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
@@ -181,6 +182,9 @@ async function getNextPositionForGoal(db: PlanGoalDb, goal_id: string): Promise<
 }
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const tag = searchParams.get('tag')
   const difficulty = searchParams.get('difficulty')
@@ -294,6 +298,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const data = await readJsonObject(req)
     assertOnlyFields(data, CREATE_FIELDS)
@@ -344,6 +351,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const data = await readJsonObject(req)
     assertOnlyFields(data, UPDATE_FIELDS)
@@ -498,6 +508,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: DeletePlan
 export async function DELETE(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const { searchParams } = new URL(req.url)
   const plan_id = searchParams.get('plan_id') || undefined
   if (!plan_id) return NextResponse.json({ success: false, message: 'plan_id required' }, { status: 400 })

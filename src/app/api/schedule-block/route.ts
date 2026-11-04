@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { PrismaClient } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -88,6 +89,9 @@ function toScheduleErrorResponse(error: unknown): NextResponse | null {
 }
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   let date: string
   try {
     date = parseDateKey(new URL(req.url).searchParams.get("date"))
@@ -119,6 +123,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const idempotencyKey = req.headers.get("Idempotency-Key")?.trim() ?? ""
     if (idempotencyKey.length < 1 || idempotencyKey.length > 128) {
@@ -154,6 +161,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const body = await readJsonObject(req)
     if (body.operation === "update") {

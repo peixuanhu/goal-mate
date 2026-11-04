@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { PrismaClient } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -109,6 +110,9 @@ function toErrorResponse(error: ScheduleServiceError): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const body = await readJsonObject(req)
     return NextResponse.json(await completeScheduleBlock(prisma, parseBody(body)))

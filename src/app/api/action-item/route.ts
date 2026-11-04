@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { createHash } from "node:crypto"
 
 import { PrismaClient, type Prisma } from "@prisma/client"
@@ -250,6 +251,9 @@ function mapMutationError(error: unknown): NextResponse | null {
 }
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const planId = new URL(req.url).searchParams.get("plan_id")?.trim()
   if (!planId) {
     return validationError("plan_id required")
@@ -264,6 +268,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const rawIdempotencyKey = req.headers.get("Idempotency-Key")
   const idempotencyKey = rawIdempotencyKey?.trim() ?? ""
   if (idempotencyKey.length < 1 || idempotencyKey.length > 128) {
@@ -325,6 +332,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   try {
     const data = await readJsonObject(req)
     const { actionId, updateData } = parseValidated(() => normalizeEditableData(data))
@@ -357,6 +367,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const actionId = new URL(req.url).searchParams.get("action_id")?.trim()
   if (!actionId) {
     return validationError("action_id required")

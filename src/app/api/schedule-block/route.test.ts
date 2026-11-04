@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => ({ username: "test" }) }))
+
 const mocks = vi.hoisted(() => ({
   prisma: {
     planningPreference: { findUnique: vi.fn() },

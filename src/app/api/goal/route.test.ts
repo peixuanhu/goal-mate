@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => ({ username: "test" }) }))
+
 const { events, prismaMock, transactionMock } = vi.hoisted(() => ({
   events: [] as string[],
   prismaMock: {

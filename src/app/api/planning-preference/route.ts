@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { PrismaClient } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -15,6 +16,9 @@ function validationError(message: string) {
 }
 
 export async function GET() {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   const row = await prisma.planningPreference.findUnique({
     where: { preference_id: DEFAULT_PREFERENCE_ID },
   })
@@ -23,6 +27,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   let body: unknown
   try {
     body = await req.json()

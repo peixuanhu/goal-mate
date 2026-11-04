@@ -1,3 +1,4 @@
+import { requireApiAuth } from "@/lib/api-auth"
 import { PrismaClient } from "@prisma/client"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -7,6 +8,9 @@ import { parseDateKey } from "@/lib/today/validation"
 const prisma = new PrismaClient()
 
 export async function GET(req: NextRequest) {
+  const unauthorized = await requireApiAuth()
+  if (unauthorized) return unauthorized
+
   let date: string
   try {
     date = parseDateKey(new URL(req.url).searchParams.get("date"))
